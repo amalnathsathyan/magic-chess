@@ -1,16 +1,44 @@
-# Magic Speed Chess -- Project Specification
+# Magic Chess — Project Specification
+
+> **Repo**: https://github.com/amalnathsathyan/magic-chess
+> **Program**: `magic_chess` (Anchor 0.31.1)
+> **Program ID**: `4f7VH9vbhNnwBSeby9wKLjtbu8vM8RhUX2KVcE9havUB`
+> **Branch**: `main`
+> **Commit convention**: All commits must end with `Co-Authored-By: Claude <noreply@anthropic.com>`
+
+## 0. Architecture Decisions (Locked In)
+
+These decisions were made during the 18-agent audit and are reflected in the current codebase:
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Program name | `magic_chess` | Clean, descriptive, matches repo |
+| Anchor version | 0.31.1 | Stable, matching existing code |
+| Token model | **Generic SPL** — any mint, flexible amounts | No hardcoded addresses |
+| Bet validation | `bet_amount >= 1`, `platform_fee <= 10000` | Prevents zero-bet spam, caps fees |
+| PDA seeds | `b"chess_match"` / `b"match_escrow"` | Single source in `constants.rs` |
+| Auth provider | **Privy** (planned) | Google sign-in, TEE session keys |
+| Session keys | **MagicBlock Delegation Program** | Zero-confirmation moves |
+| Gas model | **Platform-sponsored** (~$0.06-0.16/match) | ER free + sponsor pays commit/close |
+| Frontend | **Next.js 15** + react-chessboard | Web-first, deferred React Native |
+| Backend | **Fastify + Postgres + Redis** on Railway | $0/month MVP |
+| Indexing | **Helius Enhanced Webhooks** | Free tier, Anchor event decoding |
+| FEN | **Off-chain only** (TS utility in SDK) | Zero CU cost |
+| Repetition detection | **Zobrist hashing** (future) | 8 bytes/position, ~10 CU |
+| ELO rating | **Off-chain** (webhook handler) | No on-chain dependency |
+| Fee split | **50/50** — treasury vault + dev wallet | PDA-controlled vault |
+| Token launch | **Manual SPL** ($SPEED), not pump.fun | Pump.fun can't reserve supply |
+| Testing | Plain `#[test]` + Mollusk + LiteSVM | 3-tier strategy |
 
 ## 1. Overview
 
-Magic Speed Chess is an on-chain chess engine running on Solana, designed for the MagicBlock hackathon. It enables two players to wager SPL tokens and play a full game of chess with all moves validated on-chain. The project combines the transparency and security of on-chain settlement with the low-latency experience of MagicBlock ephemeral rollups.
+Magic Chess is an on-chain chess engine on Solana, built for the MagicBlock hackathon. Two players wager SPL tokens and play a full game of chess with all moves validated on-chain. PDA-based escrow holds wagers; winner is settled automatically.
 
 **Core value proposition:**
-- Trustless wager-based chess: tokens are escrowed in a PDA, and the winner is settled automatically by the program.
-- Complete chess rules enforced on-chain (castling, en passant, promotion, checkmate, stalemate, 50-move rule).
-- Designed for MagicBlock ephemeral rollups to enable gasless, low-latency gameplay with session keys.
-- Extensible architecture for prediction markets and ELO ratings in future phases.
-
-**Target:** MagicBlock hackathon submission -- July/August 2026.
+- Trustless wager-based chess with PDA escrow
+- Complete FIDE chess rules enforced on-chain
+- MagicBlock ephemeral rollups for gasless, low-latency gameplay
+- Extensible for prediction markets and ELO ratings
 
 ---
 
