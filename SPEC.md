@@ -4,7 +4,7 @@
 > **Program**: `magic_chess` (Anchor 0.31.1)
 > **Program ID**: `4f7VH9vbhNnwBSeby9wKLjtbu8vM8RhUX2KVcE9havUB`
 > **Branch**: `main`
-> **Commit convention**: All commits must end with `Co-Authored-By: Claude <noreply@anthropic.com>`
+> **Commit convention**: Standard commits. Do NOT use "Co-Authored-By: Claude" going forward.
 
 ## 0. Architecture Decisions (Locked In)
 
