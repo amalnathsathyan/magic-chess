@@ -29,7 +29,7 @@ pub struct ProcessMatchSettlement<'info> {
         seeds = [MATCH_ESCROW_SEED, chess_match.match_id.as_bytes()], // Assuming match_id is String
         bump, // Anchor derives and verifies this bump
     )]
-    pub match_escrow_token_account: Account<'info, TokenAccount>,
+    pub match_escrow_token_account: Box<Account<'info, TokenAccount>>,
 
     // Player 1's token account (ATA)
     #[account(
@@ -37,7 +37,7 @@ pub struct ProcessMatchSettlement<'info> {
         constraint = player_one_ata.owner == chess_match.players[0] @ ChessError::PlayerTokenAccountMismatch,
         constraint = player_one_ata.mint == chess_match.betting_token_mint @ ChessError::PlayerTokenAccountMismatch,
     )]
-    pub player_one_ata: Account<'info, TokenAccount>, // Player 1's Associated Token Account
+    pub player_one_ata: Box<Account<'info, TokenAccount>>, // Player 1's Associated Token Account
 
     // Player 2's token account (ATA)
     #[account(
@@ -45,7 +45,7 @@ pub struct ProcessMatchSettlement<'info> {
         constraint = player_two_ata.owner == chess_match.players[1] @ ChessError::PlayerTokenAccountMismatch,
         constraint = player_two_ata.mint == chess_match.betting_token_mint @ ChessError::PlayerTokenAccountMismatch,
     )]
-    pub player_two_ata: Account<'info, TokenAccount>, // Player 2's Associated Token Account
+    pub player_two_ata: Box<Account<'info, TokenAccount>>, // Player 2's Associated Token Account
     
     // Platform's fee collection account
     #[account(
@@ -53,7 +53,7 @@ pub struct ProcessMatchSettlement<'info> {
         constraint = platform_fee_ata.mint == chess_match.betting_token_mint @ ChessError::PlatformTokenAccountError,
         constraint = platform_fee_ata.owner == chess_match.platform_fee_wallet @ ChessError::InvalidPlatformFeeWallet,
     )]
-    pub platform_fee_ata: Account<'info, TokenAccount>, // Platform's Associated Token Account
+    pub platform_fee_ata: Box<Account<'info, TokenAccount>>, // Platform's Associated Token Account
 
     pub token_program: Program<'info, Token>,
     // system_program: Program<'info, System>, // Not directly needed for this instruction
