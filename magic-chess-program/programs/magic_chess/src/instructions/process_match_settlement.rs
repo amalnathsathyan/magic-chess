@@ -51,7 +51,7 @@ pub struct ProcessMatchSettlement<'info> {
     #[account(
         mut,
         constraint = platform_fee_ata.mint == chess_match.betting_token_mint @ ChessError::PlatformTokenAccountError,
-        // Owner of platform_fee_ata is not constrained here, assumed to be a known, correct address.
+        constraint = platform_fee_ata.owner == chess_match.platform_fee_wallet @ ChessError::InvalidPlatformFeeWallet,
     )]
     pub platform_fee_ata: Account<'info, TokenAccount>, // Platform's Associated Token Account
 
@@ -60,6 +60,20 @@ pub struct ProcessMatchSettlement<'info> {
 }
 
 pub fn handle_process_match_settlement(ctx: Context<ProcessMatchSettlement>) -> Result<()> {
+    // Prevent duplicate mutable accounts (state corruption)
+    require!(
+        ctx.accounts.player_one_ata.key() != ctx.accounts.player_two_ata.key(),
+        ChessError::DuplicateAccounts
+    );
+    require!(
+        ctx.accounts.player_one_ata.key() != ctx.accounts.platform_fee_ata.key(),
+        ChessError::DuplicateAccounts
+    );
+    require!(
+        ctx.accounts.player_two_ata.key() != ctx.accounts.platform_fee_ata.key(),
+        ChessError::DuplicateAccounts
+    );
+
     let chess_match = &mut ctx.accounts.chess_match; // Note: mutable reference
     
     // These are Account<TokenAccount> types from the context
