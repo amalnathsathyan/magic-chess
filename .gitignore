@@ -10,6 +10,14 @@ dist/
 .anchor/
 agent-findings/
 
+# Frontend generated content
+frontend/node_modules/
+frontend/.next/
+
+# Backend generated content
+backend/node_modules/
+backend/dist/
+
 # Keep local only — not pushed to remote
 BACKEND_DESIGN.md
 DEPLOYMENT_PLAN.md
