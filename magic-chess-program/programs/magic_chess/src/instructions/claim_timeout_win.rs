@@ -116,11 +116,21 @@ pub fn handle_claim_timeout_win(ctx: Context<ClaimTimeoutWin>) -> Result<()> {
         &ctx.accounts.claimer_signer.to_account_info(),
     )?;
 
-    // TODO: Schedule undelegation task after settlement completes
+    // 9. Schedule undelegation task to fire after settlement completes.
+    // Settlement fires in 5s; undelegation fires in 10s to ensure it runs after.
+    let undelegation_task_id = base_id.wrapping_add(20_000); // Offset for undelegation tasks
+
+    schedule_timeout::invoke_schedule_task(
+        undelegation_task_id,
+        10_000, // 10-second delay (settlement fires at 5s, this fires 5s later)
+        1,      // Fire once
+        &ctx.accounts.claimer_signer.to_account_info(),
+    )?;
 
     msg!(
-        "Settlement task {} scheduled for match {}",
+        "Settlement task {} and undelegation task {} scheduled for match {}",
         settlement_task_id,
+        undelegation_task_id,
         chess_match.match_id
     );
 
