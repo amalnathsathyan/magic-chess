@@ -37,3 +37,15 @@ export {
   findMatchEscrowPda,
   findPredictionPoolPda,
 } from "./pda";
+
+// MagicBlock helpers
+export {
+  MAGICBLOCK_DEVNET_RPC,
+  MAGICBLOCK_DEVNET_ROUTER,
+  DELEGATION_PROGRAM_ID,
+  MAGIC_PROGRAM_ID,
+  MAGIC_CONTEXT_ID,
+  getDelegationStatus,
+  getERConnection,
+} from "./magicblock";
+export type { DelegationStatus } from "./magicblock";

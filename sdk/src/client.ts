@@ -1,7 +1,9 @@
 import {
+  Connection,
   type PublicKey,
-  type TransactionSignature,
   SystemProgram,
+  Transaction,
+  type TransactionSignature,
 } from "@solana/web3.js";
 import type { AnchorWallet, Program } from "@anchor-lang/core";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
@@ -16,6 +18,7 @@ import type {
   MoveResult,
 } from "./types";
 import { findChessMatchPda, findMatchEscrowPda } from "./pda";
+import { MAGIC_PROGRAM_ID, MAGIC_CONTEXT_ID } from "./magicblock";
 
 const TOKEN_PROGRAM = TOKEN_PROGRAM_ID;
 const SYSTEM_PROGRAM = SystemProgram.programId;
@@ -209,6 +212,118 @@ export class MagicChessClient {
         tokenProgram: TOKEN_PROGRAM,
       })
       .rpc();
+
+    return { signature: sig };
+  }
+
+  // ── MagicBlock Ephemeral Rollups ───────────────────────────────
+
+  /**
+   * Delegate a chess match account to MagicBlock Ephemeral Rollups.
+   *
+   * This locks the match account on the base layer and clones it into the ER,
+   * enabling low-latency gameplay. Send to **base layer**.
+   *
+   * @param matchId - The match to delegate. Used as the delegation uid.
+   */
+  async delegateMatch(
+    matchId: string
+  ): Promise<{ signature: TransactionSignature }> {
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+
+    const sig = await this.program.methods
+      .delegateMatch(matchId)
+      .accounts({
+        payer: this.wallet?.publicKey,
+        chessMatch: chessMatchPda,
+      })
+      .rpc();
+
+    return { signature: sig };
+  }
+
+  /**
+   * Commit the delegated account state from the ER back to the base layer.
+   *
+   * Keeps the account delegated after commit so gameplay can continue.
+   * Send to the **Ephemeral Rollup** connection.
+   *
+   * @param matchId - The delegated match to commit.
+   * @param erConnection - A Connection to the ER validator (use {@link getERConnection}).
+   */
+  async commitState(
+    matchId: string,
+    erConnection: Connection
+  ): Promise<{ signature: TransactionSignature }> {
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+
+    if (!this.wallet) {
+      throw new Error("commitState requires a wallet for signing");
+    }
+
+    const ix = await this.program.methods
+      .commitState()
+      .accounts({
+        payer: this.wallet.publicKey,
+        chessMatch: chessMatchPda,
+        magicProgram: MAGIC_PROGRAM_ID,
+        magicContext: MAGIC_CONTEXT_ID,
+      })
+      .instruction();
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = this.wallet.publicKey;
+
+    const { blockhash } = await erConnection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
+    const signedTx = await this.wallet.signTransaction(tx);
+    const sig = await erConnection.sendRawTransaction(
+      signedTx.serialize()
+    );
+
+    return { signature: sig };
+  }
+
+  /**
+   * Commit state and undelegate the match from the ER back to the base layer.
+   *
+   * After this, the account is no longer delegated and subsequent operations
+   * should be sent to the base layer. Send to the **Ephemeral Rollup** connection.
+   *
+   * @param matchId - The delegated match to undelegate.
+   * @param erConnection - A Connection to the ER validator (use {@link getERConnection}).
+   */
+  async undelegateMatch(
+    matchId: string,
+    erConnection: Connection
+  ): Promise<{ signature: TransactionSignature }> {
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+
+    if (!this.wallet) {
+      throw new Error("undelegateMatch requires a wallet for signing");
+    }
+
+    const ix = await this.program.methods
+      .undelegateMatch()
+      .accounts({
+        payer: this.wallet.publicKey,
+        chessMatch: chessMatchPda,
+        magicProgram: MAGIC_PROGRAM_ID,
+        magicContext: MAGIC_CONTEXT_ID,
+      })
+      .instruction();
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = this.wallet.publicKey;
+
+    const { blockhash } = await erConnection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
+    const signedTx = await this.wallet.signTransaction(tx);
+    const sig = await erConnection.sendRawTransaction(
+      signedTx.serialize()
+    );
 
     return { signature: sig };
   }
