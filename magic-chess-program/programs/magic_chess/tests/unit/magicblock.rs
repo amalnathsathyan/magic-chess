@@ -52,20 +52,6 @@ fn standard_match(current_turn: PlayerColor) -> ChessMatch {
     make_match(chess_logic::initialize_chess_board(), current_turn)
 }
 
-/// Create an 8x8 board with only two kings placed far apart.
-fn board_with_kings() -> [[Option<Piece>; 8]; 8] {
-    let mut board = [[None; 8]; 8];
-    board[0][4] = Some(Piece {
-        piece_type: PieceType::King,
-        color: PlayerColor::White,
-    });
-    board[7][4] = Some(Piece {
-        piece_type: PieceType::King,
-        color: PlayerColor::Black,
-    });
-    board
-}
-
 /// Simulate the session key validation check used in make_move.rs.
 /// Session is valid if: session_signer != default() AND signer == session_signer AND now < expires_at.
 fn is_session_valid(chess_match: &ChessMatch, signer: Pubkey, now: i64) -> bool {

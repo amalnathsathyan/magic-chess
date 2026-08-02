@@ -17,6 +17,11 @@ no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 integration-tests = [
     "dep:mollusk-svm",
+    "dep:solana-account",
+    "dep:solana-pubkey",
+    "dep:solana-instruction",
+    "dep:solana-hash",
+    "dep:solana-system-program",
     "dep:solana-program-test",
     "dep:spl-token",
     "dep:spl-associated-token-account",
@@ -33,6 +38,11 @@ ephemeral-rollups-sdk = { version = "0.16.2", features = ["anchor"] }
 
 # Integration test dependencies — gated behind the "integration-tests" feature.
 mollusk-svm = { version = "0.14.0", optional = true }
+solana-account = { version = "4", optional = true }
+solana-pubkey = { version = "4", optional = true }
+solana-instruction = { version = "3", optional = true }
+solana-hash = { version = "3", optional = true }
+solana-system-program = { version = "4", optional = true }
 solana-program-test = { version = "2.3", optional = true }
 spl-token = { version = "7.0", optional = true }
 spl-associated-token-account = { version = "4.0", optional = true }
@@ -41,3 +51,20 @@ tokio = { version = "1", features = ["rt", "macros"], optional = true }
 [dev-dependencies]
 anchor-lang = "1.1.2"
 solana-sdk = "2.3"
+solana-program-test = "2.3"
+spl-token = "7.0"
+spl-associated-token-account = "4.0"
+tokio = { version = "1", features = ["rt", "macros"] }
+borsh = "1"
+sha2 = "0.10"
+mollusk-svm = "0.14.0"
+
+[[test]]
+name = "cu_benchmarks"
+path = "tests/mollusk/cu_benchmarks.rs"
+required-features = ["integration-tests"]
+
+[[test]]
+name = "payout_full_flow"
+path = "tests/integration/payout_full_flow.rs"
+required-features = ["integration-tests"]
