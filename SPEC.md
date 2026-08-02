@@ -493,3 +493,52 @@ The following items are pending research from parallel agent investigations. Fin
 - Database schema for match history, player stats, ELO ratings
 - Crank system design for automated timeout detection
 - Matchmaking algorithm design
+
+---
+
+## 11. Prediction Markets (Post-MVP)
+
+Opt-in per-match prediction pools. Gated by `prediction_enabled` bool on `ChessMatch`.
+
+### Design
+- **PredictionPool PDA** per match: tracks total bets on White/Black/Draw
+- **Parimutuel** payout model (proportional to winning pool)
+- **Pull-model** claims: winners claim individually (avoids CU limits)
+- **Players blocked** from betting (anti-match-fixing)
+- **Bets locked** once game status = Active
+
+### New Instructions (5, deferred)
+1. `initialize_prediction_pool` — create pool PDA
+2. `place_prediction_bet` — spectator bets
+3. `settle_prediction_pool` — trigger after game ends
+4. `claim_prediction_winnings` — winners claim
+5. `cancel_prediction_bet` — refund if match never starts
+
+### Added Now
+- `prediction_enabled: bool` on ChessMatch (1 byte, defaults false)
+- No changes to chess logic, match lifecycle, or settlement
+
+See `agent-findings/05-prediction-markets.md` for full architecture and attack vector analysis.
+
+## TypeScript SDK
+
+Package: `@magic-chess/sdk` at `sdk/`
+
+- Thin wrapper over `@anchor-lang/core` Program<MagicChess>
+- React hooks via `/react` subpath export
+- PDA utilities, typed instruction builders, event listeners
+- See `agent-findings/04-ts-sdk-design.md` for full architecture
+
+### API Surface
+| Method | Description |
+|--------|-------------|
+| `createMatch(params)` | Initialize a new chess match with bet |
+| `joinMatch(params)` | Join as player 2, match bet amount |
+| `abortMatch(matchId)` | Cancel while WaitingForOpponent (TODO: add to program) |
+| `makeMove(matchId, move)` | Execute a chess move |
+| `resign(matchId)` | Resign the game |
+| `claimTimeout(matchId)` | Claim win on opponent timeout |
+| `settleMatch(matchId)` | Process payouts after game ends |
+| `getMatch(matchId)` | Fetch full match state |
+| `listJoinableMatches(filters?)` | Find open matches |
+| `getPlayerMatches(player)` | List player's matches |
