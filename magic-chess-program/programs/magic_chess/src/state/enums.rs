@@ -33,6 +33,7 @@ pub enum GameStatus {
     WhiteWins,
     BlackWins,
     Draw,
+    Aborted,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug, PartialEq, Eq, InitSpace)]
@@ -43,6 +44,7 @@ pub enum GameEndReason {
     Timeout,
     FiftyMoveRule,
     ThreefoldRepetition,
+    Aborted,
     // InsufficientMaterial, // Potentially later
 }
 

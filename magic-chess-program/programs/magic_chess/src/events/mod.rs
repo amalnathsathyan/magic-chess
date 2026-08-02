@@ -65,3 +65,13 @@ pub struct MatchCreatedEvent {
     pub platform_fee_basis_points: u16, // Added this field
 }
 
+#[event]
+pub struct MatchAbortedEvent {
+    pub match_id: String,
+    pub creator: Pubkey,
+}
+
+#[event]
+pub struct MatchClosedEvent {
+    pub match_id: String,
+}

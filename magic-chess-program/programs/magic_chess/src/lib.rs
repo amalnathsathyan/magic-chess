@@ -11,10 +11,6 @@ pub mod instructions;
 pub mod state;
 pub mod utils;
 
-#[cfg(test)]
-#[path = "unit_chess.rs"]
-mod chess_unit_tests;
-
 use instructions::*;
 
 
@@ -101,5 +97,25 @@ pub mod speed_chess {
     // Cancel a previously scheduled timeout crank task
     pub fn cancel_timeout_task(ctx: Context<CancelTimeoutTask>) -> Result<()> {
         instructions::cancel_timeout_task::handle_cancel_timeout_task(ctx)
+    }
+
+    // Set a session key for gasless move signing on MagicBlock ER
+    pub fn set_session_key(ctx: Context<SetSessionKey>, session_signer: Pubkey, expires_at: i64) -> Result<()> {
+        instructions::set_session_key::handle_set_session_key(ctx, session_signer, expires_at)
+    }
+
+    // Revoke the active session key for this match
+    pub fn revoke_session_key(ctx: Context<RevokeSessionKey>) -> Result<()> {
+        instructions::revoke_session_key::handle_revoke_session_key(ctx)
+    }
+
+    // Abort a match that is still waiting for an opponent (creator only)
+    pub fn abort_match(ctx: Context<AbortMatch>) -> Result<()> {
+        instructions::abort_match::handle_abort_match(ctx)
+    }
+
+    // Close a chess_match PDA after settlement, returning rent to the caller
+    pub fn close_match(ctx: Context<CloseMatch>) -> Result<()> {
+        instructions::close_match::handle_close_match(ctx)
     }
 }

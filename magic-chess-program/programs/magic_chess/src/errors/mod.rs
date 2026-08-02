@@ -30,8 +30,6 @@ pub enum ChessError {
     InvalidMoveCannotCaptureOwnPiece,
     #[msg("Invalid move: Illegal movement for this piece type.")]
     InvalidMoveIllegalPieceMovement,
-    #[msg("Invalid move: Path is blocked.")]
-    InvalidMovePathBlocked,
     #[msg("Invalid move: Move leaves king in check.")]
     InvalidMoveLeavesKingInCheck,
     #[msg("Invalid promotion: Specified piece type is not allowed for promotion.")]
@@ -84,10 +82,20 @@ pub enum ChessError {
     PlayerTokenAccountMismatch,
     #[msg("Platform fee token account mismatch or invalid mint for payout.")]
     PlatformTokenAccountError,
+    #[msg("Platform fee wallet does not match the expected recipient.")]
+    InvalidPlatformFeeWallet,
+    #[msg("Duplicate mutable accounts detected — state corruption risk.")]
+    DuplicateAccounts,
     #[msg("Game state is invalid for processing a payout (e.g., winner does not exist).")]
     InvalidGameStateForPayout,
     #[msg("Signer is not authorized — must be the player whose turn it is or a valid session key.")]
     UnauthorizedSigner,
     #[msg("Session key is expired or invalid for this action.")]
     InvalidSession,
+    #[msg("Match is not in WaitingForOpponent state, cannot abort.")]
+    MatchNotWaitingForOpponent,
+    #[msg("Only the match creator can perform this action.")]
+    NotMatchCreator,
+    #[msg("Match settlement has not been processed yet, cannot close.")]
+    MatchNotSettled,
 }
