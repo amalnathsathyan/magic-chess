@@ -9,3 +9,14 @@ test-ledger/
 dist/
 .anchor/
 agent-findings/
+
+# Keep local only — not pushed to remote
+BACKEND_DESIGN.md
+DEPLOYMENT_PLAN.md
+FEE_SPLIT_DESIGN.md
+HACKATHON_SHOWCASE.md
+MIGRATION_PLAN.md
+MVP-ORDER.md
+TOKEN_STRATEGY.md
+program/
+scripts/
