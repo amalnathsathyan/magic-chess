@@ -15,11 +15,11 @@ use instructions::*;
 
 
 
-declare_id!("5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6");
+declare_id!("FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h");
 
 #[ephemeral]
 #[program]
-pub mod speed_chess {
+pub mod magic_chess {
     use super::*; // Brings in InitializeMatch, JoinMatch, MakeMove, ResignGame, ClaimTimeoutWin, ProcessMatchSettlement, MakeMoveArgs from instructions::*
 
     // Initialize a new chess match with betting enabled

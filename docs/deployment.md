@@ -100,7 +100,7 @@ Deploying cluster: https://api.devnet.solana.com
 Upgrade authority: /Users/.../.config/solana/id.json
 Deploying program "magic_chess"...
 Program path: ./target/deploy/magic_chess.so...
-Program Id: 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6
+Program Id: FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h
 
 Deploy success
 ```
@@ -110,13 +110,13 @@ Deploy success
 Check that the program is live on devnet:
 
 ```bash
-solana program show 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6 --url devnet
+solana program show FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h --url devnet
 ```
 
 Or visit the Solana Explorer:
 
 ```
-https://explorer.solana.com/address/5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6?cluster=devnet
+https://explorer.solana.com/address/FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h?cluster=devnet
 ```
 
 The explorer should show the program account with the owner set to the BPF Loader and the executable flag set to `true`.
@@ -126,7 +126,7 @@ The explorer should show the program account with the owner set to the BPF Loade
 Anchor 1.x uses Program Metadata to store the IDL on-chain. Initialize it:
 
 ```bash
-anchor idl init 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6 \
+anchor idl init FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h \
   --filepath target/idl/magic_chess.json \
   --provider.cluster devnet
 ```
@@ -134,7 +134,7 @@ anchor idl init 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6 \
 Verify the IDL upload:
 
 ```bash
-anchor idl fetch 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6 --provider.cluster devnet
+anchor idl fetch FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h --provider.cluster devnet
 ```
 
 ### 5. Upgrade (re-deploy)
@@ -144,14 +144,14 @@ To upgrade an existing program:
 ```bash
 anchor build
 anchor upgrade --provider.cluster devnet \
-  --program-id 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6 \
+  --program-id FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h \
   ./target/deploy/magic_chess.so
 ```
 
 Then update the IDL:
 
 ```bash
-anchor idl upgrade 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6 \
+anchor idl upgrade FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h \
   --filepath target/idl/magic_chess.json \
   --provider.cluster devnet
 ```
@@ -170,10 +170,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-magic_chess = "5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6"
+magic_chess = "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h"
 
 [programs.localnet]
-magic_chess = "5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6"
+magic_chess = "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h"
 
 [provider]
 cluster = "localnet"
@@ -287,7 +287,7 @@ anchor deploy --provider.cluster devnet
 The IDL hasn't been uploaded. Run:
 
 ```bash
-anchor idl init 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6 \
+anchor idl init FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h \
   --filepath target/idl/magic_chess.json \
   --provider.cluster devnet
 ```
@@ -321,4 +321,4 @@ anchor deploy --provider.cluster devnet
 anchor idl init <PROGRAM_ID> --filepath target/idl/magic_chess.json --provider.cluster devnet
 ```
 
-Program ID (devnet): `5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6`
+Program ID (devnet): `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h`

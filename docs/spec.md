@@ -2,7 +2,7 @@
 
 > **Repo**: https://github.com/amalnathsathyan/magic-chess
 > **Program**: `magic_chess` (Anchor 0.31.1)
-> **Program ID**: `5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6`
+> **Program ID**: `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h`
 > **Branch**: `main`
 > **Commit convention**: Standard commits. Do NOT use "Co-Authored-By: Claude" going forward.
 

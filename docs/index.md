@@ -58,4 +58,4 @@ npm run anchor-test
 
 [https://github.com/amalnathsathyan/magic-chess](https://github.com/amalnathsathyan/magic-chess)
 
-Program ID (devnet): `5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6`
+Program ID (devnet): `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h`

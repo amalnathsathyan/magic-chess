@@ -36,7 +36,7 @@ import { expect } from "chai";
 
 // @ts-ignore — JSON import requires resolveJsonModule in tsconfig (enabled)
 import idl from "../target/idl/magic_chess.json";
-import type { SpeedChess } from "../target/types/speed_chess";
+import type { MagicChess } from "../target/types/magic_chess";
 import { Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
@@ -152,7 +152,7 @@ async function setupTokenMint(
  * Returns everything needed to make moves.
  */
 async function createAndJoinMatch(
-  program: Program<SpeedChess>,
+  program: Program<MagicChess>,
   provider: anchor.AnchorProvider,
   player1: Keypair,
   player2: Keypair,
@@ -229,7 +229,7 @@ async function createAndJoinMatch(
  * a1 = (row:0, col:0), h8 = (row:7, col:7).
  */
 async function makeMove(
-  program: Program<SpeedChess>,
+  program: Program<MagicChess>,
   chessMatchPda: PublicKey,
   signer: Keypair,
   fromRow: number,
@@ -265,7 +265,7 @@ describe("Magic Chess — Standard Integration Tests", () => {
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
 
-  const program = new Program<SpeedChess>(idl as any, provider);
+  const program = new Program<MagicChess>(idl as any, provider);
 
   // Detect localnet to conditionally skip MagicBlock-dependent tests
   const isLocalnet = (provider.connection.rpcEndpoint.includes("localhost")

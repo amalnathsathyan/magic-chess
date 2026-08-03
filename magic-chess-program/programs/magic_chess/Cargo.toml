@@ -62,4 +62,3 @@ required-features = ["integration-tests"]
 [[test]]
 name = "payout_full_flow"
 path = "tests/integration/payout_full_flow.rs"
-required-features = ["integration-tests"]

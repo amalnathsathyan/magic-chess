@@ -41,7 +41,7 @@ use solana_system_program::id as system_program_id;
 use std::str::FromStr;
 
 // ── Program identity ───────────────────────────────────────────────────────
-const PROGRAM_ID_STR: &str = "5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6";
+const PROGRAM_ID_STR: &str = "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h";
 /// Path to the compiled program .so file, relative to the cargo manifest dir.
 ///
 /// Mollusk auto-appends `.so` when searching, so omit the extension here.
@@ -124,6 +124,7 @@ fn build_init_match_ix_data(
     move_timeout_duration: i64,
     platform_fee_basis_points: u16,
     platform_fee_wallet: &Pubkey,
+    prediction_enabled: bool,
 ) -> Vec<u8> {
     let mut data = Vec::new();
     data.extend_from_slice(&instruction_disc("initialize_match"));
@@ -136,6 +137,7 @@ fn build_init_match_ix_data(
     data.extend_from_slice(&move_timeout_duration.to_le_bytes());
     data.extend_from_slice(&platform_fee_basis_points.to_le_bytes());
     data.extend_from_slice(&platform_fee_wallet.to_bytes());
+    data.push(prediction_enabled as u8);
 
     data
 }
@@ -627,6 +629,7 @@ fn bench_06_initialize_match() {
         move_timeout_duration,
         platform_fee_bps,
         &platform_fee_wallet,
+        false,
     );
 
     let account_metas = vec![
@@ -731,11 +734,12 @@ fn bench_07_initialize_match_with_token() {
 
     let token_program_id = Pubkey::from_str(TOKEN_PROGRAM_ID_STR).unwrap();
 
-    // Try to find and load the SPL Token .so file
+    // Try to find and load the SPL Token .so file.
+    // Mollusk auto-appends `.so` when searching, so omit the extension here.
     let token_so_paths = [
-        "../../target/deploy/spl_token.so",
-        "target/deploy/spl_token.so",
-        "tests/fixtures/spl_token.so",
+        "../../target/deploy/spl_token",
+        "target/deploy/spl_token",
+        "tests/fixtures/spl_token",
     ];
     let mut token_loaded = false;
     for path in &token_so_paths {
@@ -787,6 +791,7 @@ fn bench_07_initialize_match_with_token() {
         move_timeout_duration,
         platform_fee_bps,
         &platform_fee_wallet,
+        false,
     );
 
     let account_metas = vec![

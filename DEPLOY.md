@@ -5,7 +5,7 @@
 > **Anchor CLI**: 1.1.2
 > **Build SBF**: requires `--tools-version v1.52` (v1.54 crashes on macOS 12)
 > **Surfpool**: `~/.cargo/bin/surfpool`
-> **Program ID**: `5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6`
+> **Program ID**: `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h`
 > **Program Keypair**: `target/deploy/magic_chess-keypair.json`
 > **Program Binary**: `target/deploy/magic_chess.so`
 > **Last updated**: 2026-08-03
@@ -46,14 +46,14 @@ export ANCHOR_WALLET="$HOME/.config/solana/id.json"
 
 ```bash
 ls -la magic-chess-program/target/deploy/magic_chess-keypair.json
-# Must show a 298-byte file containing the private key for 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6
+# Must show a 298-byte file containing the private key for FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h
 ```
 
 ### 5. Confirm Anchor.toml program ID matches the keypair
 
 ```bash
 solana-keygen pubkey magic-chess-program/target/deploy/magic_chess-keypair.json
-# Must print: 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6
+# Must print: FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h
 ```
 
 ---
@@ -140,7 +140,7 @@ solana program deploy \
 ### A.5 Verify deployment
 
 ```bash
-solana program show 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6
+solana program show FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h
 # Expected: Owner: BPFLoaderUpgradeab1e11111111111111111111111
 ```
 
@@ -168,7 +168,7 @@ cargo test --test litesvm
 ### Quick Verify (Path A)
 
 ```bash
-solana program show 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6 && \
+solana program show FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h && \
 solana balance && \
 echo "Surfpool deploy OK"
 ```
@@ -226,18 +226,18 @@ solana program deploy \
 
 Expected output:
 ```
-Program Id: 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6
+Program Id: FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h
 ```
 
 ### B.5 Verify deployment
 
 ```bash
-solana program show 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6 --url devnet
+solana program show FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h --url devnet
 ```
 
 Expected:
 ```
-Program Id: 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6
+Program Id: FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h
 Owner: BPFLoaderUpgradeab1e11111111111111111111111
 Executable: true
 ```
@@ -248,13 +248,13 @@ Executable: true
 ANCHOR_PROVIDER_URL="https://api.devnet.solana.com" \
 anchor idl init \
   --filepath target/idl/magic_chess.json \
-  5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6
+  FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h
 ```
 
 ### Quick Verify (Path B)
 
 ```bash
-solana program show 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6 --url devnet && \
+solana program show FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h --url devnet && \
 solana balance --url devnet && \
 echo "Devnet deploy OK"
 ```
@@ -267,7 +267,7 @@ Path B (Solana devnet) is a prerequisite — the base program must be live on de
 
 ### C.1 Prerequisites
 
-- Path B completed: program live on Solana devnet at `5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6`
+- Path B completed: program live on Solana devnet at `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h`
 - Dependencies installed:
 
 ```bash
@@ -361,7 +361,7 @@ solana program deploy \
 
 **Option 2: Close and redeploy** (fresh start, breaks all existing PDAs):
 ```bash
-solana program close 5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6 \
+solana program close FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h \
   --url devnet --bypass-warning
 solana program deploy --url devnet \
   --program-id target/deploy/magic_chess-keypair.json \

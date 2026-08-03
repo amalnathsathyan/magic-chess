@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 
 // ── Well-known constants ──────────────────────────────────────────────────
 
-pub const PROGRAM_ID_STR: &str = "5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6";
+pub const PROGRAM_ID_STR: &str = "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h";
 pub const CHESS_MATCH_SEED: &[u8] = b"chess_match";
 pub const MATCH_ESCROW_SEED: &[u8] = b"match_escrow";
 
@@ -128,7 +128,7 @@ impl TestSvm {
 
         // Try to load SPL Token program for token operations
         if let Some(token_bytes) = load_token_so() {
-            ctx.svm.add_program(token_program_id(), &token_bytes);
+            let _ = ctx.svm.add_program(token_program_id(), &token_bytes);
         }
 
         TestSvm { ctx }
@@ -142,6 +142,7 @@ impl TestSvm {
         self.ctx.create_funded_account(lamports).expect("create_funded_account")
     }
 
+    #[allow(dead_code)]
     pub fn airdrop(&mut self, pubkey: &Pubkey, lamports: u64) {
         self.ctx.airdrop(pubkey, lamports).expect("airdrop");
     }

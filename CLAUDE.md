@@ -37,7 +37,7 @@ magic-chess/
 ## Key Technical Details
 
 - **Anchor 1.1.2**, Rust, Solana 2.x crates
-- **Program ID**: `5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6`
+- **Program ID**: `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h`
 - **Build**: `cargo build-sbf --tools-version v1.52` (macOS 12 compat)
 - **MagicBlock**: Ephemeral Rollups via delegation program `DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh`
 - **Crank**: Task Scheduler `Magic11111111111111111111111111111111111111`

@@ -8,7 +8,7 @@
  */
 
 export type MagicChess = {
-  address: "5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6";
+  address: "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h";
   metadata: {
     name: "magicChess";
     version: "0.1.0";
