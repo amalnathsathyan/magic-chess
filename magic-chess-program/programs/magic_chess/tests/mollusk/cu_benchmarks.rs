@@ -41,7 +41,7 @@ use solana_system_program::id as system_program_id;
 use std::str::FromStr;
 
 // ── Program identity ───────────────────────────────────────────────────────
-const PROGRAM_ID_STR: &str = "F8MMYzGxdXdtKTkGqUJvDrmTWm8bBb1zyajLT1s5tpMe";
+const PROGRAM_ID_STR: &str = "5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6";
 /// Path to the compiled program .so file, relative to the cargo manifest dir.
 ///
 /// Mollusk auto-appends `.so` when searching, so omit the extension here.

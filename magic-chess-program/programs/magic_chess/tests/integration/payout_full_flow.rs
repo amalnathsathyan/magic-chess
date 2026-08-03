@@ -31,7 +31,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 //  Constants
 // ============================================================================
 
-const PROGRAM_ID_STR: &str = "F8MMYzGxdXdtKTkGqUJvDrmTWm8bBb1zyajLT1s5tpMe";
+const PROGRAM_ID_STR: &str = "5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6";
 const PROGRAM_SO_PATH: &str = "../../target/deploy/magic_chess";
 
 const CHESS_MATCH_SEED: &[u8] = b"chess_match";

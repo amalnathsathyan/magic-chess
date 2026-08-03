@@ -16,7 +16,7 @@ use sha2::{Digest, Sha256};
 
 // ── Well-known constants ──────────────────────────────────────────────────
 
-pub const PROGRAM_ID_STR: &str = "F8MMYzGxdXdtKTkGqUJvDrmTWm8bBb1zyajLT1s5tpMe";
+pub const PROGRAM_ID_STR: &str = "5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6";
 pub const CHESS_MATCH_SEED: &[u8] = b"chess_match";
 pub const MATCH_ESCROW_SEED: &[u8] = b"match_escrow";
 

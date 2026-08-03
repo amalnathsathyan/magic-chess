@@ -15,7 +15,7 @@ use instructions::*;
 
 
 
-declare_id!("F8MMYzGxdXdtKTkGqUJvDrmTWm8bBb1zyajLT1s5tpMe");
+declare_id!("5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6");
 
 #[ephemeral]
 #[program]
