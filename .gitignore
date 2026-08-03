@@ -18,16 +18,8 @@ frontend/.next/
 backend/node_modules/
 backend/dist/
 
-# Keep local only — not pushed to remote
-BACKEND_DESIGN.md
-DEPLOYMENT_PLAN.md
-FEE_SPLIT_DESIGN.md
-HACKATHON_SHOWCASE.md
-MIGRATION_PLAN.md
-MVP-ORDER.md
-TOKEN_STRATEGY.md
+# Program build artifacts
 magic-chess-program/target/
-scripts/
 
 # Surfpool logs and state
 .surfpool/
