@@ -48,18 +48,17 @@
  *
  * ── Account Notes ──────────────────────────────────────────────────────
  *
- * The delegate_match instruction uses @delegate from ephemeral_rollups_sdk,
- * which injects two extra accounts beyond what the base IDL declares:
- *   - magic_context  (MagicContext account)
- *   - magic_program  (Delegation program: DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh)
+ * The IDL is built with MagicBlock macros enabled, so ALL accounts are
+ * declared in the IDL (including auto-generated PDA accounts for delegation).
+ * Anchor v0.32.1 auto-resolves these accounts from the IDL — no manual
+ * remainingAccounts or PDA derivation is needed.
  *
- * Similarly, commit_state uses @commit, which injects:
- *   - magic_context
- *   - magic_program
+ * delegate_match: 8 accounts (payer, buffer_chess_match, delegation_record,
+ *   delegation_metadata, chess_match, owner_program, delegation_program,
+ *   system_program) — ALL auto-resolved by Anchor.
  *
- * These accounts must be resolved at runtime. The Anchor TS client may not
- * auto-resolve them if the IDL was built without the MagicBlock macros.
- * In that case, add them manually to the transaction instruction.
+ * commit_state / undelegate_match: 4 accounts (payer, chess_match,
+ *   magic_program [Task Scheduler], magic_context) — ALL auto-resolved.
  *
  * ── Free Commit Budget ──────────────────────────────────────────────────
  *
@@ -110,15 +109,19 @@ const DELEGATION_POLL_INTERVAL_MS = 1000;
 
 describe("MagicBlock Ephemeral Rollup — Full Lifecycle", () => {
   // ── Provider setup ──────────────────────────────────────────────────
-  // Use the base-layer RPC for the Anchor provider.
-  // WARNING: The standard AnchorProvider will connect to the base layer.
-  // For ER transactions (moves), we construct a separate Connection to the
-  // ER fqdn resolved from the router.
+  // Use the MagicBlock RPC for the Anchor provider (delegation/commit/undelegate).
+  // For funding, fall back to standard devnet RPC to avoid sync lag.
   const baseConnection = new anchor.web3.Connection(BASE_LAYER_RPC, "confirmed");
+  const baseConnectionFallback = new anchor.web3.Connection(
+    "https://api.devnet.solana.com",
+    "confirmed"
+  );
 
-  // Payer wallet — in a real test, this comes from the Anchor provider's wallet.
-  // For devnet tests, ensure ~0.5 SOL for account rent + transaction fees.
-  const payer = anchor.web3.Keypair.generate();
+  // Payer wallet — reuses ANCHOR_WALLET keypair to avoid needing SOL transfers
+  const payer = (() => {
+    const envWallet = anchor.AnchorProvider.env().wallet;
+    return (envWallet as any).payer as anchor.web3.Keypair;
+  })();
 
   // Opponent wallet — player 2 who joins the match
   const opponent = anchor.web3.Keypair.generate();
@@ -154,20 +157,56 @@ describe("MagicBlock Ephemeral Rollup — Full Lifecycle", () => {
   // ────────────────────────────────────────────────────────────────────
   // Setup: create SPL token mint and fund both players
   // ────────────────────────────────────────────────────────────────────
-  before(async () => {
-    // NOTE: In a real test, you would airdrop SOL to the payer and opponent.
-    // For devnet, request airdrops:
-    //   await baseConnection.requestAirdrop(payer.publicKey, 2 * LAMPORTS_PER_SOL);
-    // For local testing where balances may be zero, consider:
-    //   - Using a pre-funded keypair from Anchor.toml provider.wallet
-    //   - Or seeding funds via solana-test-validator
+  before(async function () {
+    this.timeout(120000);
 
     console.log(`Payer: ${payer.publicKey.toBase58()}`);
     console.log(`Opponent: ${opponent.publicKey.toBase58()}`);
+
+    // Fund opponent wallet (small amount needed for join + tx fee)
+    const payerBal = await baseConnectionFallback.getBalance(payer.publicKey);
+    console.log(`Payer balance: ${payerBal / anchor.web3.LAMPORTS_PER_SOL} SOL`);
+
+    // Try airdrop to opponent, fall back to small transfer from payer
+    const opponentFundAmount = 0.1 * anchor.web3.LAMPORTS_PER_SOL; // 0.1 SOL
+    console.log(`Funding opponent: ${opponent.publicKey.toBase58().slice(0, 8)}...`);
+    try {
+      const sig = await baseConnectionFallback.requestAirdrop(
+        opponent.publicKey, opponentFundAmount
+      );
+      await baseConnectionFallback.confirmTransaction(sig);
+      console.log(`  Airdrop confirmed: ${sig.slice(0, 12)}...`);
+    } catch (e: any) {
+      console.log(`  Airdrop failed, transferring from payer...`);
+      const tx = new anchor.web3.Transaction().add(
+        anchor.web3.SystemProgram.transfer({
+          fromPubkey: payer.publicKey,
+          toPubkey: opponent.publicKey,
+          lamports: opponentFundAmount,
+        })
+      );
+      try {
+        await anchor.web3.sendAndConfirmTransaction(
+          baseConnectionFallback, tx, [payer]
+        );
+        console.log(`  Funded via transfer.`);
+      } catch (e2: any) {
+        console.log(`  Transfer also failed: ${e2.message?.slice(0, 80)}`);
+        console.log(`  Payer may not have enough SOL. Skipping funding.`);
+      }
+    }
+
+    // Wait for MagicBlock RPC to sync opponent balance
+    for (let i = 0; i < 10; i++) {
+      const bal = await baseConnection.getBalance(opponent.publicKey);
+      if (bal > 0) { console.log(`  Opponent balance synced: ${bal / anchor.web3.LAMPORTS_PER_SOL} SOL`); break; }
+      if (i === 0) console.log(`Waiting for RPC sync...`);
+      await sleep(1000);
+    }
+
     console.log(`Match ID: ${matchId}`);
 
     // Create a fake SPL token mint for betting (devnet)
-    // In production, you would use an existing mint like USDC or wSOL.
     bettingMint = await createMint(
       baseConnection,
       payer,
@@ -286,17 +325,10 @@ describe("MagicBlock Ephemeral Rollup — Full Lifecycle", () => {
   it("Step 2 — Delegate the match account to MagicBlock ER", async () => {
     const uid = `chess-${matchId}`;
 
-    // IMPORTANT: The delegate_match instruction uses the @delegate macro from
-    // ephemeral_rollups_sdk, which injects two extra accounts:
-    //   - magic_context: The MagicContext PDA
-    //   - magic_program:  DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh
-    //
-    // If the IDL was rebuilt with the MagicBlock feature enabled, these accounts
-    // will be auto-resolved by Anchor. Otherwise, they need to be passed in the
-    // `.remainingAccounts()` array.
-    //
-    // The MagicContext PDA is derived as:
-    //   findProgramAddressSync([b"magic_context"], delegation_program_id)
+    // The IDL includes all accounts auto-generated by @delegate and @ephemeral
+    // macros: payer, buffer_chess_match, delegation_record_chess_match,
+    // delegation_metadata_chess_match, chess_match, owner_program,
+    // delegation_program, system_program. Anchor auto-resolves all of them.
 
     const tx = await program.methods
       .delegateMatch(uid)
@@ -304,23 +336,6 @@ describe("MagicBlock Ephemeral Rollup — Full Lifecycle", () => {
         payer: payer.publicKey,
         chessMatch: chessMatchPda,
       })
-      .remainingAccounts([
-        // MagicContext PDA — the ER runtime context account
-        {
-          pubkey: PublicKey.findProgramAddressSync(
-            [Buffer.from("magic_context")],
-            DELEGATION_PROGRAM_ID
-          )[0],
-          isWritable: false,
-          isSigner: false,
-        },
-        // MagicBlock delegation program
-        {
-          pubkey: DELEGATION_PROGRAM_ID,
-          isWritable: false,
-          isSigner: false,
-        },
-      ])
       .signers([payer])
       .rpc();
 
@@ -489,29 +504,16 @@ describe("MagicBlock Ephemeral Rollup — Full Lifecycle", () => {
   // Step 5: Commit state back to the base layer
   // ────────────────────────────────────────────────────────────────────
   it("Step 5 — Commit ER state back to the base layer", async () => {
-    // The commit_state instruction uses the @commit macro, which injects
-    // magic_context and magic_program accounts like delegate does.
+    // The commit_state instruction has 4 accounts: payer, chess_match,
+    // magic_program (Task Scheduler: Magic11111111111111111111111111111111111111),
+    // magic_context (MagicContext1111111111111111111111111111111).
+    // All are auto-resolved by Anchor from the IDL.
     const tx = await program.methods
       .commitState()
       .accounts({
         payer: payer.publicKey,
         chessMatch: chessMatchPda,
       })
-      .remainingAccounts([
-        {
-          pubkey: PublicKey.findProgramAddressSync(
-            [Buffer.from("magic_context")],
-            DELEGATION_PROGRAM_ID
-          )[0],
-          isWritable: false,
-          isSigner: false,
-        },
-        {
-          pubkey: DELEGATION_PROGRAM_ID,
-          isWritable: false,
-          isSigner: false,
-        },
-      ])
       .signers([payer])
       .rpc();
 
@@ -534,27 +536,13 @@ describe("MagicBlock Ephemeral Rollup — Full Lifecycle", () => {
   it("Step 6 — Undelegate the match account", async () => {
     // Undelegate: commit any remaining state and release the account from ER.
     // Uses @commit macro internally via commit_and_undelegate.
+    // Same account structure as commitState; Anchor auto-resolves all.
     const tx = await program.methods
       .undelegateMatch()
       .accounts({
         payer: payer.publicKey,
         chessMatch: chessMatchPda,
       })
-      .remainingAccounts([
-        {
-          pubkey: PublicKey.findProgramAddressSync(
-            [Buffer.from("magic_context")],
-            DELEGATION_PROGRAM_ID
-          )[0],
-          isWritable: false,
-          isSigner: false,
-        },
-        {
-          pubkey: DELEGATION_PROGRAM_ID,
-          isWritable: false,
-          isSigner: false,
-        },
-      ])
       .signers([payer])
       .rpc();
 

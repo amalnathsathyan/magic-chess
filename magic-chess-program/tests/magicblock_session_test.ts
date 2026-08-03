@@ -282,17 +282,9 @@ describe("MagicBlock Session Key — Authorization Flow", () => {
         payer: whitePlayer.publicKey,
         chessMatch: chessMatchPda,
       })
-      .remainingAccounts([
-        {
-          pubkey: PublicKey.findProgramAddressSync(
-            [Buffer.from("magic_context")],
-            DELEGATION_PROGRAM_ID
-          )[0],
-          isWritable: false,
-          isSigner: false,
-        },
-        { pubkey: DELEGATION_PROGRAM_ID, isWritable: false, isSigner: false },
-      ])
+      // The #[delegate] macro auto-adds: buffer_chess_match, delegation_record,
+      // delegation_metadata, owner_program, delegation_program, system_program.
+      // Anchor auto-resolves these — no remaining accounts needed.
       .signers([whitePlayer])
       .rpc();
 

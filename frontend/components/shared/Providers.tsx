@@ -5,15 +5,19 @@ import { Provider as JotaiProvider } from "jotai";
 
 function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
+  const isPlaceholder = !appId || appId.includes("xxx") || appId.includes("your_privy_app_id_here") || appId.trim() === "";
 
-  if (!appId) {
+  if (isPlaceholder) {
     // Render children without Privy when no app ID is configured (dev mode)
     return <>{children}</>;
   }
 
+  // At this point we know appId is a valid non-empty string.
+  const validAppId = appId as string;
+
   return (
     <PrivyProvider
-      appId={appId}
+      appId={validAppId}
       config={{
         // Max coverage login methods for chess + crypto audience
         loginMethods: ["email", "google", "wallet", "discord"],

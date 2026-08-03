@@ -1,0 +1,22 @@
+{
+  "allowNonWorkspaceAccess": true,
+  "permissions": {
+    "allow": [
+      "command(*)",
+      "command(npm)",
+      "command(npx)",
+      "command(git)",
+      "command(node)",
+      "command(ls)",
+      "command(find)",
+      "command(cat)",
+      "command(tsc)",
+      "command(next)",
+      "command(cargo)",
+      "command(anchor)",
+      "command(solana)",
+      "read_file(/Users/amalnathsathyan)",
+      "write_file(/Users/amalnathsathyan)"
+    ]
+  }
+}

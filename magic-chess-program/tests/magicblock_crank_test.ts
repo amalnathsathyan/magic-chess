@@ -4,12 +4,13 @@
  * Tests the MagicBlock crank chain: schedule_timeout → claim_timeout_win → settlement.
  *
  * Flow:
- *   1. Initialize a chess match + delegate to MagicBlock ER
- *   2. Player 2 joins the match
+ *   1. Initialize a chess match + Player 2 joins (L1)
+ *   2. Delegate to MagicBlock ER
  *   3. Player 1 (White) makes a move → verify a timeout task is scheduled
- *   4. Wait for the timeout window to elapse (or use a very short timeout)
- *   5. Player 2 claims timeout win → verify game ends
- *   6. Verify a process_match_settlement task is scheduled
+ *   4. Wait for the timeout window to elapse (short timeout)
+ *   5. Player 1 claims timeout win → verify game ends (on ER)
+ *   6. Undelegate from ER (commits state back to L1)
+ *   7. Verify and process settlement on L1
  *
  * ── Crank Architecture ─────────────────────────────────────────────────
  *
@@ -36,29 +37,11 @@
  *
  * This test uses a SMALL timeout (e.g. 5 seconds) to make the crank
  * practical in a test environment.
- *
- * ── RPC Endpoints ──────────────────────────────────────────────────────
- *
- * - Base Layer RPC:  https://rpc.magicblock.app/devnet    (delegate/commit/undelegate)
- * - Router API:      https://devnet-router.magicblock.app/ (delegation status)
- * - ER RPC:          https://{fqdn}                        (game moves)
- * - Task Scheduler:  Magic11111111111111111111111111111111111111 (on-chain program)
- *
- * NOTE: The Task Scheduler is an on-chain program that the Scheduler crank
- * monitors. Tasks are executed as CPIs to the registered program when their
- * interval elapses. This test verifies task scheduling — actual execution
- * by the Scheduler crank happens asynchronously on the MagicBlock infra.
  */
 
 import * as anchor from "@coral-xyz/anchor";
 import { Program, BN } from "@coral-xyz/anchor";
-import {
-  PublicKey,
-  Keypair,
-  SystemProgram,
-  Transaction,
-  sendAndConfirmTransaction,
-} from "@solana/web3.js";
+import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
   createMint,
@@ -81,6 +64,9 @@ const DELEGATION_PROGRAM_ID = new PublicKey(
 );
 const TASK_SCHEDULER_ID = new PublicKey(
   "Magic11111111111111111111111111111111111111"
+);
+const MAGIC_CONTEXT_ID = new PublicKey(
+  "MagicContext1111111111111111111111111111111"
 );
 
 const CHESS_MATCH_SEED = Buffer.from("chess_match");
@@ -179,6 +165,12 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
   let bettingMint: PublicKey;
   let payerAta: PublicKey;
   let opponentAta: PublicKey;
+  let platformFeeAta: PublicKey;
+
+  // ER connection — resolved from router after delegation
+  let erFqdn: string;
+  let erConnection: anchor.web3.Connection;
+  let erProgram: anchor.Program;
 
   // Use a short timeout (5 seconds) so we can observe the timeout window
   const SHORT_TIMEOUT_SECONDS = 5;
@@ -188,8 +180,26 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
   // Setup
   // ────────────────────────────────────────────────────────────────────
   before(async () => {
+    // Fund test wallets from ANCHOR_WALLET (avoids faucet rate limits)
+    const funder = anchor.AnchorProvider.env().wallet;
+    const fundAmount = 0.5 * anchor.web3.LAMPORTS_PER_SOL;
+    for (const kp of [payer, opponent, platformFeeWallet]) {
+      const bal = await baseConnection.getBalance(kp.publicKey);
+      if (bal < 0.1 * anchor.web3.LAMPORTS_PER_SOL) {
+        const tx = new anchor.web3.Transaction().add(
+          anchor.web3.SystemProgram.transfer({
+            fromPubkey: funder.publicKey,
+            toPubkey: kp.publicKey,
+            lamports: fundAmount,
+          })
+        );
+        await anchor.web3.sendAndConfirmTransaction(baseConnection, tx, [(funder as any).payer]);
+      }
+    }
+
     console.log(`Payer: ${payer.publicKey.toBase58()}`);
     console.log(`Opponent: ${opponent.publicKey.toBase58()}`);
+    console.log(`Platform fee wallet: ${platformFeeWallet.publicKey.toBase58()}`);
     console.log(`Match ID: ${matchId}`);
     console.log(`Timeout: ${SHORT_TIMEOUT_SECONDS}s (for fast test)`);
 
@@ -230,6 +240,15 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
       )
     ).address;
 
+    platformFeeAta = (
+      await getOrCreateAssociatedTokenAccount(
+        baseConnection,
+        payer,
+        bettingMint,
+        platformFeeWallet.publicKey
+      )
+    ).address;
+
     await mintTo(baseConnection, payer, bettingMint, payerAta, payer.publicKey, 1000_000000);
     await mintTo(baseConnection, payer, bettingMint, opponentAta, payer.publicKey, 1000_000000);
 
@@ -237,10 +256,9 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
   });
 
   // ────────────────────────────────────────────────────────────────────
-  // Step 1: Initialize match + Delegate to ER
+  // Step 1: Initialize match (L1)
   // ────────────────────────────────────────────────────────────────────
-  it("Step 1 — Initialize match and delegate to MagicBlock ER", async () => {
-    // Initialize
+  it("Step 1 — Initialize match on L1", async () => {
     await program.methods
       .initializeMatch(
         matchId,
@@ -262,59 +280,26 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
       .signers([payer])
       .rpc();
 
-    // Delegate
-    const uid = `crank-${matchId}`;
-    await program.methods
-      .delegateMatch(uid)
-      .accounts({
-        payer: payer.publicKey,
-        chessMatch: chessMatchPda,
-      })
-      .remainingAccounts([
-        {
-          pubkey: PublicKey.findProgramAddressSync(
-            [Buffer.from("magic_context")],
-            DELEGATION_PROGRAM_ID
-          )[0],
-          isWritable: false,
-          isSigner: false,
-        },
-        { pubkey: DELEGATION_PROGRAM_ID, isWritable: false, isSigner: false },
-      ])
-      .signers([payer])
-      .rpc();
-
-    // Poll router for delegation
-    let delegated = false;
-    let fqdn = "";
-    for (let i = 0; i < 20; i++) {
-      await sleep(1000);
-      try {
-        const res = await fetch(`${ROUTER_API_BASE}/delegation/${chessMatchPda.toBase58()}`);
-        if (res.ok) {
-          const status = await res.json();
-          if (status.delegated) {
-            delegated = true;
-            fqdn = status.fqdn;
-            break;
-          }
-        }
-      } catch {}
-    }
-    assert.isTrue(delegated, "Delegation must be confirmed");
-    console.log(`Delegated to ER: ${fqdn}`);
-
-    // Verify on-chain
     const matchData = await program.account.chessMatch.fetch(chessMatchPda);
-    assert.isTrue(matchData.isDelegated);
-    assert.equal(matchData.activeTaskId, -1, "No tasks scheduled initially");
+    assert.equal(matchData.matchId, matchId, "Match ID should match");
+    assert.equal(matchData.gameStatus as any, 0, "Game should be WaitingForOpponent");
+    assert.isFalse(matchData.isDelegated, "Should not be delegated yet");
+
+    console.log("Match initialized on L1");
   });
 
   // ────────────────────────────────────────────────────────────────────
-  // Step 2: Join the match
+  // Step 2: Join match (L1 — MUST be before delegation)
   // ────────────────────────────────────────────────────────────────────
-  it("Step 2 — Opponent joins the match", async () => {
-    await program.methods
+  it("Step 2 — Opponent joins the match on L1", async () => {
+    const opponentProvider = new anchor.AnchorProvider(
+      baseConnection,
+      new anchor.Wallet(opponent),
+      { commitment: "confirmed" }
+    );
+    const opponentProgram = new anchor.Program(idl as any, opponentProvider);
+
+    await opponentProgram.methods
       .joinMatch(betAmount)
       .accounts({
         chessMatch: chessMatchPda,
@@ -338,23 +323,62 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
   });
 
   // ────────────────────────────────────────────────────────────────────
-  // Step 3: Make a move and verify timeout task is scheduled
+  // Step 3: Delegate to MagicBlock ER
   // ────────────────────────────────────────────────────────────────────
-  it("Step 3 — Make a move → verify timeout task scheduled", async () => {
-    // Resolve ER fqdn from router
-    const res = await fetch(`${ROUTER_API_BASE}/delegation/${chessMatchPda.toBase58()}`);
-    const status = await res.json();
-    const erConnection = new anchor.web3.Connection(
-      `https://${status.fqdn}`,
-      "confirmed"
-    );
+  it("Step 3 — Delegate match to MagicBlock ER", async () => {
+    const uid = `crank-${matchId}`;
+
+    // Anchor TS auto-resolves the extra accounts (buffer, delegation_record,
+    // delegation_metadata, owner_program, delegation_program, system_program)
+    // from the IDL — no remainingAccounts needed.
+    await program.methods
+      .delegateMatch(uid)
+      .accounts({
+        payer: payer.publicKey,
+        chessMatch: chessMatchPda,
+      })
+      .signers([payer])
+      .rpc();
+
+    // Poll router for delegation
+    let delegated = false;
+    for (let i = 0; i < 25; i++) {
+      await sleep(1000);
+      try {
+        const res = await fetch(`${ROUTER_API_BASE}/delegation/${chessMatchPda.toBase58()}`);
+        if (res.ok) {
+          const status = await res.json();
+          if (status.delegated) {
+            delegated = true;
+            erFqdn = status.fqdn;
+            break;
+          }
+        }
+      } catch {}
+    }
+    assert.isTrue(delegated, "Delegation must be confirmed");
+    console.log(`Delegated to ER: ${erFqdn}`);
+
+    // Build ER connection and program for subsequent steps
+    erConnection = new anchor.web3.Connection(`https://${erFqdn}`, "confirmed");
     const erProvider = new anchor.AnchorProvider(
       erConnection,
       new anchor.Wallet(payer),
       { commitment: "confirmed" }
     );
-    const erProgram = new anchor.Program(idl as any, erProvider);
+    erProgram = new anchor.Program(idl as any, erProvider);
 
+    // Verify on-chain
+    const matchData = await erProgram.account.chessMatch.fetch(chessMatchPda);
+    assert.isTrue(matchData.isDelegated);
+    assert.equal(matchData.activeTaskId, -1, "No tasks scheduled initially");
+    console.log("Delegation verified on ER");
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Step 4: Make a move on ER → verify timeout task is scheduled
+  // ────────────────────────────────────────────────────────────────────
+  it("Step 4 — Make a move → verify timeout task scheduled", async () => {
     // White (payer) moves: e2 → e4
     const moveTx = await erProgram.methods
       .makeMove({
@@ -373,29 +397,8 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
 
     console.log(`Move tx (ER): ${moveTx}`);
 
-    // Commit so we can read the updated state on the base layer
-    await program.methods
-      .commitState()
-      .accounts({
-        payer: payer.publicKey,
-        chessMatch: chessMatchPda,
-      })
-      .remainingAccounts([
-        {
-          pubkey: PublicKey.findProgramAddressSync(
-            [Buffer.from("magic_context")],
-            DELEGATION_PROGRAM_ID
-          )[0],
-          isWritable: false,
-          isSigner: false,
-        },
-        { pubkey: DELEGATION_PROGRAM_ID, isWritable: false, isSigner: false },
-      ])
-      .signers([payer])
-      .rpc();
-
-    // Read match from base layer
-    const matchData = await program.account.chessMatch.fetch(chessMatchPda);
+    // Read match state from ER (no need to commit for this check)
+    const matchData = await erProgram.account.chessMatch.fetch(chessMatchPda);
 
     // Verify: the program should have scheduled a timeout task after the move
     assert.isAbove(
@@ -411,83 +414,36 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
 
     // NOTE: The task_id derivation uses wrapping_add, so this may differ by MOD 2^64.
     // The important assertion is that active_task_id != -1 (a task IS scheduled).
-    console.log("Timeout task verified as scheduled.");
+    console.log("Timeout task verified as scheduled on ER.");
   });
 
   // ────────────────────────────────────────────────────────────────────
-  // Step 4: Wait for timeout → claim timeout win
+  // Step 5: Wait for timeout → claim timeout win (on ER)
   // ────────────────────────────────────────────────────────────────────
-  it("Step 4 — Wait for timeout and claim timeout win", async () => {
-    // The timeout is SHORT_TIMEOUT_SECONDS (5s). We need to wait long enough
-    // that Player 1 (White, who just moved) "times out" on their next turn.
-    //
-    // Actually, after White moves, it's Black's turn. Black needs to not move,
-    // and wait until the timeout duration has elapsed since White's move.
-    // Then Black (opponent) can claim_timeout_win.
-    //
-    // Wait: SHORT_TIMEOUT_SECONDS + 2 seconds buffer
+  it("Step 5 — Wait for timeout and claim timeout win on ER", async () => {
+    // After White's move (e2-e4), it's now Black's turn.
+    // White (payer) will claim that Black timed out.
+    // Wait: SHORT_TIMEOUT_SECONDS + 3 seconds buffer
     const waitSeconds = SHORT_TIMEOUT_SECONDS + 3;
     console.log(`Waiting ${waitSeconds} seconds for timeout window to elapse...`);
     await sleep(waitSeconds * 1000);
 
-    // Commit any ER state first to ensure the base layer has the latest timestamp
-    await program.methods
-      .commitState()
-      .accounts({
-        payer: payer.publicKey,
-        chessMatch: chessMatchPda,
-      })
-      .remainingAccounts([
-        {
-          pubkey: PublicKey.findProgramAddressSync(
-            [Buffer.from("magic_context")],
-            DELEGATION_PROGRAM_ID
-          )[0],
-          isWritable: false,
-          isSigner: false,
-        },
-        { pubkey: DELEGATION_PROGRAM_ID, isWritable: false, isSigner: false },
-      ])
-      .signers([payer])
-      .rpc();
-
-    // Opponent (Black) claims the timeout win since it was Black's turn and White
-    // didn't move within the timeout window. Wait — let me re-read the logic.
-    //
-    // After e2-e4 by White, it's now Black's turn (current_turn = Black).
-    // The timeout check in make_move says: if now - last_move_timestamp > move_timeout_duration,
-    // the current player (Black) has timed out.
-    //
-    // In claim_timeout_win:
-    //   - The claimer must be one of the players
-    //   - current_turn must be the OPPONENT's color (i.e., it must be the opponent's turn)
-    //   - The opponent (whose turn it is) is the one who might have timed out
-    //
-    // So if current_turn = Black, then the claimer must be White (payer).
-    // White claims that Black timed out (didn't move in time).
-    //
-    // Let's verify: opponent = Black, it's Black's turn, White claims Black timed out.
-    // That works. The claimer is the one whose turn it is NOT – they're claiming the
-    // opponent (whose turn it IS) failed to move.
-
-    const claimerIsWhite = true; // White (payer) claims Black timed out
-    const claimer = payer;
-
-    // Claim timeout win
-    const claimTx = await program.methods
+    // White (payer) claims Black timed out on the ER
+    // Must use erProgram because the account is delegated (locked on L1)
+    const claimTx = await erProgram.methods
       .claimTimeoutWin()
       .accounts({
         chessMatch: chessMatchPda,
-        claimerSigner: claimer.publicKey,
+        claimerSigner: payer.publicKey,
       })
-      .signers([claimer])
+      .signers([payer])
       .rpc();
 
-    console.log(`Claim timeout win tx: ${claimTx}`);
+    console.log(`Claim timeout win tx (ER): ${claimTx}`);
 
-    // Verify game ended
-    const matchData = await program.account.chessMatch.fetch(chessMatchPda);
-    console.log(`Game status: ${matchData.gameStatus}`); // 2 = WhiteWins, 3 = BlackWins
+    // Read match state from ER
+    const matchData = await erProgram.account.chessMatch.fetch(chessMatchPda);
+    console.log(`Game status: ${matchData.gameStatus}`); // 2 = WhiteWins
     assert.notEqual(
       matchData.gameStatus as any,
       1, // Not Active
@@ -499,39 +455,54 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
     );
     console.log(`Game end reason: ${matchData.gameEndReason}`);
 
-    // The previous timeout task should have been cancelled
+    // The timeout task should have been cancelled (active_task_id set to -1)
     assert.equal(
       matchData.activeTaskId,
       -1,
       "Timeout task should be cancelled after game ends"
     );
+
+    // Settlement and undelegation tasks were scheduled on the ER
+    const { settlementTaskId } = deriveTaskIds(chessMatchPda, 0);
+    console.log(`Settlement task scheduled with id: ${settlementTaskId}`);
+    console.log("Game ended on ER. Settlement + undelegation tasks scheduled.");
   });
 
   // ────────────────────────────────────────────────────────────────────
-  // Step 5: Verify settlement task was scheduled
+  // Step 6: Undelegate from ER (commits state to L1)
   // ────────────────────────────────────────────────────────────────────
-  it("Step 5 — Verify process_match_settlement task is scheduled", async () => {
-    // After claim_timeout_win succeeds, the contract schedules a
-    // process_match_settlement crank task via invoke_schedule_task:
-    //   task_id = base_id.wrapping_add(10_000)
-    //   interval = 5_000ms (fires once after 5 seconds)
-    //
-    // Since the settlement task is scheduled as part of the claim_timeout_win
-    // instruction, we need to check that it was scheduled correctly.
-    //
-    // The active_task_id was reset to -1 in claim_timeout_win, but the settlement
-    // task was scheduled directly via invoke_schedule_task. The contract does NOT
-    // store the settlement task ID in active_task_id (only the timeout task ID).
-    //
-    // However, the settlement task IS scheduled with the Task Scheduler program.
-    // In a production environment, the MagicBlock Scheduler crank would pick it up
-    // and execute process_match_settlement after 5 seconds.
-    //
-    // For testing, we can verify:
-    // 1. The game has ended (already verified in Step 4)
-    // 2. The settlement task ID derivation is correct
-    // 3. (Optionally) Call process_match_settlement manually to verify it works
+  it("Step 6 — Undelegate from ER (commit state to L1)", async () => {
+    // undelegateMatch commits the latest ER state to L1 and undelegates.
+    // After this, the account is back on L1 and can be written to directly.
+    // Anchor TS auto-resolves magic_program and magic_context from the IDL.
+    await program.methods
+      .undelegateMatch()
+      .accounts({
+        payer: payer.publicKey,
+        chessMatch: chessMatchPda,
+      })
+      .signers([payer])
+      .rpc();
 
+    // Verify on L1
+    const matchData = await program.account.chessMatch.fetch(chessMatchPda);
+    assert.isFalse(matchData.isDelegated, "Account should no longer be delegated");
+
+    // Game should still be in concluded state on L1
+    assert.notEqual(
+      matchData.gameStatus as any,
+      1,
+      "Game should still be concluded on L1"
+    );
+    assert.isFalse(matchData.payoutProcessed, "Payout should not yet be processed");
+
+    console.log("Undelegated. Account back on L1 with committed state.");
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Step 7: Process settlement on L1
+  // ────────────────────────────────────────────────────────────────────
+  it("Step 7 — Process match settlement on L1", async () => {
     const matchData = await program.account.chessMatch.fetch(chessMatchPda);
 
     // Verify game is in a concluded state (eligible for settlement)
@@ -543,51 +514,34 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
     );
     assert.isFalse(matchData.payoutProcessed, "Payout should not yet be processed");
 
-    // Derive the settlement task ID
+    // Derive the settlement task ID for logging
     const { settlementTaskId } = deriveTaskIds(chessMatchPda, 0);
     console.log(`Expected settlement_task_id: ${settlementTaskId}`);
 
-    // Verify the payer can still process settlement — this confirms the game
-    // state is valid for settlement. In the crank flow, the Scheduler would
-    // CPI into process_match_settlement after 5 seconds.
-    //
-    // NOTE: process_match_settlement requires:
-    //   - chess_match (PDA)
-    //   - match_escrow_token_account (PDA)
-    //   - player_one_ata
-    //   - player_two_ata
-    //   - platform_fee_ata
-    //   - token_program
+    // Process settlement manually on L1.
+    // In production, the MagicBlock Scheduler crank would CPI into
+    // process_match_settlement after 5 seconds. Here we call it directly.
+    const settlementTx = await program.methods
+      .processMatchSettlement()
+      .accounts({
+        chessMatch: chessMatchPda,
+        matchEscrowTokenAccount: escrowPda,
+        playerOneAta: payerAta,
+        playerTwoAta: opponentAta,
+        platformFeeAta: platformFeeAta,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([payer])
+      .rpc();
 
-    try {
-      const settlementTx = await program.methods
-        .processMatchSettlement()
-        .accounts({
-          chessMatch: chessMatchPda,
-          matchEscrowTokenAccount: escrowPda,
-          playerOneAta: payerAta,
-          playerTwoAta: opponentAta,
-          platformFeeAta: opponentAta, // Using opponent's ATA as fee receiver for test simplicity
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .signers([payer])
-        .rpc();
+    console.log(`Settlement tx: ${settlementTx}`);
 
-      console.log(`Manual settlement tx: ${settlementTx}`);
-
-      const settledData = await program.account.chessMatch.fetch(chessMatchPda);
-      assert.isTrue(
-        settledData.payoutProcessed,
-        "Payout should be marked as processed"
-      );
-      console.log("Settlement processed successfully");
-    } catch (err: any) {
-      // Settlement may fail if ATAs are not correctly set up for the
-      // platform fee wallet. Log the error for debugging but don't fail
-      // the test — the important part is that the game is concluded.
-      console.log(`Settlement attempt (expected may need correct ATAs): ${err.message}`);
-    }
-
+    const settledData = await program.account.chessMatch.fetch(chessMatchPda);
+    assert.isTrue(
+      settledData.payoutProcessed,
+      "Payout should be marked as processed"
+    );
+    console.log("Settlement processed successfully");
     console.log("=== Crank chain test PASSED ===");
   });
 });
