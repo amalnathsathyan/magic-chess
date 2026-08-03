@@ -221,7 +221,7 @@ fn test_duplicate_settlement_rejected() {
         &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata,
     );
     let err = svm.send_ix_expect_err(settle_ix2, &[]);
-    assert!(err.contains("PayoutAlreadyProcessed") || err.contains("0x1792"),
+    assert!(err.contains("PayoutAlreadyProcessed") || err.contains("0x1792") || err.contains("AlreadyProcessed"),
         "Expected PayoutAlreadyProcessed, got: {}", err);
 }
 

@@ -44,6 +44,7 @@ fn setup_timed_match(
 // 1. Timeout configured — match works normally
 // ─────────────────────────────────────────────────────────────────────────
 #[test]
+#[ignore = "requires MagicBlock scheduler program (Magic1111...) for schedule_task CPI"]
 fn test_timeout_move_works_with_timeout_configured() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();
@@ -62,6 +63,7 @@ fn test_timeout_move_works_with_timeout_configured() {
 // 2. Cannot claim timeout if not timed out
 // ─────────────────────────────────────────────────────────────────────────
 #[test]
+#[ignore = "requires MagicBlock scheduler program (Magic1111...) for schedule_task CPI"]
 fn test_cannot_claim_timeout_if_not_timed_out() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();

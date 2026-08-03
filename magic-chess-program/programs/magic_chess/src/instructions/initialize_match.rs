@@ -45,7 +45,7 @@ pub struct InitializeMatch<'info> {
         seeds = [MATCH_ESCROW_SEED, match_id_arg.as_bytes()],
         bump,
         token::mint = betting_token_mint_account,
-        token::authority = chess_match
+        token::authority = match_escrow_token_account
     )]
     pub match_escrow_token_account: Account<'info, TokenAccount>,
 

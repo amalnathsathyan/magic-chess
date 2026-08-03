@@ -59,7 +59,6 @@ pub fn handle_abort_match(ctx: Context<AbortMatch>) -> Result<()> {
 
     // Capture match-level data needed for signing and event before mutable borrow
     let match_id = ctx.accounts.chess_match.match_id.clone();
-    let chess_match_bump = ctx.accounts.chess_match.bump;
     let creator_key = ctx.accounts.chess_match.players[0];
 
     // Prepare signer seeds for the escrow PDA (for token transfer)
@@ -94,15 +93,8 @@ pub fn handle_abort_match(ctx: Context<AbortMatch>) -> Result<()> {
     }
 
     // 4. Close the escrow token account (return lamports to creator)
-    // The token account authority is the chess_match PDA, so we sign with chess_match seeds
+    // The token account authority is the escrow PDA, so we sign with escrow seeds
     msg!("Closing escrow token account, returning rent to creator.");
-    let chess_match_info = ctx.accounts.chess_match.to_account_info();
-    let chess_match_seeds: &[&[u8]] = &[
-        CHESS_MATCH_SEED,
-        &match_id_bytes,
-        &[chess_match_bump],
-    ];
-    let chess_match_signer_seeds: &[&[&[u8]]] = &[&chess_match_seeds[..]];
 
     token::close_account(
         CpiContext::new_with_signer(
@@ -110,9 +102,9 @@ pub fn handle_abort_match(ctx: Context<AbortMatch>) -> Result<()> {
             CloseAccount {
                 account: match_escrow_info.clone(),
                 destination: player_signer_info.clone(),
-                authority: chess_match_info,
+                authority: match_escrow_info.clone(),
             },
-            chess_match_signer_seeds,
+            escrow_signer_seeds,
         ),
     )?;
 
