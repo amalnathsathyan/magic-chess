@@ -24,6 +24,8 @@ pub fn handle_delegate_match(ctx: Context<DelegateMatch>, uid: String) -> Result
     //   3. Assigns the chess_match PDA to the delegation program
     //   4. CPIs to the delegation program to reconstruct the account on the ER
     // After step 3, our program no longer owns chess_match — writes would fail.
+    // The #[delegate] macro with `del` attribute handles the exit serialization
+    // by recognizing the ownership transfer and skipping the post-CPI write.
     let chess_match = &mut ctx.accounts.chess_match;
     chess_match.delegation_uid = uid;
     chess_match.is_delegated = true;
