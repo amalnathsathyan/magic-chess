@@ -2,7 +2,7 @@
 
 > **Repo**: https://github.com/amalnathsathyan/magic-chess
 > **Program**: `magic_chess` (Anchor 0.31.1)
-> **Program ID**: `4f7VH9vbhNnwBSeby9wKLjtbu8vM8RhUX2KVcE9havUB`
+> **Program ID**: `5Ro6jsg6ov1VmEQ7Un5NAaydyfpUKDvABCK5CE5qN5E6`
 > **Branch**: `main`
 > **Commit convention**: Standard commits. Do NOT use "Co-Authored-By: Claude" going forward.
 
@@ -335,7 +335,7 @@ The test suite at `anchor/tests/speed_chess.test.ts` uses `@coral-xyz/anchor` an
 - [x] Initial test suite (30+ test cases)
 - [x] Fix critical bugs: mint address mismatch in instruction files, platform fee owner constraint
 - [ ] Remove hardcoded token/bet amount restrictions -- support any SPL mint
-- [x] Fix Cargo.toml program name ("counter" -> "magic_chess") — **DONE**
+- [ ] Fix Cargo.toml program name ("counter" -> "magic_chess") — **DONE**
 - [ ] Implement FEN string generation for events
 - [ ] Complete test coverage (castling, en passant, checkmate, settlement)
 - [ ] TypeScript SDK v0.1 (generated from IDL, with helper methods)
