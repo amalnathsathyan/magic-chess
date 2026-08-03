@@ -15,6 +15,7 @@ pub const PLATFORM_FEE_DEFAULT_BPS: u16 = 200;
 pub const CHESS_MATCH_SEED: &[u8] = b"chess_match";
 pub const MATCH_ESCROW_SEED: &[u8] = b"match_escrow";
 pub const PREDICTION_POOL_SEED: &[u8] = b"prediction_pool";
+pub const PREDICTION_POOL_VAULT_SEED: &[u8] = b"prediction_pool_vault";
 pub const PREDICTION_BET_SEED: &[u8] = b"prediction_bet";
 
 // ── Game Defaults ──

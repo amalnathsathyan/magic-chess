@@ -2,7 +2,7 @@
 
 use anchor_lang::{AccountDeserialize, AccountSerialize};
 use anchor_litesvm::{Keypair, Pubkey, Signer};
-use magic_chess::state::{GameStatus, GameEndReason, PieceType, PlayerColor, ChessMatch};
+use magic_chess::state::{ChessMatch, GameStatus, GameEndReason, Piece, PieceType, PlayerColor};
 
 use super::helpers::*;
 

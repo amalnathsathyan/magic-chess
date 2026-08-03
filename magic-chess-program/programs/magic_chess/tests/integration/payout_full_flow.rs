@@ -13,7 +13,7 @@
 //          --features integration-tests -- --nocapture
 // ---------------------------------------------------------------------------
 
-use litesvm::LiteSVM;
+use anchor_litesvm::LiteSVM;
 use solana_sdk::{
     account::Account,
     instruction::{AccountMeta, Instruction},
@@ -928,5 +928,5 @@ fn test_timeout_not_yet_exceeded() {
 #[cfg(test)]
 #[allow(unused_imports)]
 mod _litesvm_available {
-    use litesvm;
+    use anchor_litesvm;
 }

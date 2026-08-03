@@ -118,4 +118,45 @@ pub mod speed_chess {
     pub fn close_match(ctx: Context<CloseMatch>) -> Result<()> {
         instructions::close_match::handle_close_match(ctx)
     }
+
+    // ── Prediction Market ──
+
+    // Initialize a prediction pool for a match (only if prediction_enabled)
+    pub fn initialize_prediction_pool(
+        ctx: Context<InitializePredictionPool>,
+        platform_fee_bps_arg: u16,
+    ) -> Result<()> {
+        instructions::initialize_prediction_pool::handle_initialize_prediction_pool(
+            ctx,
+            platform_fee_bps_arg,
+        )
+    }
+
+    // Place a prediction bet on White (0), Black (1), or Draw (2)
+    pub fn place_prediction_bet(
+        ctx: Context<PlacePredictionBet>,
+        bet_amount_arg: u64,
+        predicted_outcome_arg: u8,
+    ) -> Result<()> {
+        instructions::place_prediction_bet::handle_place_prediction_bet(
+            ctx,
+            bet_amount_arg,
+            predicted_outcome_arg,
+        )
+    }
+
+    // Settle the prediction pool after the match concludes (permissionless)
+    pub fn settle_prediction_pool(ctx: Context<SettlePredictionPool>) -> Result<()> {
+        instructions::settle_prediction_pool::handle_settle_prediction_pool(ctx)
+    }
+
+    // Claim winnings from a settled prediction pool
+    pub fn claim_prediction_winnings(ctx: Context<ClaimPredictionWinnings>) -> Result<()> {
+        instructions::claim_prediction_winnings::handle_claim_prediction_winnings(ctx)
+    }
+
+    // Cancel a prediction bet and get a refund (only if match is WaitingForOpponent or Aborted)
+    pub fn cancel_prediction_bet(ctx: Context<CancelPredictionBet>) -> Result<()> {
+        instructions::cancel_prediction_bet::handle_cancel_prediction_bet(ctx)
+    }
 }

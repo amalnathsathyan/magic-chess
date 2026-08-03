@@ -98,4 +98,27 @@ pub enum ChessError {
     NotMatchCreator,
     #[msg("Match settlement has not been processed yet, cannot close.")]
     MatchNotSettled,
+    // ── Prediction Market ──
+    #[msg("Prediction market is not enabled for this match.")]
+    PredictionNotEnabled,
+    #[msg("A prediction pool already exists for this match.")]
+    PredictionPoolAlreadyExists,
+    #[msg("Prediction pool not found for this match.")]
+    PredictionPoolNotFound,
+    #[msg("Players in the match cannot place prediction bets.")]
+    PlayersCannotBet,
+    #[msg("Betting is closed — the match is no longer Active.")]
+    BettingClosed,
+    #[msg("Invalid outcome — must be 0 (White), 1 (Black), or 2 (Draw).")]
+    InvalidOutcome,
+    #[msg("Prediction settlement has already been processed for this pool.")]
+    SettlementAlreadyProcessed,
+    #[msg("Winnings have already been claimed for this bet.")]
+    AlreadyClaimed,
+    #[msg("Nothing to claim — no balance available for this bet.")]
+    NothingToClaim,
+    #[msg("The match has not been aborted, cannot cancel this way.")]
+    MatchNotAborted,
+    #[msg("Cannot cancel bet on an Active match.")]
+    CannotCancelActiveMatch,
 }
