@@ -228,11 +228,11 @@ Args: `from_row: u8`, `from_col: u8`, `to_row: u8`, `to_col: u8`, `promotion: Op
 2. **Hardcoded token addresses with mismatch between files** (`initialize_match.rs` and `join_match.rs`): The mock mint addresses differ between the two instruction files:
    - `initialize_match.rs`: SEND = `4tCTxt8UneZDL4g8d8R9NLRkRNMbuAjCyHGefcvzZvjS`, wSOL = `So11111111111111111111111111111111111111112`
    - `join_match.rs`: SEND = `SENDYLjLBaTgjyfXtPP2aHUt91WhNzX7iUfpThyApht`, wSOL = `WSiBAnrREwNLdGkDpXuqdKL4fJvAHeJhDfehmFdMdvw`
-   The program will work correctly only if the mint addresses match between the two files (both must refer to the same deployed mints). The test file uses the latter set. **Fix:** Unify to a single source of truth, or better yet, remove hardcoded mint checks entirely and allow any SPL mint.
+   ~~Previously had hardcoded mint addresses in init/join with mismatched values.~~ **FIXED** — program now stores `betting_token_mint` in ChessMatch at init time and validates against stored value at join. Any SPL token is accepted.
 
 3. **Hardcoded bet amounts** (`initialize_match.rs` lines 95-103, `join_match.rs` lines 76-80): Fixed bet amounts (10 SEND / 0.1 wSOL) are enforced. **Fix:** Remove hardcoded amounts and accept any valid `u64` bet amount.
 
-4. **Cargo.toml artifact:** The program's `Cargo.toml` has `name = "counter"` (copy-paste from a scaffold template).
+4. ~~**Cargo.toml artifact:** The program's `Cargo.toml` has `name = "counter"`~~ **FIXED** — lib name is now `magic_chess`.
 
 5. **No anchor idl-build command:** The root `package.json` defines `anchor-build` but not `anchor-test` via Anchor CLI (tests run through Jest directly).
 
@@ -244,7 +244,7 @@ Args: `from_row: u8`, `from_col: u8`, `to_row: u8`, `to_col: u8`, `promotion: Op
 |-------|-----------|--------|
 | Blockchain | Solana (devnet) | Active |
 | Scaling | MagicBlock Ephemeral Rollup | Planned (Phase 2) |
-| Smart Contract | Anchor 0.31.1 (Rust) | Active |
+| Smart Contract | Anchor 1.1.2 (Rust), Solana 2.x crates | Active |
 | Frontend Web | Next.js 15.3.1, React 19, Tailwind CSS 4 | Scaffolded (no chess UI yet) |
 | Frontend Mobile | React Native (Expo) | Planned (Phase 3) |
 | Wallet Adapter | @solana/wallet-adapter-react 0.15.38 | Installed (not yet wired for chess) |
@@ -333,9 +333,9 @@ The test suite at `anchor/tests/speed_chess.test.ts` uses `@coral-xyz/anchor` an
 - [x] Match lifecycle (create -> join -> play -> end -> settle)
 - [x] Token escrow and payout logic
 - [x] Initial test suite (30+ test cases)
-- [ ] Fix critical bugs: mint address mismatch in instruction files, platform fee owner constraint
+- [x] Fix critical bugs: mint address mismatch in instruction files, platform fee owner constraint
 - [ ] Remove hardcoded token/bet amount restrictions -- support any SPL mint
-- [ ] Fix `Cargo.toml` program name ("counter" -> "speed_chess")
+- [x] Fix Cargo.toml program name ("counter" -> "magic_chess") — **DONE**
 - [ ] Implement FEN string generation for events
 - [ ] Complete test coverage (castling, en passant, checkmate, settlement)
 - [ ] TypeScript SDK v0.1 (generated from IDL, with helper methods)
@@ -418,7 +418,7 @@ magic-speed-chess/
 |   |   |-- ui/                         # shadcn/ui primitives (button, card, etc.)
 |   |   |-- account/                    # Account data access + display
 |   |   |-- cluster/                    # Cluster (network) selector
-|   |   |-- counter/                    # Example counter feature (scaffold artifact)
+|   |   |-- game/                       # Chess game components (board, timer, history)
 |   |   |-- dashboard/                  # Dashboard feature
 |   |   |-- solana-provider.tsx         # Solana wallet adapter provider
 |   |   |-- theme-provider.tsx          # Dark/light theme provider
