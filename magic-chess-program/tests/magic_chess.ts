@@ -33,6 +33,8 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, BN } from "@coral-xyz/anchor";
 import { expect } from "chai";
+import * as fs from "fs";
+import * as path from "path";
 
 import idl from "../target/idl/magic_chess.json" with { type: "json" };
 import type { MagicChess } from "../target/types/magic_chess";
@@ -162,7 +164,7 @@ async function createAndJoinMatch(
   betAmount: BN = new BN(100 * 10 ** TOKEN_DECIMALS),
   matchIdPrefix: string = "match"
 ) {
-  const matchId = `${matchIdPrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const matchId = `${matchIdPrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`.slice(0, 32);
 
   // Derive PDAs
   const [chessMatchPda] = PublicKey.findProgramAddressSync(
@@ -182,7 +184,8 @@ async function createAndJoinMatch(
       betAmount,
       new BN(0),               // move_timeout_duration = 0 (no MagicBlock timeout)
       200,                     // platform_fee_basis_points = 2%
-      platformFeeWallet
+      platformFeeWallet,
+      false                     // prediction_enabled
     )
     .accounts({
       chessMatch: chessMatchPda,
@@ -270,10 +273,26 @@ describe("Magic Chess — Standard Integration Tests", () => {
   const isLocalnet = (provider.connection.rpcEndpoint.includes("localhost")
     || provider.connection.rpcEndpoint.includes("127.0.0.1"));
 
-  // ── Persistent wallets / accounts ─────────────────────────────────────
-  const player1 = Keypair.generate();
-  const player2 = Keypair.generate();
-  const platformFeeWallet = Keypair.generate();
+  // ── Persistent wallets — loaded from file, reused across runs ─────────
+  const WALLET_DIR = path.join(__dirname, "..", ".test-wallets");
+  const MINT_FILE = path.join(WALLET_DIR, "mint.json");
+
+  function loadOrCreateKeypair(name: string): Keypair {
+    const filePath = path.join(WALLET_DIR, `${name}.json`);
+    if (fs.existsSync(filePath)) {
+      const secretBytes = Uint8Array.from(JSON.parse(fs.readFileSync(filePath, "utf8")));
+      return Keypair.fromSecretKey(secretBytes);
+    }
+    const kp = Keypair.generate();
+    fs.mkdirSync(WALLET_DIR, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(Array.from(kp.secretKey)));
+    console.log(`  Created new ${name} wallet: ${kp.publicKey.toBase58().slice(0, 8)}...`);
+    return kp;
+  }
+
+  const player1 = loadOrCreateKeypair("player1");
+  const player2 = loadOrCreateKeypair("player2");
+  const platformFeeWallet = loadOrCreateKeypair("platform-fee");
 
   // ── Shared SPL token infrastructure ───────────────────────────────────
   let mint: PublicKey;
@@ -290,8 +309,8 @@ describe("Magic Chess — Standard Integration Tests", () => {
     const walletPayer = (provider.wallet as any).payer as Keypair;
 
     // Fund test wallets from payer (avoids faucet rate limits)
-    const fundAmount = 0.2 * LAMPORTS_PER_SOL;
-    const minBalance = 0.05 * LAMPORTS_PER_SOL;
+    const fundAmount = 0.3 * LAMPORTS_PER_SOL;
+    const minBalance = 0.1 * LAMPORTS_PER_SOL;
     for (const kp of [player1, player2, platformFeeWallet]) {
       const currentBalance = await provider.connection.getBalance(kp.publicKey);
       if (currentBalance < minBalance) {
@@ -307,14 +326,48 @@ describe("Magic Chess — Standard Integration Tests", () => {
       }
     }
 
-    // Set up SPL token infrastructure shared across all tests
-    const tokens = await setupTokenMint(
-      provider.connection, walletPayer, player1, player2, platformFeeWallet
-    );
-    mint = tokens.mint;
-    player1Ata = tokens.player1Ata;
-    player2Ata = tokens.player2Ata;
-    platformFeeAta = tokens.platformFeeAta;
+    // Reuse mint across runs (save address to file)
+    if (fs.existsSync(MINT_FILE)) {
+      const savedMint = new PublicKey(JSON.parse(fs.readFileSync(MINT_FILE, "utf8")));
+      try {
+        await getAccount(provider.connection, savedMint);
+        mint = savedMint;
+        console.log(`  Reusing saved mint: ${mint.toBase58()}`);
+      } catch {
+        console.log("  Saved mint gone, creating fresh one");
+        fs.unlinkSync(MINT_FILE);
+      }
+    }
+
+    if (mint) {
+      // Reuse existing mint — just get/create ATAs and top up tokens
+      player1Ata = (await getOrCreateAssociatedTokenAccount(
+        provider.connection, walletPayer, mint, player1.publicKey
+      )).address;
+      player2Ata = (await getOrCreateAssociatedTokenAccount(
+        provider.connection, walletPayer, mint, player2.publicKey
+      )).address;
+      platformFeeAta = (await getOrCreateAssociatedTokenAccount(
+        provider.connection, walletPayer, mint, platformFeeWallet.publicKey
+      )).address;
+      // Top up tokens if low
+      const p1Bal = Number((await getAccount(provider.connection, player1Ata)).amount);
+      if (p1Bal < 1000 * 10 ** TOKEN_DECIMALS) {
+        console.log("  Topping up tokens...");
+        await mintTo(provider.connection, walletPayer, mint, player1Ata, walletPayer, 10_000 * 10 ** TOKEN_DECIMALS);
+        await mintTo(provider.connection, walletPayer, mint, player2Ata, walletPayer, 10_000 * 10 ** TOKEN_DECIMALS);
+      }
+    } else {
+      // Create fresh mint + ATAs + save
+      const tokens = await setupTokenMint(
+        provider.connection, walletPayer, player1, player2, platformFeeWallet
+      );
+      mint = tokens.mint;
+      player1Ata = tokens.player1Ata;
+      player2Ata = tokens.player2Ata;
+      platformFeeAta = tokens.platformFeeAta;
+      fs.writeFileSync(MINT_FILE, JSON.stringify(mint.toBase58()));
+    }
 
     console.log(`Mint:          ${mint.toBase58()}`);
     console.log(`Player1:       ${player1.publicKey.toBase58()}`);
