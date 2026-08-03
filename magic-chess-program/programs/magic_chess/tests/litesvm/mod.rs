@@ -14,3 +14,6 @@ mod test_timeout;
 
 #[cfg(test)]
 mod test_session_keys;
+
+#[cfg(test)]
+mod test_prediction;

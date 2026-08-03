@@ -30,6 +30,7 @@ pub mod speed_chess {
         move_timeout_duration_arg: i64,
         platform_fee_basis_points_arg: u16,
         platform_fee_wallet_arg: Pubkey,
+        prediction_enabled_arg: bool,
     ) -> Result<()> {
         instructions::initialize_match::handle_initialize_match(
             ctx,
@@ -38,6 +39,7 @@ pub mod speed_chess {
             move_timeout_duration_arg,
             platform_fee_basis_points_arg,
             platform_fee_wallet_arg,
+            prediction_enabled_arg,
         )
     }
 

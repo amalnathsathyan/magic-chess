@@ -26,7 +26,7 @@ fn test_initialize_match() {
     let ix = initialize_match_ix(
         &chess_match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet,
+        bet_amount, 0, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(ix, &[]);
 
@@ -71,7 +71,7 @@ fn test_join_match() {
     let ix = initialize_match_ix(
         &chess_match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet,
+        bet_amount, 0, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(ix, &[]);
 
@@ -117,7 +117,7 @@ fn test_abort_match() {
     let ix = initialize_match_ix(
         &chess_match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet,
+        bet_amount, 0, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(ix, &[]);
 
@@ -159,7 +159,7 @@ fn test_cannot_abort_active_match() {
     let init_ix = initialize_match_ix(
         &chess_match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet,
+        bet_amount, 0, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -203,7 +203,7 @@ fn test_close_match_after_settlement() {
     let init_ix = initialize_match_ix(
         &chess_match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet,
+        bet_amount, 0, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -245,7 +245,7 @@ fn test_cannot_close_unsettled_match() {
     let init_ix = initialize_match_ix(
         &chess_match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet,
+        bet_amount, 0, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 

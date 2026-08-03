@@ -24,7 +24,7 @@ fn setup_active_match(
     let init_ix = initialize_match_ix(
         &chess_match_pda, p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet,
+        bet_amount, 0, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -214,7 +214,7 @@ fn test_game_not_active_cannot_move() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet,
+        bet_amount, 0, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 

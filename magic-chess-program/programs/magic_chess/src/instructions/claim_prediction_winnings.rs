@@ -15,8 +15,9 @@ pub struct ClaimPredictionWinnings<'info> {
     )]
     pub chess_match: Account<'info, ChessMatch>,
 
-    /// The PredictionPool — must be settled.
+    /// The PredictionPool — must be settled. Mutable so Anchor allows PDA signing.
     #[account(
+        mut,
         seeds = [PREDICTION_POOL_SEED, chess_match.match_id.as_bytes()],
         bump = prediction_pool.bump,
         constraint = prediction_pool.settlement_processed @ ChessError::SettlementAlreadyProcessed,
@@ -135,7 +136,7 @@ pub fn handle_claim_prediction_winnings(ctx: Context<ClaimPredictionWinnings>) -
     let cpi_accounts = Transfer {
         from: ctx.accounts.prediction_pool_vault.to_account_info(),
         to: ctx.accounts.bettor_token_account.to_account_info(),
-        authority: ctx.accounts.prediction_pool_vault.to_account_info(),
+        authority: ctx.accounts.prediction_pool.to_account_info(),
     };
     let cpi_ctx = CpiContext::new_with_signer(
         ctx.accounts.token_program.key(),

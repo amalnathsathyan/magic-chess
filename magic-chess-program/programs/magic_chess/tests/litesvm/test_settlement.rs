@@ -26,7 +26,7 @@ fn setup_joined_match(
     let init_ix = initialize_match_ix(
         &match_pda, p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet.pubkey(),
+        bet_amount, 0, 200, &platform_fee_wallet.pubkey(), false,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -163,7 +163,7 @@ fn test_platform_fee_calculation() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 500, &platform_fee_wallet.pubkey(),
+        bet_amount, 0, 500, &platform_fee_wallet.pubkey(), false,
     );
     svm.send_ix(init_ix, &[]);
 

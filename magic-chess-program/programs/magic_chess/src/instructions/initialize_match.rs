@@ -15,6 +15,7 @@ use crate::utils::*;
     move_timeout_duration_arg: i64,
     platform_fee_basis_points_arg: u16,
     platform_fee_wallet_arg: Pubkey,
+    prediction_enabled_arg: bool,
 )]
 pub struct InitializeMatch<'info> {
     #[account(
@@ -60,6 +61,7 @@ pub fn handle_initialize_match(
     move_timeout_duration_arg: i64,
     platform_fee_basis_points_arg: u16,
     platform_fee_wallet_arg: Pubkey,
+    prediction_enabled_arg: bool,
 ) -> Result<()> {
     let chess_match_account = &mut ctx.accounts.chess_match;
     let player_signer_account = &ctx.accounts.player_signer;
@@ -113,7 +115,7 @@ pub fn handle_initialize_match(
     chess_match_account.platform_fee_wallet = platform_fee_wallet_arg;
 
     chess_match_account.payout_processed = false;
-    chess_match_account.prediction_enabled = false;
+    chess_match_account.prediction_enabled = prediction_enabled_arg;
 
     chess_match_account.session_signer = Pubkey::default();
     chess_match_account.session_expires_at = 0;

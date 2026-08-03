@@ -107,7 +107,7 @@ pub fn handle_cancel_prediction_bet(ctx: Context<CancelPredictionBet>) -> Result
     let cpi_accounts = Transfer {
         from: ctx.accounts.prediction_pool_vault.to_account_info(),
         to: ctx.accounts.bettor_token_account.to_account_info(),
-        authority: ctx.accounts.prediction_pool_vault.to_account_info(),
+        authority: ctx.accounts.prediction_pool.to_account_info(),
     };
     let cpi_ctx = CpiContext::new_with_signer(
         ctx.accounts.token_program.key(),

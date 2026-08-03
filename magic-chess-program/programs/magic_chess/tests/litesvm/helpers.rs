@@ -294,6 +294,7 @@ pub fn initialize_match_ix(
     move_timeout_duration: i64,
     platform_fee_bps: u16,
     platform_fee_wallet: &Pubkey,
+    prediction_enabled: bool,
 ) -> Instruction {
     let mut data = Vec::new();
     data.extend_from_slice(&discriminator("initialize_match"));
@@ -305,6 +306,7 @@ pub fn initialize_match_ix(
     data.extend_from_slice(&move_timeout_duration.to_le_bytes());
     data.extend_from_slice(&platform_fee_bps.to_le_bytes());
     data.extend_from_slice(&platform_fee_wallet.to_bytes());
+    data.push(prediction_enabled as u8);
 
     Instruction {
         program_id: program_id(),
@@ -487,5 +489,150 @@ pub fn revoke_session_key_ix(
             AccountMeta::new(*player, true),
         ],
         data: discriminator("revoke_session_key").to_vec(),
+    }
+}
+
+// ── Prediction Market PDA helpers ─────────────────────────────────────────
+
+pub fn find_prediction_pool_pda(match_id: &str) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[b"prediction_pool", match_id.as_bytes()],
+        &program_id(),
+    )
+}
+
+pub fn find_prediction_pool_vault_pda(prediction_pool: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[b"prediction_pool_vault", prediction_pool.as_ref()],
+        &program_id(),
+    )
+}
+
+pub fn find_prediction_bet_pda(prediction_pool: &Pubkey, bettor: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[b"prediction_bet", prediction_pool.as_ref(), bettor.as_ref()],
+        &program_id(),
+    )
+}
+
+// ── Prediction Market instruction builders ─────────────────────────────────
+
+pub fn initialize_prediction_pool_ix(
+    chess_match_pda: &Pubkey,
+    prediction_pool: &Pubkey,
+    prediction_pool_vault: &Pubkey,
+    betting_token_mint: &Pubkey,
+    payer: &Pubkey,
+    platform_fee_bps: u16,
+) -> Instruction {
+    let mut data = Vec::new();
+    data.extend_from_slice(&discriminator("initialize_prediction_pool"));
+    data.extend_from_slice(&platform_fee_bps.to_le_bytes());
+
+    Instruction {
+        program_id: program_id(),
+        accounts: vec![
+            AccountMeta::new_readonly(*chess_match_pda, false),
+            AccountMeta::new(*prediction_pool, false),
+            AccountMeta::new(*prediction_pool_vault, false),
+            AccountMeta::new_readonly(*betting_token_mint, false),
+            AccountMeta::new(*payer, true),
+            AccountMeta::new_readonly(token_program_id(), false),
+            AccountMeta::new_readonly(system_program_id(), false),
+        ],
+        data,
+    }
+}
+
+pub fn place_prediction_bet_ix(
+    chess_match_pda: &Pubkey,
+    prediction_pool: &Pubkey,
+    prediction_bet: &Pubkey,
+    prediction_pool_vault: &Pubkey,
+    bettor_token_account: &Pubkey,
+    bettor: &Pubkey,
+    bet_amount: u64,
+    predicted_outcome: u8,
+) -> Instruction {
+    let mut data = Vec::new();
+    data.extend_from_slice(&discriminator("place_prediction_bet"));
+    data.extend_from_slice(&bet_amount.to_le_bytes());
+    data.push(predicted_outcome);
+
+    Instruction {
+        program_id: program_id(),
+        accounts: vec![
+            AccountMeta::new_readonly(*chess_match_pda, false),
+            AccountMeta::new(*prediction_pool, false),
+            AccountMeta::new(*prediction_bet, false),
+            AccountMeta::new(*prediction_pool_vault, false),
+            AccountMeta::new(*bettor_token_account, false),
+            AccountMeta::new(*bettor, true),
+            AccountMeta::new_readonly(token_program_id(), false),
+            AccountMeta::new_readonly(system_program_id(), false),
+        ],
+        data,
+    }
+}
+
+pub fn settle_prediction_pool_ix(
+    chess_match_pda: &Pubkey,
+    prediction_pool: &Pubkey,
+    caller: &Pubkey,
+) -> Instruction {
+    Instruction {
+        program_id: program_id(),
+        accounts: vec![
+            AccountMeta::new_readonly(*chess_match_pda, false),
+            AccountMeta::new(*prediction_pool, false),
+            AccountMeta::new(*caller, true),
+        ],
+        data: discriminator("settle_prediction_pool").to_vec(),
+    }
+}
+
+pub fn claim_prediction_winnings_ix(
+    chess_match_pda: &Pubkey,
+    prediction_pool: &Pubkey,
+    prediction_bet: &Pubkey,
+    prediction_pool_vault: &Pubkey,
+    bettor_token_account: &Pubkey,
+    bettor: &Pubkey,
+) -> Instruction {
+    Instruction {
+        program_id: program_id(),
+        accounts: vec![
+            AccountMeta::new_readonly(*chess_match_pda, false),
+            AccountMeta::new(*prediction_pool, false),
+            AccountMeta::new(*prediction_bet, false),
+            AccountMeta::new(*prediction_pool_vault, false),
+            AccountMeta::new(*bettor_token_account, false),
+            AccountMeta::new(*bettor, true),
+            AccountMeta::new_readonly(token_program_id(), false),
+        ],
+        data: discriminator("claim_prediction_winnings").to_vec(),
+    }
+}
+
+pub fn cancel_prediction_bet_ix(
+    chess_match_pda: &Pubkey,
+    prediction_pool: &Pubkey,
+    prediction_bet: &Pubkey,
+    prediction_pool_vault: &Pubkey,
+    bettor_token_account: &Pubkey,
+    bettor: &Pubkey,
+) -> Instruction {
+    Instruction {
+        program_id: program_id(),
+        accounts: vec![
+            AccountMeta::new_readonly(*chess_match_pda, false),
+            AccountMeta::new(*prediction_pool, false),
+            AccountMeta::new(*prediction_bet, false),
+            AccountMeta::new(*prediction_pool_vault, false),
+            AccountMeta::new(*bettor_token_account, false),
+            AccountMeta::new(*bettor, true),
+            AccountMeta::new_readonly(token_program_id(), false),
+        ],
+        data: discriminator("cancel_prediction_bet").to_vec(),
     }
 }
