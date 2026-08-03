@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+/* ── Google Fonts (Space Grotesk, JetBrains Mono, DM Sans) ── */
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Space+Grotesk:wght@300..700&display=swap");
+
+/* ── Theme CSS Variables ── */
+@theme inline {
+  /* Font families */
+  --font-heading: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-body: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* ── Dark mode ("Digital Arena") ── */
+  --color-background: #0a0a0f;
+  --color-foreground: #f0f0f5;
+  --color-card: #12121a;
+  --color-card-hover: #181825;
+  --color-border: rgba(255, 255, 255, 0.06);
+  --color-border-hover: rgba(255, 255, 255, 0.10);
+  --color-muted: #6b6b80;
+  --color-muted-foreground: #9d9db5;
+
+  /* Accent: electric emerald */
+  --color-primary: #00e676;
+  --color-primary-foreground: #0a0a0f;
+  --color-primary-hover: #00c853;
+
+  /* Secondary accent: warm amber */
+  --color-accent: #ffab00;
+  --color-accent-foreground: #0a0a0f;
+
+  /* Destructive */
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #f0f0f5;
+
+  /* Chart / misc */
+  --color-ring: #00e676;
+  --color-input: rgba(255, 255, 255, 0.08);
+
+  /* Glass surface */
+  --color-glass: rgba(18, 18, 26, 0.6);
+  --color-glass-border: rgba(255, 255, 255, 0.04);
+
+  /* Border radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+
+  /* Shadows */
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20px rgba(0, 230, 118, 0.15);
+}
+
+/* ── Base Styles ── */
+* {
+  border-color: var(--color-border);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar Styling ── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ── Glass Morphism Utility ── */
+.glass {
+  background: var(--color-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-glass-border);
+}
+
+.glass-card {
+  background: var(--color-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-glass-border);
+  border-radius: var(--radius-lg);
+}
+
+/* ── Chess Board Overrides ── */
+.react-chessboard {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-glow);
+}
