@@ -34,14 +34,20 @@ cd magic-chess-program && anchor build
 ### Test
 
 ```bash
-# Run the full integration test suite (requires local validator)
-npm run anchor-test
+# Unit tests (182 pure Rust, ~0s)
+cd magic-chess-program && cargo test -p magic_chess
 
-# Or run Anchor tests directly
+# LiteSVM integration (23 in-process, SPL token flows)
+cd magic-chess-program/programs/magic_chess && cargo test -- litesvm
+
+# Mollusk CU benchmarks (8 benchmarks)
+cargo test --features integration-tests -p magic_chess --test cu_benchmarks
+
+# Anchor TypeScript tests (12, requires local validator)
 cd magic-chess-program && anchor test
 ```
 
-The test suite covers 100+ test cases across 3 tiers: 47+ pure unit tests for chess logic, Mollusk CU benchmarks, and LiteSVM integration tests for payout and settlement flows.
+**205 tests across 4 harnesses**: 182 unit + 23 LiteSVM + 8 Mollusk CU + 12 Anchor TS. See `magic-chess-program/programs/magic_chess/tests/README.md` for structure.
 
 ### Deploy (Devnet)
 
