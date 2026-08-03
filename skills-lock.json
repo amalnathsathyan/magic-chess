@@ -6,6 +6,18 @@
       "sourceType": "github",
       "skillPath": "skill/SKILL.md",
       "computedHash": "8376f3a978b4b1d9d7b235579d79b5080f9102801269793e7b0b59344d6fbee4"
+    },
+    "solana-audit": {
+      "source": "Berektassuly/solana-audit-skill",
+      "sourceType": "github",
+      "skillPath": "skill/SKILL.md",
+      "computedHash": "d22436234c718f6b9d55737c36115251f04a340b5643fc69e13d806325ecca65"
+    },
+    "solana-incident-response": {
+      "source": "Berektassuly/solana-audit-skill",
+      "sourceType": "github",
+      "skillPath": "skills/solana-incident-response/SKILL.md",
+      "computedHash": "bf9c8e1878c98609082f8728181f47276958e601367ccc3556e2349bcde25d0d"
     }
   }
 }
