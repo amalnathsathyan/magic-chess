@@ -169,6 +169,23 @@ describe("MagicBlock Session Key — Authorization Flow", () => {
   // Setup: initialize match, join, delegate
   // ────────────────────────────────────────────────────────────────────
   before(async () => {
+    // Fund test wallets from ANCHOR_WALLET (avoids faucet rate limits)
+    const funder = anchor.AnchorProvider.env().wallet;
+    const fundAmount = 0.5 * anchor.web3.LAMPORTS_PER_SOL;
+    for (const kp of [whitePlayer, blackPlayer, platformFeeWallet]) {
+      const bal = await baseConnection.getBalance(kp.publicKey);
+      if (bal < 0.1 * anchor.web3.LAMPORTS_PER_SOL) {
+        const tx = new anchor.web3.Transaction().add(
+          anchor.web3.SystemProgram.transfer({
+            fromPubkey: funder.publicKey,
+            toPubkey: kp.publicKey,
+            lamports: fundAmount,
+          })
+        );
+        await anchor.web3.sendAndConfirmTransaction(baseConnection, tx, [(funder as any).payer]);
+      }
+    }
+
     console.log(`White (player 1):  ${whitePlayer.publicKey.toBase58()}`);
     console.log(`Black (player 2):  ${blackPlayer.publicKey.toBase58()}`);
     console.log(`Session key:      ${sessionKey.publicKey.toBase58()}`);
