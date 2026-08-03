@@ -28,3 +28,10 @@ MVP-ORDER.md
 TOKEN_STRATEGY.md
 magic-chess-program/target/
 scripts/
+
+# Surfpool logs and state
+.surfpool/
+
+# Claude Code local settings (user-specific permissions)
+.claude/settings.local.json
+skills-lock.json

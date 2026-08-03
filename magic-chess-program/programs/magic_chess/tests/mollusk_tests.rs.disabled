@@ -1,8 +1,0 @@
-// Mollusk CU benchmarks for Magic Chess.
-// Requires the "integration-tests" feature to be enabled.
-//
-// The benchmark file is kept under tests/mollusk/cu_benchmarks.rs
-// for clean folder organisation.
-
-#[path = "mollusk/cu_benchmarks.rs"]
-mod cu_benchmarks;
