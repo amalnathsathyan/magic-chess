@@ -9,6 +9,7 @@ import {
   TrendingUp,
   Clock,
   ArrowLeft,
+  Play,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -77,14 +78,19 @@ export default function ProfilePage() {
         animate={{ opacity: 1, y: 0 }}
         className="glass-card mb-8 flex flex-col gap-6 p-6 sm:flex-row sm:items-center"
       >
-        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
           <User className="h-10 w-10 text-primary" />
         </div>
         <div className="flex-1">
-          <h1 className="font-heading text-2xl font-bold">{PROFILE.address}</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Rating:{" "}
-            <span className="font-mono font-semibold text-foreground">
+          <div className="flex items-center gap-3">
+            <h1 className="font-heading text-2xl font-bold">Player Profile</h1>
+            <span className="rounded-md bg-primary/20 px-2.5 py-1 text-xs font-mono font-medium text-primary border border-primary/30">
+              {PROFILE.address}
+            </span>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            ELO Rating:{" "}
+            <span className="font-mono font-semibold text-emerald-400">
               {PROFILE.rating}
             </span>
           </p>
@@ -92,7 +98,7 @@ export default function ProfilePage() {
         <div className="flex gap-4">
           <Link
             href="/arena"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-primary-foreground transition-all hover:bg-primary-hover"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-primary-foreground transition-all hover:bg-primary-hover shadow-[0_0_15px_rgba(0,230,118,0.3)]"
           >
             <Sword className="h-4 w-4" />
             Play Now
@@ -101,27 +107,37 @@ export default function ProfilePage() {
       </motion.div>
 
       {/* Stats grid */}
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-5">
         {[
           {
             icon: Sword,
             label: "Games",
             value: PROFILE.gamesPlayed,
+            color: "text-muted",
           },
           {
             icon: Trophy,
-            label: "Win Rate",
-            value: `${PROFILE.winRate}%`,
+            label: "Wins",
+            value: PROFILE.wins,
+            color: "text-emerald-400",
           },
           {
             icon: TrendingUp,
-            label: "Total Won",
-            value: `${PROFILE.totalWon} SOL`,
+            label: "Losses",
+            value: PROFILE.losses,
+            color: "text-destructive",
           },
           {
             icon: Clock,
+            label: "Draws",
+            value: PROFILE.draws,
+            color: "text-amber-400",
+          },
+          {
+            icon: TrendingUp,
             label: "Wagered",
             value: `${PROFILE.totalWagered} SOL`,
+            color: "text-primary",
           },
         ].map((stat) => (
           <motion.div
@@ -130,9 +146,9 @@ export default function ProfilePage() {
             animate={{ opacity: 1, y: 0 }}
             className="glass-card p-4 text-center"
           >
-            <stat.icon className="mx-auto mb-2 h-5 w-5 text-muted" />
-            <p className="font-mono text-xl font-bold">{stat.value}</p>
-            <p className="text-xs text-muted">{stat.label}</p>
+            <stat.icon className={cn("mx-auto mb-2 h-5 w-5", stat.color)} />
+            <p className={cn("font-mono text-xl font-bold", stat.color)}>{stat.value}</p>
+            <p className="text-xs text-muted-foreground">{stat.label}</p>
           </motion.div>
         ))}
       </div>
@@ -140,7 +156,7 @@ export default function ProfilePage() {
       {/* Recent games */}
       <div>
         <h2 className="mb-4 font-heading text-lg font-semibold">
-          Recent Games
+          Match History
         </h2>
         <div className="space-y-3">
           {PROFILE.recentGames.map((game, i) => (
@@ -149,15 +165,15 @@ export default function ProfilePage() {
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: i * 0.05 }}
-              className="glass-card flex items-center justify-between p-4"
+              className="glass-card flex items-center justify-between p-4 group hover:bg-white/5 transition-colors"
             >
               <div className="flex items-center gap-4">
                 <div
                   className={cn(
-                    "flex h-9 w-9 items-center justify-center rounded-lg text-xs font-bold",
-                    game.result === "win" && "bg-primary/10 text-primary",
-                    game.result === "loss" && "bg-destructive/10 text-destructive",
-                    game.result === "draw" && "bg-accent/10 text-accent"
+                    "flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold font-mono border",
+                    game.result === "win" && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+                    game.result === "loss" && "bg-destructive/10 text-destructive border-destructive/20",
+                    game.result === "draw" && "bg-amber-500/10 text-amber-400 border-amber-500/20"
                   )}
                 >
                   {game.result === "win"
@@ -167,13 +183,16 @@ export default function ProfilePage() {
                       : "D"}
                 </div>
                 <div>
-                  <p className="text-sm font-medium">vs {game.opponent}</p>
-                  <p className="text-xs text-muted">
-                    {game.timeControl} &middot; {game.wager} SOL
+                  <p className="text-sm font-medium font-mono">vs {game.opponent}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {game.timeControl} &middot; {game.wager} SOL &middot; {game.date}
                   </p>
                 </div>
               </div>
-              <span className="text-xs text-muted">{game.date}</span>
+              <button className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/5 text-xs font-medium text-muted-foreground opacity-0 group-hover:opacity-100 transition-all hover:bg-white/10 hover:text-foreground">
+                <Play className="h-3 w-3" />
+                Replay
+              </button>
             </motion.div>
           ))}
         </div>
@@ -181,3 +200,4 @@ export default function ProfilePage() {
     </div>
   );
 }
+

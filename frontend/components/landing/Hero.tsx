@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, Sword, Coins, Zap } from "lucide-react";
+import { ArrowRight, Sword, Coins, Zap, Play } from "lucide-react";
 
 export function Hero() {
   return (
@@ -42,12 +42,12 @@ export function Hero() {
 
         {/* Headline */}
         <h1 className="font-heading text-5xl font-bold leading-tight tracking-tight sm:text-6xl lg:text-7xl">
-          <span className="text-primary">On-Chain Chess,</span>
+          <span className="text-primary">On-Chain Chess.</span>
           <br />
-          Real Stakes.
+          Gasless. Real Stakes.
         </h1>
 
-        <p className="mx-auto mt-6 max-w-2xl text-lg text-muted-foreground sm:text-xl">
+        <p className="mx-auto mt-6 max-w-2xl font-body text-lg text-muted-foreground sm:text-xl">
           Play competitive chess on Solana with gasless moves.
           Wager SOL or SPL tokens, settle instantly on-chain via
           MagicBlock Ephemeral Rollups.
@@ -59,14 +59,15 @@ export function Hero() {
             href="/arena"
             className="inline-flex items-center gap-2 rounded-lg bg-primary px-7 py-3 font-heading text-sm font-semibold text-primary-foreground transition-all hover:bg-primary-hover hover:shadow-glow"
           >
-            Enter the Arena
+            Enter Arena
             <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
             href="/arena"
             className="inline-flex items-center gap-2 rounded-lg border border-border px-7 py-3 font-heading text-sm font-semibold text-foreground transition-all hover:border-border-hover hover:bg-card"
           >
-            Spectate a Match
+            Create Match
+            <Play className="h-4 w-4" />
           </Link>
         </div>
       </motion.div>
@@ -103,25 +104,53 @@ export function Hero() {
               <stat.icon className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted">{stat.label}</p>
+              <p className="font-body text-xs text-muted-foreground">{stat.label}</p>
               <p className="font-mono text-lg font-semibold">{stat.value}</p>
             </div>
           </div>
         ))}
       </motion.div>
 
-      {/* Placeholder for animated chess board */}
+      {/* Animated glowing mini chessboard preview */}
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.9, duration: 0.6 }}
-        className="mt-20 w-full max-w-md"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1, y: [0, -10, 0] }}
+        transition={{ 
+          delay: 0.9, 
+          duration: 4,
+          repeat: Infinity,
+          repeatType: "reverse",
+          ease: "easeInOut"
+        }}
+        className="mt-20 w-full max-w-sm relative"
       >
-        <div className="glass-card flex aspect-square items-center justify-center">
-          <p className="text-sm text-muted">
-            {/* react-chessboard placeholder — will render live board animation */}
-            Animated Chess Board
-          </p>
+        <div className="absolute inset-0 rounded-xl bg-primary/20 blur-2xl" />
+        <div className="glass-card relative overflow-hidden p-4">
+          <div className="grid grid-cols-8 grid-rows-8 aspect-square rounded-lg border border-border/50 overflow-hidden">
+            {Array.from({ length: 64 }).map((_, i) => {
+              const row = Math.floor(i / 8);
+              const col = i % 8;
+              const isDark = (row + col) % 2 === 1;
+              return (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0.8 }}
+                  animate={{ 
+                    opacity: [0.8, 1, 0.8],
+                    backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.01)"
+                  }}
+                  transition={{
+                    duration: 2 + Math.random() * 2,
+                    repeat: Infinity,
+                    repeatType: "reverse"
+                  }}
+                  className={`w-full h-full ${
+                    isDark ? 'bg-white/5' : 'bg-transparent'
+                  }`}
+                />
+              );
+            })}
+          </div>
         </div>
       </motion.div>
     </section>

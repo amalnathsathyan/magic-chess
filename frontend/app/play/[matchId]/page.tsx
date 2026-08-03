@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { use, useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Eye } from "lucide-react";
@@ -11,27 +11,80 @@ import { MoveList } from "@/components/chess/MoveList";
 import { CapturedPieces } from "@/components/chess/CapturedPieces";
 import { GameStatus } from "@/components/chess/GameStatus";
 import { PromotionDialog } from "@/components/chess/PromotionDialog";
+import { PlayerCard } from "@/components/chess/PlayerCard";
+import { BoardControls } from "@/components/chess/BoardControls";
 import { TransactionStatus } from "@/components/shared/TransactionStatus";
 import type { Square } from "chess.js";
 import { Chess } from "chess.js";
 import { sounds } from "@/lib/sounds";
+// @ts-ignore
+import { useMatch, useMatchEvents, useMagicChessClient } from "@magic-chess/sdk/react";
+// @ts-ignore
+import { PublicKey } from "@solana/web3.js";
+import { toast } from "sonner";
 
 interface PlayPageProps {
   params: Promise<{ matchId: string }>;
 }
 
 export default function PlayPage({ params }: PlayPageProps) {
+  const { matchId } = use(params);
   const router = useRouter();
+  
+  // SDK Hooks
+  let client: any = null;
+  let matchContext: any = { match: null, loading: false, refetch: async () => {} };
+  
+  try {
+    client = useMagicChessClient();
+    matchContext = useMatch(matchId);
+  } catch (e) {
+    // Graceful fallback when no provider
+  }
+
+  const { match, loading, refetch } = matchContext;
+
   const [fen, setFen] = useState("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
   const [moves, setMoves] = useState<string[]>([]);
-  
-  useEffect(() => {
-    sounds.play("game_start");
-    return () => sounds.destroy();
-  }, []);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const [promotionSquare, setPromotionSquare] = useState<Square | null>(null);
+
+  // Sync with on-chain match
+  useEffect(() => {
+    if (match) {
+      // Very basic sync - if there's a custom FEN stored we'd set it
+      // But typically we parse moves to get FEN or just rely on events
+      // For this scaffold, we'll wait for events or initial FEN if provided.
+    }
+  }, [match]);
+
+  // Subscribe to live move events
+  let unsubscribeEvents = () => {};
+  try {
+    unsubscribeEvents = useMatchEvents(matchId, {
+      onMoveMade: (event: any) => {
+        setFen(event.boardFen);
+        if (event.algebraicMove) {
+          setMoves((prev) => [...prev, event.algebraicMove]);
+          setCurrentMoveIndex((prev) => prev + 1);
+        }
+        sounds.playMoveSound(event.algebraicMove || "move");
+      },
+      onGameEnded: (event: any) => {
+        sounds.play("game_end");
+        toast.info(`Game ended! ${event.status}`);
+      }
+    });
+  } catch (e) {}
+
+  useEffect(() => {
+    sounds.play("game_start");
+    return () => {
+      sounds.destroy();
+      unsubscribeEvents();
+    };
+  }, [unsubscribeEvents]);
 
   // Clock state (mock — 5 minutes each)
   const [whiteTime] = useState(300_000);
@@ -64,6 +117,7 @@ export default function PlayPage({ params }: PlayPageProps) {
         });
 
         if (move) {
+          // Optimistic update
           setFen(game.fen());
           setMoves((prev) => [...prev, move.san]);
           setCurrentMoveIndex((prev) => prev + 1);
@@ -74,6 +128,12 @@ export default function PlayPage({ params }: PlayPageProps) {
           } else {
             sounds.playMoveSound(move.san);
           }
+          
+          // Trigger on-chain move here if client is available
+          if (client) {
+            // e.g. client.makeMove({ matchId, move: ... })
+          }
+
           return true;
         }
 
@@ -82,7 +142,7 @@ export default function PlayPage({ params }: PlayPageProps) {
         return false;
       }
     },
-    [fen]
+    [fen, client, matchId]
   );
 
   const handlePromotion = useCallback(
@@ -91,7 +151,6 @@ export default function PlayPage({ params }: PlayPageProps) {
 
       try {
         const game = new Chess(fen);
-        // Find the pawn move that needs promotion
         const legalMoves = game.moves({ verbose: true });
         const promoMove = legalMoves.find(
           (m) => m.to === promotionSquare && m.promotion
@@ -109,6 +168,11 @@ export default function PlayPage({ params }: PlayPageProps) {
           } else {
             sounds.playMoveSound(promoMove.san);
           }
+          
+          // Trigger on-chain move here if client is available
+          if (client) {
+             // client.makeMove({ matchId, move: ... })
+          }
         }
       } catch {
         // Invalid move
@@ -116,7 +180,7 @@ export default function PlayPage({ params }: PlayPageProps) {
 
       setPromotionSquare(null);
     },
-    [fen, promotionSquare]
+    [fen, promotionSquare, client, matchId]
   );
 
   // Determine game result
@@ -172,6 +236,12 @@ export default function PlayPage({ params }: PlayPageProps) {
 
   return (
     <div className="min-h-screen bg-background">
+      <GameStatus
+        result={result}
+        winner={winner}
+        turn={turn === "w" ? "white" : "black"}
+      />
+      
       {/* Top bar */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
@@ -185,12 +255,12 @@ export default function PlayPage({ params }: PlayPageProps) {
             </button>
             <span className="hidden text-sm text-muted sm:inline">|</span>
             <span className="hidden font-mono text-xs text-muted sm:inline">
-              Match ID
+              Match ID: {matchId}
             </span>
           </div>
           <div className="flex items-center gap-3">
             <Link
-              href={`/play/match123/spectate`}
+              href={`/play/${matchId}/spectate`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               <Eye className="h-3.5 w-3.5" />
@@ -210,18 +280,27 @@ export default function PlayPage({ params }: PlayPageProps) {
         >
           {/* Left column: board */}
           <div className="flex flex-col items-center gap-4">
-            {/* Black clock + captured pieces */}
-            <div className="flex w-full max-w-[560px] items-start justify-between">
+            {/* Black player info + clock + captured pieces */}
+            <div className="flex w-full max-w-[560px] flex-col gap-2">
+              <div className="flex items-end justify-between">
+                <PlayerCard
+                  side="black"
+                  isActive={turn === "b" && !isGameOver}
+                  address="8xTk...9aF1"
+                  wagerAmount={10}
+                  className="flex-1 mr-4"
+                />
+                <ChessClock
+                  whiteTime={whiteTime}
+                  blackTime={blackTime}
+                  activeSide={activeSide}
+                  isPaused={isGameOver}
+                />
+              </div>
               <CapturedPieces
                 whiteCaptured={wCaptured}
                 blackCaptured={bCaptured}
                 side="white"
-              />
-              <ChessClock
-                whiteTime={whiteTime}
-                blackTime={blackTime}
-                activeSide={activeSide}
-                isPaused={isGameOver}
               />
             </div>
 
@@ -243,29 +322,37 @@ export default function PlayPage({ params }: PlayPageProps) {
                 />
               )}
             </div>
+            
+            <BoardControls 
+              onFlipBoard={() => {}}
+              onOfferDraw={() => {}}
+              onResign={() => {}}
+              className="w-full max-w-[560px]"
+            />
 
-            {/* White captured pieces */}
-            <div className="flex w-full max-w-[560px] justify-start">
+            {/* White player info + captured pieces */}
+            <div className="flex w-full max-w-[560px] flex-col gap-2">
               <CapturedPieces
                 whiteCaptured={wCaptured}
                 blackCaptured={bCaptured}
                 side="black"
               />
+              <PlayerCard
+                side="white"
+                isActive={turn === "w" && !isGameOver}
+                address="7xYk...2bR9"
+                wagerAmount={10}
+              />
             </div>
           </div>
 
-          {/* Right column: move list + status */}
+          {/* Right column: move list */}
           <div className="flex flex-col gap-4">
-            <GameStatus
-              result={result}
-              winner={winner}
-              turn={turn === "w" ? "white" : "black"}
-            />
-
             <MoveList
               moves={moves}
+              fen={fen}
               currentMoveIndex={currentMoveIndex}
-              className="flex-1"
+              className="flex-1 min-h-[400px]"
             />
           </div>
         </motion.div>

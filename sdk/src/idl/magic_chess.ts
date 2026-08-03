@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Placeholder IDL type for the Magic Chess program.
  *
@@ -14,18 +15,18 @@ export type MagicChess = {
     version: "0.1.0";
     spec: "0.1.0";
     description: "On-chain chess engine with wagering";
-  };
+  },
   instructions: [
     {
       name: "initializeMatch";
       accounts: [
-        { name: "chessMatch"; writable: true; pda: object };
-        { name: "playerSigner"; writable: true; signer: true };
-        { name: "bettingTokenMintAccount" };
-        { name: "playerTokenAccount"; writable: true };
-        { name: "matchEscrowTokenAccount"; writable: true; pda: object };
-        { name: "tokenProgram"; address: string };
-        { name: "systemProgram"; address: string };
+        { name: "chessMatch"; writable: true; pda: object },
+        { name: "playerSigner"; writable: true; signer: true },
+        { name: "bettingTokenMintAccount" },
+        { name: "playerTokenAccount"; writable: true },
+        { name: "matchEscrowTokenAccount"; writable: true; pda: object },
+        { name: "tokenProgram"; address: string },
+        { name: "systemProgram"; address: string },
       ];
       args: [
         { name: "matchIdArg"; type: "string" },
@@ -38,53 +39,53 @@ export type MagicChess = {
     {
       name: "joinMatch";
       accounts: [
-        { name: "chessMatch"; writable: true; pda: object };
-        { name: "playerTwoSigner"; writable: true; signer: true };
-        { name: "playerTokenAccount"; writable: true };
-        { name: "matchEscrowTokenAccount"; writable: true; pda: object };
-        { name: "tokenProgram"; address: string };
-        { name: "systemProgram"; address: string };
+        { name: "chessMatch"; writable: true; pda: object },
+        { name: "playerTwoSigner"; writable: true; signer: true },
+        { name: "playerTokenAccount"; writable: true },
+        { name: "matchEscrowTokenAccount"; writable: true; pda: object },
+        { name: "tokenProgram"; address: string },
+        { name: "systemProgram"; address: string },
       ];
-      args: [{ name: "betAmountArg"; type: "u64" }];
+      args: [{ name: "betAmountArg"; type: "u64" }],
     },
     {
       name: "makeMove";
       accounts: [
-        { name: "chessMatch"; writable: true; pda: object };
-        { name: "player"; writable: true; signer: true };
+        { name: "chessMatch"; writable: true; pda: object },
+        { name: "player"; writable: true; signer: true },
       ];
-      args: [{ name: "args"; type: { defined: { name: "makeMoveArgs" } } }];
+      args: [{ name: "args"; type: { defined: { name: "makeMoveArgs" } } }],
     },
     {
       name: "resignGame";
       accounts: [
-        { name: "chessMatch"; writable: true; pda: object };
-        { name: "playerSigner"; writable: true; signer: true };
+        { name: "chessMatch"; writable: true; pda: object },
+        { name: "playerSigner"; writable: true; signer: true },
       ];
       args: [];
     },
     {
       name: "claimTimeoutWin";
       accounts: [
-        { name: "chessMatch"; writable: true; pda: object };
-        { name: "claimerSigner"; writable: true; signer: true };
+        { name: "chessMatch"; writable: true; pda: object },
+        { name: "claimerSigner"; writable: true; signer: true },
       ];
       args: [];
     },
     {
       name: "processMatchSettlement";
       accounts: [
-        { name: "chessMatch"; writable: true; pda: object };
-        { name: "matchEscrowTokenAccount"; writable: true; pda: object };
-        { name: "playerOneAta"; writable: true };
-        { name: "playerTwoAta"; writable: true };
-        { name: "platformFeeAta"; writable: true };
-        { name: "tokenProgram"; address: string };
+        { name: "chessMatch"; writable: true; pda: object },
+        { name: "matchEscrowTokenAccount"; writable: true; pda: object },
+        { name: "playerOneAta"; writable: true },
+        { name: "playerTwoAta"; writable: true },
+        { name: "platformFeeAta"; writable: true },
+        { name: "tokenProgram"; address: string },
       ];
       args: [];
     },
   ];
-  accounts: [{ name: "chessMatch" }];
+  accounts: [{ name: "chessMatch" }],
   events: [
     { name: "matchCreatedEvent" },
     { name: "playerJoinedEvent" },

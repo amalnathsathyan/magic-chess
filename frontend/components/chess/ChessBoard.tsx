@@ -202,7 +202,7 @@ export function ChessBoard({
             width: boardWidth,
             height: boardWidth,
             borderRadius: "0.75rem",
-            boxShadow: "0 0 20px rgba(0, 230, 118, 0.15)",
+            boxShadow: "0 0 24px rgba(0, 230, 118, 0.2)",
           },
           darkSquareStyle: { backgroundColor: "#1a1a2e" },
           lightSquareStyle: { backgroundColor: "#16213e" },

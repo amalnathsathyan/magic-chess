@@ -6,11 +6,11 @@
   "types": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./react": "./src/react/index.ts"
+    "./react": "./src/react/index.tsx"
   },
   "peerDependencies": {
     "@anchor-lang/core": "^1.0.0",
     "@magicblock-labs/ephemeral-rollups-kit": "^0.6.0",
-    "@solana/web3.js": "^2.0.0"
+    "@solana/web3.js": "1.95.4"
   }
 }

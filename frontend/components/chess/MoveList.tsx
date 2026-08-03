@@ -2,15 +2,19 @@
 
 import { useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
+import { Copy } from "lucide-react";
+import { toast } from "sonner";
 
 interface MoveListProps {
   moves: string[];
+  fen?: string;
   currentMoveIndex?: number;
   className?: string;
 }
 
 export function MoveList({
   moves,
+  fen,
   currentMoveIndex = -1,
   className,
 }: MoveListProps) {
@@ -22,6 +26,22 @@ export function MoveList({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [moves]);
+
+  const copyPGN = () => {
+    const pgn = moves.reduce((acc, move, i) => {
+      if (i % 2 === 0) return `${acc} ${Math.floor(i / 2) + 1}. ${move}`;
+      return `${acc} ${move}`;
+    }, "").trim();
+    navigator.clipboard.writeText(pgn);
+    toast.success("PGN copied to clipboard");
+  };
+
+  const copyFEN = () => {
+    if (fen) {
+      navigator.clipboard.writeText(fen);
+      toast.success("FEN copied to clipboard");
+    }
+  };
 
   // Group moves into pairs (white, black)
   const movePairs: { number: number; white: string; black?: string }[] = [];
@@ -37,13 +57,15 @@ export function MoveList({
     return (
       <div
         className={cn(
-          "glass-card flex h-full flex-col p-4",
+          "glass-card flex h-full flex-col p-4 backdrop-blur-md bg-background/40",
           className
         )}
       >
-        <h3 className="mb-3 font-heading text-sm font-semibold text-muted">
-          Moves
-        </h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-heading text-sm font-semibold text-muted">
+            Moves
+          </h3>
+        </div>
         <p className="text-sm text-muted-foreground">No moves yet</p>
       </div>
     );
@@ -52,13 +74,33 @@ export function MoveList({
   return (
     <div
       className={cn(
-        "glass-card flex h-full flex-col p-4",
+        "glass-card flex h-full flex-col p-4 backdrop-blur-md bg-background/40",
         className
       )}
     >
-      <h3 className="mb-3 font-heading text-sm font-semibold text-muted">
-        Moves
-      </h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-heading text-sm font-semibold text-muted">
+          Moves
+        </h3>
+        <div className="flex gap-2">
+          <button
+            onClick={copyPGN}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            title="Copy PGN"
+          >
+            <Copy className="h-3 w-3" /> PGN
+          </button>
+          {fen && (
+            <button
+              onClick={copyFEN}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              title="Copy FEN"
+            >
+              <Copy className="h-3 w-3" /> FEN
+            </button>
+          )}
+        </div>
+      </div>
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto pr-1 font-mono text-sm"

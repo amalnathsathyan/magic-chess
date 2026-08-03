@@ -22,10 +22,9 @@ function formatTime(ms: number): string {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-/** Determine urgency class based on time remaining */
 function urgencyClass(ms: number): string {
-  if (ms <= 10_000) return "text-destructive";
-  if (ms <= 60_000) return "text-accent";
+  if (ms <= 10_000) return "text-destructive animate-pulse [text-shadow:0_0_10px_rgba(239,68,68,0.8)]";
+  if (ms <= 60_000) return "text-amber-500 [text-shadow:0_0_10px_rgba(245,158,11,0.5)]";
   return "";
 }
 

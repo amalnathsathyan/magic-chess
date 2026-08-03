@@ -29,9 +29,14 @@ export const MAGIC_CONTEXT_ID = new PublicKey(
 
 /** The shape returned by the MagicBlock router delegation endpoint. */
 export interface DelegationStatus {
-  delegated: boolean;
-  fqdn: string;
-  owner: string;
+  isDelegated: boolean;
+  fqdn?: string;
+  delegationRecord?: {
+    authority: string;
+    owner: string;
+    delegationSlot: number;
+    lamports: number;
+  };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -45,9 +50,16 @@ export interface DelegationStatus {
 export async function getDelegationStatus(
   account: PublicKey
 ): Promise<DelegationStatus> {
-  const response = await fetch(
-    `${MAGICBLOCK_DEVNET_ROUTER}delegation/${account.toBase58()}`
-  );
+  const response = await fetch(MAGICBLOCK_DEVNET_ROUTER, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "getDelegationStatus",
+      params: [account.toBase58()],
+    }),
+  });
 
   if (!response.ok) {
     throw new Error(
@@ -55,7 +67,9 @@ export async function getDelegationStatus(
     );
   }
 
-  return response.json();
+  const body = await response.json();
+  if (body.error) throw new Error(body.error.message);
+  return body.result as DelegationStatus;
 }
 
 /**
@@ -68,6 +82,7 @@ export async function getDelegationStatus(
  * @returns A new Connection pointing at the ER.
  */
 export function getERConnection(fqdn: string): Connection {
-  // The router returns the FQDN without the `https://` scheme.
-  return new Connection(`https://${fqdn}`);
+  // Router may return fqdn with or without https:// prefix
+  const erUrl = fqdn.startsWith("https://") ? fqdn : `https://${fqdn}`;
+  return new Connection(erUrl);
 }

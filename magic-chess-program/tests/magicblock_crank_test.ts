@@ -328,27 +328,54 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
   it("Step 3 — Delegate match to MagicBlock ER", async () => {
     const uid = `crank-${matchId}`;
 
-    // Anchor TS auto-resolves the extra accounts (buffer, delegation_record,
-    // delegation_metadata, owner_program, delegation_program, system_program)
-    // from the IDL — no remainingAccounts needed.
+    // Manually derive delegation PDAs (Anchor TS auto-resolution has
+    // issues with cross-program PDA derivation in the IDL).
+    const [bufferChessMatch] = PublicKey.findProgramAddressSync(
+      [Buffer.from("buffer"), chessMatchPda.toBuffer()],
+      program.programId
+    );
+    const [delegationRecordChessMatch] = PublicKey.findProgramAddressSync(
+      [Buffer.from("delegation"), chessMatchPda.toBuffer()],
+      DELEGATION_PROGRAM_ID
+    );
+    const [delegationMetadataChessMatch] = PublicKey.findProgramAddressSync(
+      [Buffer.from("delegation-metadata"), chessMatchPda.toBuffer()],
+      DELEGATION_PROGRAM_ID
+    );
+
     await program.methods
-      .delegateMatch(uid)
+      .delegateMatch()
       .accounts({
         payer: payer.publicKey,
         chessMatch: chessMatchPda,
+        bufferChessMatch: bufferChessMatch,
+        delegationRecordChessMatch: delegationRecordChessMatch,
+        delegationMetadataChessMatch: delegationMetadataChessMatch,
+        delegationProgram: DELEGATION_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
       })
       .signers([payer])
       .rpc();
 
-    // Poll router for delegation
+    // Poll router for delegation (JSON-RPC POST)
     let delegated = false;
     for (let i = 0; i < 25; i++) {
       await sleep(1000);
       try {
-        const res = await fetch(`${ROUTER_API_BASE}/delegation/${chessMatchPda.toBase58()}`);
+        const res = await fetch(ROUTER_API_BASE, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "getDelegationStatus",
+            params: [chessMatchPda.toBase58()],
+          }),
+        });
         if (res.ok) {
-          const status = await res.json();
-          if (status.delegated) {
+          const body = await res.json();
+          const status = body.result;
+          if (status && status.isDelegated && status.fqdn) {
             delegated = true;
             erFqdn = status.fqdn;
             break;
@@ -360,7 +387,9 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
     console.log(`Delegated to ER: ${erFqdn}`);
 
     // Build ER connection and program for subsequent steps
-    erConnection = new anchor.web3.Connection(`https://${erFqdn}`, "confirmed");
+    // Router fqdn may already include https:// prefix
+    const erUrl = erFqdn.startsWith("https://") ? erFqdn : `https://${erFqdn}`;
+    erConnection = new anchor.web3.Connection(erUrl, "confirmed");
     const erProvider = new anchor.AnchorProvider(
       erConnection,
       new anchor.Wallet(payer),

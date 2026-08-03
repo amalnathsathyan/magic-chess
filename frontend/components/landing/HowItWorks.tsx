@@ -1,32 +1,26 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Wallet, Gamepad2, CheckCircle, ArrowRight } from "lucide-react";
+import { PlusCircle, Zap, Trophy } from "lucide-react";
 
 const steps = [
   {
-    icon: Wallet,
-    title: "Connect Wallet",
+    icon: PlusCircle,
+    title: "Create Match",
     description:
-      "Link your Solana wallet via Privy. One-click sign-in with email or social, plus embedded wallet creation.",
+      "Set your wager in SOL or SPL tokens. Your funds are locked securely in a PDA escrow until the match concludes.",
   },
   {
-    icon: Gamepad2,
-    title: "Join or Create a Match",
+    icon: Zap,
+    title: "Gasless Moves",
     description:
-      "Browse open matches in the Arena or create your own. Set wager amount, time control, and challenge opponents.",
+      "Play with 50ms latency. MagicBlock Ephemeral Rollups handle all moves off-chain without transaction fees, settling instantly.",
   },
   {
-    icon: ArrowRight,
-    title: "Play Chess",
+    icon: Trophy,
+    title: "Win Escrow",
     description:
-      "Make moves on the interactive chess board. Every move is submitted on-chain via MagicBlock with zero gas fees.",
-  },
-  {
-    icon: CheckCircle,
-    title: "Settle Instantly",
-    description:
-      "Winner claims the wager automatically. All game state verified on-chain with cryptographic proof of fair play.",
+      "Checkmate your opponent. The smart contract verifies the game state and automatically transfers the escrow to the winner.",
   },
 ];
 
@@ -41,34 +35,35 @@ export function HowItWorks() {
           transition={{ duration: 0.5 }}
           className="mb-16 text-center"
         >
-          <h2 className="font-heading text-3xl font-bold sm:text-4xl">
+          <h2 className="font-heading text-3xl font-bold sm:text-4xl text-foreground">
             How It Works
           </h2>
-          <p className="mt-3 text-muted-foreground">
-            From wallet to checkmate in four simple steps
+          <p className="mt-3 font-body text-muted-foreground">
+            From creation to victory in three simple steps
           </p>
         </motion.div>
 
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-8 md:grid-cols-3">
           {steps.map((step, i) => (
             <motion.div
               key={step.title}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
+              whileHover={{ y: -5, boxShadow: "var(--shadow-glow)" }}
               transition={{ delay: i * 0.1, duration: 0.4 }}
-              className="glass-card relative p-6"
+              className="glass-card relative p-6 transition-all"
             >
-              <span className="absolute right-4 top-4 font-mono text-xs text-muted">
+              <span className="absolute right-4 top-4 font-mono text-xs text-muted-foreground">
                 0{i + 1}
               </span>
               <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                 <step.icon className="h-5 w-5 text-primary" />
               </div>
-              <h3 className="font-heading text-lg font-semibold">
+              <h3 className="font-heading text-xl font-semibold text-foreground">
                 {step.title}
               </h3>
-              <p className="mt-2 text-sm text-muted-foreground">
+              <p className="mt-3 font-body text-sm text-muted-foreground leading-relaxed">
                 {step.description}
               </p>
             </motion.div>

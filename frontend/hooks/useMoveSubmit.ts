@@ -14,7 +14,7 @@ interface UseMoveSubmitReturn {
   isSubmitting: boolean;
   lastSignature: string | null;
   error: string | null;
-  submitMove: (from: string, to: string, promotion?: string) => Promise<boolean>;
+  submitMove: (from: string, to: string, promotion?: string) => Promise<string | null>;
   clearError: () => void;
 }
 
@@ -31,7 +31,7 @@ export function useMoveSubmit(
   const [error, setError] = useState<string | null>(null);
 
   const submitMove = useCallback(
-    async (from: string, to: string, promotion?: string): Promise<boolean> => {
+    async (from: string, to: string, promotion?: string): Promise<string | null> => {
       setIsSubmitting(true);
       setError(null);
 
@@ -49,7 +49,7 @@ export function useMoveSubmit(
           description: `Tx: ${signature.slice(0, 8)}...${signature.slice(-8)}`,
         });
 
-        return true;
+        return signature;
       } catch (err) {
         const message =
           err instanceof Error ? err.message : "Unknown error submitting move";
@@ -60,7 +60,7 @@ export function useMoveSubmit(
           description: message,
         });
 
-        return false;
+        return null;
       } finally {
         setIsSubmitting(false);
       }

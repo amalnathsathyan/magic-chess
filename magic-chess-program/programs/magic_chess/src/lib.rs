@@ -77,8 +77,8 @@ pub mod magic_chess {
     }
 
     // Delegate a chess match account to MagicBlock Ephemeral Rollups
-    pub fn delegate_match(ctx: Context<DelegateMatch>, uid: String) -> Result<()> {
-        instructions::delegate_match::handle_delegate_match(ctx, uid)
+    pub fn delegate_match(ctx: Context<DelegateMatch>) -> Result<()> {
+        instructions::delegate_match::handle_delegate_match(ctx)
     }
 
     // Commit state from Ephemeral Rollup back to base layer

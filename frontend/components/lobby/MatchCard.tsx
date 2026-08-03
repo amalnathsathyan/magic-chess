@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Clock, Coins, User } from "lucide-react";
+import { Clock, Coins, User, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface MatchCardData {
@@ -90,7 +90,7 @@ export function MatchCard({ match, className }: MatchCardProps) {
 
         {/* Match details */}
         <div className="mt-4 flex items-center justify-between">
-          <div className="flex items-center gap-5">
+          <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-1.5">
               <Coins className="h-4 w-4 text-accent" />
               <span className="font-mono text-sm font-semibold">
@@ -100,6 +100,10 @@ export function MatchCard({ match, className }: MatchCardProps) {
             <div className="flex items-center gap-1.5">
               <Clock className="h-4 w-4 text-muted" />
               <span className="font-mono text-sm">{match.timeControl}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5">
+              <Zap className="h-3 w-3 text-primary" />
+              <span className="font-mono text-xs text-primary/90">Gasless ER</span>
             </div>
           </div>
           

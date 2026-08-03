@@ -3,10 +3,16 @@
  *
  * These functions wrap the @magic-chess/sdk for common operations:
  * session creation, move submission, and account watching.
- *
- * TODO: Replace placeholder implementations with actual SDK calls
- * once the MagicChess SDK exposes the ER client.
  */
+
+import {
+  MagicChessClient,
+  findChessMatchPda,
+  getDelegationStatus,
+  getERConnection,
+  MAGICBLOCK_DEVNET_ROUTER,
+} from "@magic-chess/sdk";
+import { Transaction } from "@solana/web3.js";
 
 const RPC_ENDPOINT =
   process.env.NEXT_PUBLIC_RPC_ENDPOINT ?? "https://api.devnet.solana.com";
@@ -30,26 +36,80 @@ export function getDefaultConfig(): MagicBlockConfig {
 export async function createSession(
   _config: MagicBlockConfig
 ): Promise<string> {
-  // TODO: import { createEphemeralSession } from "@magic-chess/sdk";
-  // return createEphemeralSession(config);
   console.warn("MagicBlock session creation not yet implemented");
   return `session_placeholder_${Date.now()}`;
 }
 
 /**
- * Submit a chess move as an ephemeral transaction.
+ * Submit a chess move. Sends to Ephemeral Rollup if delegated,
+ * otherwise uses the base layer via client.makeMove.
  */
 export async function submitMoveTx(
-  _sessionId: string,
-  _matchPda: string,
-  _from: string,
-  _to: string,
-  _promotion?: string
+  client: MagicChessClient,
+  matchId: string,
+  from: string,
+  to: string,
+  promotion?: string
 ): Promise<string> {
-  // TODO: import { submitMove } from "@magic-chess/sdk";
-  // return submitMove(sessionId, matchPda, from, to, promotion);
-  console.warn("Move submission not yet implemented");
-  return `tx_placeholder_${Date.now()}`;
+  const fromCol = from.charCodeAt(0) - 97;
+  const fromRow = parseInt(from[1]) - 1;
+  const toCol = to.charCodeAt(0) - 97;
+  const toRow = parseInt(to[1]) - 1;
+
+  const move = {
+    fromRow,
+    fromCol,
+    toRow,
+    toCol,
+    promotion: promotion ? (promotion as any) : undefined,
+  };
+
+  const [chessMatchPda] = findChessMatchPda(matchId, client.programId);
+  
+  let isDelegated = false;
+  let erFqdn = "";
+  try {
+    const status = await getDelegationStatus(chessMatchPda);
+    if (status.isDelegated) {
+      isDelegated = true;
+      erFqdn = status.fqdn || "";
+    }
+  } catch (err) {
+    console.warn("Failed to check delegation status, falling back to base RPC", err);
+  }
+
+  if (isDelegated && erFqdn) {
+    const erConnection = getERConnection(erFqdn);
+    if (!client.wallet) throw new Error("Wallet not connected");
+
+    const ix = await client.program.methods
+      .makeMove({
+        fromRow,
+        fromCol,
+        toRow,
+        toCol,
+        promotion: move.promotion ?? null,
+      } as any)
+      .accounts({
+        chessMatch: chessMatchPda,
+        player: client.wallet.publicKey,
+      })
+      .instruction();
+
+    const tx = new Transaction().add(ix);
+    tx.feePayer = client.wallet.publicKey;
+
+    const { blockhash } = await erConnection.getLatestBlockhash();
+    tx.recentBlockhash = blockhash;
+
+    const signedTx = await client.wallet.signTransaction(tx);
+    const signature = await erConnection.sendRawTransaction(signedTx.serialize());
+    
+    return signature;
+  } else {
+    const { signature } = await client.makeMove(matchId, move);
+    return signature;
+  }
 }
 
 /**
@@ -58,8 +118,6 @@ export async function submitMoveTx(
 export async function claimWinnings(
   _matchPda: string
 ): Promise<string> {
-  // TODO: import { claimWager } from "@magic-chess/sdk";
-  // return claimWager(matchPda);
   console.warn("Claim winnings not yet implemented");
   return `tx_placeholder_${Date.now()}`;
 }

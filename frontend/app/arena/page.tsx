@@ -111,7 +111,7 @@ export default function ArenaPage() {
         className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4"
       >
         <div>
-          <h1 className="font-heading text-3xl font-bold">The Arena</h1>
+          <h1 className="font-heading text-3xl font-bold">Lobby Arena</h1>
           <p className="mt-1 text-muted-foreground">
             Browse live and open matches. Join one or create your own.
           </p>
@@ -151,29 +151,51 @@ export default function ArenaPage() {
             <div className="h-4 w-px bg-border mx-2 hidden sm:block" />
             
             {/* Wager Filters */}
-            <select 
-              value={wagerFilter} 
-              onChange={(e) => setWagerFilter(e.target.value as any)}
-              className="rounded-lg border border-border bg-card px-2 py-1.5 text-xs font-medium text-foreground focus:outline-none"
-            >
-              <option value="all">Any Wager</option>
-              <option value="free">Free</option>
-              <option value="0.1">0.1 SOL</option>
-              <option value="0.5">0.5 SOL</option>
-              <option value="1.0">1.0 SOL</option>
-            </select>
+            <div className="flex flex-wrap items-center gap-1">
+              {[
+                { value: "all", label: "Any Wager" },
+                { value: "free", label: "Free" },
+                { value: "0.1", label: "0.1 SOL" },
+                { value: "0.5", label: "0.5 SOL" },
+                { value: "1.0", label: "1.0 SOL" }
+              ].map((w) => (
+                <button
+                  key={w.value}
+                  onClick={() => setWagerFilter(w.value as any)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                    wagerFilter === w.value
+                      ? "border-primary/50 bg-primary/10 text-primary"
+                      : "border-transparent text-muted-foreground hover:bg-card hover:text-foreground"
+                  }`}
+                >
+                  {w.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="h-4 w-px bg-border mx-2 hidden sm:block" />
 
             {/* Time Control Filters */}
-            <select 
-              value={timeFilter} 
-              onChange={(e) => setTimeFilter(e.target.value as any)}
-              className="rounded-lg border border-border bg-card px-2 py-1.5 text-xs font-medium text-foreground focus:outline-none"
-            >
-              <option value="all">Any Time</option>
-              <option value="1+0">Bullet 1+0</option>
-              <option value="3+2">Blitz 3+2</option>
-              <option value="10+0">Rapid 10+0</option>
-            </select>
+            <div className="flex flex-wrap items-center gap-1">
+              {[
+                { value: "all", label: "Any Time" },
+                { value: "1+0", label: "Bullet 1+0" },
+                { value: "3+2", label: "Blitz 3+2" },
+                { value: "10+0", label: "Rapid 10+0" }
+              ].map((t) => (
+                <button
+                  key={t.value}
+                  onClick={() => setTimeFilter(t.value as any)}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                    timeFilter === t.value
+                      ? "border-accent/50 bg-accent/10 text-accent"
+                      : "border-transparent text-muted-foreground hover:bg-card hover:text-foreground"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Actions */}
@@ -199,19 +221,15 @@ export default function ArenaPage() {
         </div>
       </div>
 
-      {/* Create match form (collapsible) */}
-      {showCreate && (
-        <div className="mb-8">
-          <CreateMatchForm
-            isOpen={showCreate}
-            onClose={() => setShowCreate(false)}
-            onSubmit={(data) => {
-              console.log("Create match:", data);
-              setShowCreate(false);
-            }}
-          />
-        </div>
-      )}
+      {/* Create match form (modal) */}
+      <CreateMatchForm
+        isOpen={showCreate}
+        onClose={() => setShowCreate(false)}
+        onSubmit={(data) => {
+          console.log("Create match:", data);
+          setShowCreate(false);
+        }}
+      />
 
       {/* Match list */}
       <div className="grid gap-4">

@@ -2,6 +2,7 @@
 
 import { PrivyProvider } from "@privy-io/react-auth";
 import { Provider as JotaiProvider } from "jotai";
+import { SolanaProgramProvider } from "./SolanaProgramProvider";
 
 function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
@@ -45,7 +46,11 @@ function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <JotaiProvider>
-      <PrivyAuthProvider>{children}</PrivyAuthProvider>
+      <PrivyAuthProvider>
+        <SolanaProgramProvider>
+          {children}
+        </SolanaProgramProvider>
+      </PrivyAuthProvider>
     </JotaiProvider>
   );
 }
