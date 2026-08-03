@@ -34,8 +34,7 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program, BN } from "@coral-xyz/anchor";
 import { expect } from "chai";
 
-// @ts-ignore — JSON import requires resolveJsonModule in tsconfig (enabled)
-import idl from "../target/idl/magic_chess.json";
+import idl from "../target/idl/magic_chess.json" with { type: "json" };
 import type { MagicChess } from "../target/types/magic_chess";
 import { Keypair, LAMPORTS_PER_SOL, PublicKey, SystemProgram } from "@solana/web3.js";
 import {
@@ -290,11 +289,22 @@ describe("Magic Chess — Standard Integration Tests", () => {
     // NodeWallet exposes the underlying Keypair via `.payer`.
     const walletPayer = (provider.wallet as any).payer as Keypair;
 
-    // Airdrop SOL to all wallets so they can pay rent + fees
-    const airdropAmount = 10 * LAMPORTS_PER_SOL;
+    // Fund test wallets from payer (avoids faucet rate limits)
+    const fundAmount = 0.2 * LAMPORTS_PER_SOL;
+    const minBalance = 0.05 * LAMPORTS_PER_SOL;
     for (const kp of [player1, player2, platformFeeWallet]) {
-      const sig = await provider.connection.requestAirdrop(kp.publicKey, airdropAmount);
-      await provider.connection.confirmTransaction(sig, "confirmed");
+      const currentBalance = await provider.connection.getBalance(kp.publicKey);
+      if (currentBalance < minBalance) {
+        console.log(`  Funding ${kp.publicKey.toBase58().slice(0, 8)}... with ${fundAmount / LAMPORTS_PER_SOL} SOL from payer`);
+        const tx = new anchor.web3.Transaction().add(
+          SystemProgram.transfer({
+            fromPubkey: walletPayer.publicKey,
+            toPubkey: kp.publicKey,
+            lamports: fundAmount,
+          })
+        );
+        await anchor.web3.sendAndConfirmTransaction(provider.connection, tx, [walletPayer]);
+      }
     }
 
     // Set up SPL token infrastructure shared across all tests
@@ -347,7 +357,8 @@ describe("Magic Chess — Standard Integration Tests", () => {
         betAmount,
         new BN(0),                // no timeout — skip MagicBlock task scheduling
         200,                      // 2% platform fee
-        platformFeeWallet.publicKey
+        platformFeeWallet.publicKey,
+        false                     // prediction_enabled
       )
       .accounts({
         chessMatch: chessMatchPda,
@@ -405,7 +416,7 @@ describe("Magic Chess — Standard Integration Tests", () => {
 
     // Initialize match
     await program.methods
-      .initializeMatch(matchId, betAmount, new BN(0), 200, platformFeeWallet.publicKey)
+      .initializeMatch(matchId, betAmount, new BN(0), 200, platformFeeWallet.publicKey, false)
       .accounts({
         chessMatch: chessMatchPda,
         playerSigner: player1.publicKey,
@@ -804,7 +815,7 @@ describe("Magic Chess — Standard Integration Tests", () => {
 
     // Initialize match (no join)
     await program.methods
-      .initializeMatch(matchId, betAmount, new BN(0), 200, platformFeeWallet.publicKey)
+      .initializeMatch(matchId, betAmount, new BN(0), 200, platformFeeWallet.publicKey, false)
       .accounts({
         chessMatch: chessMatchPda,
         playerSigner: player1.publicKey,

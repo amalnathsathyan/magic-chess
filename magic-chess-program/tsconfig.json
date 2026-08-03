@@ -10,6 +10,12 @@
     "rootDir": ".",
     "resolveJsonModule": true
   },
+  "ts-node": {
+    "esm": false,
+    "compilerOptions": {
+      "module": "commonjs"
+    }
+  },
   "include": ["tests/**/*.ts"],
   "exclude": ["node_modules", "target"]
 }
