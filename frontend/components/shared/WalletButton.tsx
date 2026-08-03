@@ -45,6 +45,9 @@ export function WalletButton() {
     <div className="flex items-center gap-2">
       {/* Balance / Address */}
       <div className="glass-card flex items-center gap-2 px-3 py-2">
+        <span className="rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary">
+          Devnet
+        </span>
         <button
           onClick={handleCopy}
           className="font-mono text-xs transition-colors hover:text-primary"

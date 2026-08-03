@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Eye } from "lucide-react";
@@ -14,6 +14,7 @@ import { PromotionDialog } from "@/components/chess/PromotionDialog";
 import { TransactionStatus } from "@/components/shared/TransactionStatus";
 import type { Square } from "chess.js";
 import { Chess } from "chess.js";
+import { sounds } from "@/lib/sounds";
 
 interface PlayPageProps {
   params: Promise<{ matchId: string }>;
@@ -23,6 +24,11 @@ export default function PlayPage({ params }: PlayPageProps) {
   const router = useRouter();
   const [fen, setFen] = useState("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
   const [moves, setMoves] = useState<string[]>([]);
+  
+  useEffect(() => {
+    sounds.play("game_start");
+    return () => sounds.destroy();
+  }, []);
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const [promotionSquare, setPromotionSquare] = useState<Square | null>(null);
@@ -62,6 +68,12 @@ export default function PlayPage({ params }: PlayPageProps) {
           setMoves((prev) => [...prev, move.san]);
           setCurrentMoveIndex((prev) => prev + 1);
           setLastMove({ from: sourceSquare, to: targetSquare });
+          
+          if (game.isGameOver()) {
+            sounds.play("game_end");
+          } else {
+            sounds.playMoveSound(move.san);
+          }
           return true;
         }
 
@@ -80,8 +92,8 @@ export default function PlayPage({ params }: PlayPageProps) {
       try {
         const game = new Chess(fen);
         // Find the pawn move that needs promotion
-        const moves = game.moves({ verbose: true });
-        const promoMove = moves.find(
+        const legalMoves = game.moves({ verbose: true });
+        const promoMove = legalMoves.find(
           (m) => m.to === promotionSquare && m.promotion
         );
 
@@ -91,6 +103,12 @@ export default function PlayPage({ params }: PlayPageProps) {
           setMoves((prev) => [...prev, promoMove.san]);
           setCurrentMoveIndex((prev) => prev + 1);
           setLastMove({ from: promoMove.from as Square, to: promotionSquare });
+          
+          if (game.isGameOver()) {
+            sounds.play("game_end");
+          } else {
+            sounds.playMoveSound(promoMove.san);
+          }
         }
       } catch {
         // Invalid move
@@ -117,6 +135,40 @@ export default function PlayPage({ params }: PlayPageProps) {
   } else if (game.isDraw()) {
     result = "draw";
   }
+
+  // Calculate captured pieces
+  const calculateCaptured = () => {
+    const startCounts: Record<string, number> = {
+      p: 8, n: 2, b: 2, r: 2, q: 1,
+      P: 8, N: 2, B: 2, R: 2, Q: 1,
+    };
+    const board = game.board();
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = board[r][c];
+        if (piece) {
+          const char = piece.color === 'w' ? piece.type.toUpperCase() : piece.type;
+          if (startCounts[char] !== undefined) startCounts[char]--;
+        }
+      }
+    }
+    
+    const wCaptured: string[] = []; // Black pieces captured by White
+    const bCaptured: string[] = []; // White pieces captured by Black
+
+    Object.entries(startCounts).forEach(([char, count]) => {
+      for (let i = 0; i < count; i++) {
+        if (char === char.toLowerCase()) {
+          wCaptured.push(char); // Black piece
+        } else {
+          bCaptured.push(char.toLowerCase()); // White piece
+        }
+      }
+    });
+    return { wCaptured, bCaptured };
+  };
+
+  const { wCaptured, bCaptured } = calculateCaptured();
 
   return (
     <div className="min-h-screen bg-background">
@@ -161,8 +213,8 @@ export default function PlayPage({ params }: PlayPageProps) {
             {/* Black clock + captured pieces */}
             <div className="flex w-full max-w-[560px] items-start justify-between">
               <CapturedPieces
-                whiteCaptured={[]}
-                blackCaptured={[]}
+                whiteCaptured={wCaptured}
+                blackCaptured={bCaptured}
                 side="white"
               />
               <ChessClock
@@ -195,8 +247,8 @@ export default function PlayPage({ params }: PlayPageProps) {
             {/* White captured pieces */}
             <div className="flex w-full max-w-[560px] justify-start">
               <CapturedPieces
-                whiteCaptured={[]}
-                blackCaptured={[]}
+                whiteCaptured={wCaptured}
+                blackCaptured={bCaptured}
                 side="black"
               />
             </div>

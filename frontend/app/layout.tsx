@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, JetBrains_Mono, DM_Sans } from "next/font/google";
 import { Providers } from "@/components/shared/Providers";
+import { Header } from "@/components/shared/Header";
 import { Toaster } from "sonner";
 import "@/app/globals.css";
 
@@ -46,8 +47,13 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} ${dmSans.variable}`}
       suppressHydrationWarning
     >
-      <body className="min-h-screen bg-background font-body text-foreground antialiased">
-        <Providers>{children}</Providers>
+      <body className="min-h-screen flex flex-col bg-background font-body text-foreground antialiased">
+        <Providers>
+          <Header />
+          <main className="flex-1">
+            {children}
+          </main>
+        </Providers>
         <Toaster
           position="bottom-right"
           toastOptions={{

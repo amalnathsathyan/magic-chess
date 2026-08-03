@@ -449,7 +449,7 @@ describe("MagicBlock Session Key — Authorization Flow", () => {
       // Verify the move was applied
       const matchData = await erProgram.account.chessMatch.fetch(chessMatchPda);
       // After White's move, current turn should be Black
-      console.log(`Current turn after session move: ${matchData.currentTurn}`);
+      console.log(`Current turn after session move:`, JSON.stringify(matchData.currentTurn));
 
       console.log("Session key move accepted.");
     } catch (err: any) {
@@ -584,10 +584,15 @@ describe("MagicBlock Session Key — Authorization Flow", () => {
     // Verify the wallet signer still works for the next move
     // (It's now Black's turn since White moved in Step 3)
     const currentTurn = matchData.currentTurn;
-    console.log(`Current turn: ${currentTurn === 0 ? "White" : "Black"}`);
+    const turnName = currentTurn && typeof currentTurn === 'object'
+      ? (Object.keys(currentTurn)[0] || 'unknown')
+      : String(currentTurn);
+    console.log(`Current turn: ${turnName}`);
 
     // Make a valid move with the correct wallet signer
-    if (currentTurn === 1 /* Black */) {
+    // currentTurn is now an enum object e.g. { black: {} }
+    const isBlackTurn = currentTurn && typeof currentTurn === 'object' && 'black' in currentTurn;
+    if (isBlackTurn) {
       const blackErProvider = new anchor.AnchorProvider(
         erConnection,
         new anchor.Wallet(blackPlayer),
@@ -616,7 +621,7 @@ describe("MagicBlock Session Key — Authorization Flow", () => {
 
     const finalData = await erProgram.account.chessMatch.fetch(chessMatchPda);
     console.log(`Final state — session revoked, wallet auth still works.`);
-    console.log(`Game status: ${finalData.gameStatus}`);
+    console.log(`Game status:`, JSON.stringify(finalData.gameStatus));
 
     console.log("=== Session key test PASSED ===");
     console.log("");

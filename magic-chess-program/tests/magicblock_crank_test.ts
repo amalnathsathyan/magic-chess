@@ -282,7 +282,7 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
 
     const matchData = await program.account.chessMatch.fetch(chessMatchPda);
     assert.equal(matchData.matchId, matchId, "Match ID should match");
-    assert.equal(matchData.gameStatus as any, 0, "Game should be WaitingForOpponent");
+    assert.deepEqual(matchData.gameStatus, { waitingForOpponent: {} }, "Game should be WaitingForOpponent");
     assert.isFalse(matchData.isDelegated, "Should not be delegated yet");
 
     console.log("Match initialized on L1");
@@ -313,7 +313,7 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
       .rpc();
 
     const matchData = await program.account.chessMatch.fetch(chessMatchPda);
-    assert.equal(matchData.gameStatus as any, 1, "Game should be Active");
+    assert.deepEqual(matchData.gameStatus, { active: {} }, "Game should be Active");
     assert.equal(
       matchData.players[1].toBase58(),
       opponent.publicKey.toBase58(),
@@ -443,10 +443,10 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
 
     // Read match state from ER
     const matchData = await erProgram.account.chessMatch.fetch(chessMatchPda);
-    console.log(`Game status: ${matchData.gameStatus}`); // 2 = WhiteWins
-    assert.notEqual(
-      matchData.gameStatus as any,
-      1, // Not Active
+    console.log(`Game status:`, JSON.stringify(matchData.gameStatus)); // { whiteWins: {} } or { blackWins: {} }
+    assert.notDeepEqual(
+      matchData.gameStatus,
+      { active: {} },
       "Game should no longer be Active"
     );
     assert.isDefined(
@@ -489,9 +489,9 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
     assert.isFalse(matchData.isDelegated, "Account should no longer be delegated");
 
     // Game should still be in concluded state on L1
-    assert.notEqual(
-      matchData.gameStatus as any,
-      1,
+    assert.notDeepEqual(
+      matchData.gameStatus,
+      { active: {} },
       "Game should still be concluded on L1"
     );
     assert.isFalse(matchData.payoutProcessed, "Payout should not yet be processed");
@@ -506,12 +506,12 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
     const matchData = await program.account.chessMatch.fetch(chessMatchPda);
 
     // Verify game is in a concluded state (eligible for settlement)
-    const concludedStatuses = [2, 3, 4]; // WhiteWins, BlackWins, Draw
-    assert.include(
-      concludedStatuses,
-      matchData.gameStatus as any,
-      "Game should be in a concluded state"
-    );
+    const gameStatusKeys = Object.keys(matchData.gameStatus);
+    const isConcluded =
+      gameStatusKeys.includes("whiteWins") ||
+      gameStatusKeys.includes("blackWins") ||
+      gameStatusKeys.includes("draw");
+    assert.isTrue(isConcluded, "Game should be in a concluded state");
     assert.isFalse(matchData.payoutProcessed, "Payout should not yet be processed");
 
     // Derive the settlement task ID for logging

@@ -18,15 +18,14 @@ export interface CreateMatchData {
   timeControlMinutes: number;
   timeIncrementSeconds: number;
   rated: boolean;
+  side: "white" | "black" | "random";
+  ephemeralRollup: boolean;
 }
 
 const TIME_CONTROLS = [
   { label: "Bullet 1+0", minutes: 1, increment: 0 },
   { label: "Blitz 3+2", minutes: 3, increment: 2 },
-  { label: "Blitz 5+0", minutes: 5, increment: 0 },
-  { label: "Rapid 10+5", minutes: 10, increment: 5 },
-  { label: "Rapid 15+10", minutes: 15, increment: 10 },
-  { label: "Classical 30+0", minutes: 30, increment: 0 },
+  { label: "Rapid 10+0", minutes: 10, increment: 0 },
 ];
 
 export function CreateMatchForm({
@@ -35,8 +34,10 @@ export function CreateMatchForm({
   onSubmit,
   className,
 }: CreateMatchFormProps) {
-  const [wagerAmount, setWagerAmount] = useState(0.1);
+  const [wagerAmount, setWagerAmount] = useState(0);
   const [timeControl, setTimeControl] = useState(TIME_CONTROLS[1]); // 3+2 default
+  const [side, setSide] = useState<"white" | "black" | "random">("random");
+  const [ephemeralRollup, setEphemeralRollup] = useState(true);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +47,8 @@ export function CreateMatchForm({
       timeControlMinutes: timeControl.minutes,
       timeIncrementSeconds: timeControl.increment,
       rated: true,
+      side,
+      ephemeralRollup,
     });
   };
 
@@ -79,7 +82,7 @@ export function CreateMatchForm({
             type="number"
             value={wagerAmount}
             onChange={(e) => setWagerAmount(Number(e.target.value))}
-            min={0.01}
+            min={0}
             step={0.01}
             className="w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-sm text-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
           />
@@ -108,6 +111,53 @@ export function CreateMatchForm({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Side Selection */}
+        <div>
+          <label className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            Play As
+          </label>
+          <div className="flex gap-2">
+            {(["random", "white", "black"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSide(s)}
+                className={cn(
+                  "flex-1 rounded-lg border border-border px-3 py-2 text-xs font-semibold capitalize transition-all",
+                  side === s
+                    ? "border-primary/50 bg-primary/10 text-primary"
+                    : "hover:border-border-hover hover:bg-card"
+                )}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Ephemeral Rollup Toggle */}
+        <div className="flex items-center justify-between rounded-lg border border-border bg-card/50 p-3">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium">Ephemeral Rollup</span>
+            <span className="text-xs text-muted-foreground">Zero gas fees during gameplay</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setEphemeralRollup(!ephemeralRollup)}
+            className={cn(
+              "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary/20",
+              ephemeralRollup ? "bg-primary" : "bg-muted"
+            )}
+          >
+            <span
+              className={cn(
+                "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                ephemeralRollup ? "translate-x-4" : "translate-x-1"
+              )}
+            />
+          </button>
         </div>
 
         {/* Submit */}

@@ -32,6 +32,7 @@ pub struct AbortMatch<'info> {
     )]
     pub player_token_account: Account<'info, TokenAccount>,
 
+    #[account(mut)]
     pub player_signer: Signer<'info>,
 
     pub token_program: Program<'info, Token>,

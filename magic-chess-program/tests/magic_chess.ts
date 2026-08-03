@@ -309,8 +309,10 @@ describe("Magic Chess — Standard Integration Tests", () => {
     const walletPayer = (provider.wallet as any).payer as Keypair;
 
     // Fund test wallets from payer (avoids faucet rate limits)
-    const fundAmount = 0.3 * LAMPORTS_PER_SOL;
-    const minBalance = 0.1 * LAMPORTS_PER_SOL;
+    // Each test creates new PDAs (ChessMatch + escrow token account) which cost rent.
+    // With 12 tests, wallets need sufficient SOL to last the entire suite.
+    const fundAmount = 1.5 * LAMPORTS_PER_SOL;
+    const minBalance = 1.0 * LAMPORTS_PER_SOL;
     for (const kp of [player1, player2, platformFeeWallet]) {
       const currentBalance = await provider.connection.getBalance(kp.publicKey);
       if (currentBalance < minBalance) {
@@ -586,7 +588,7 @@ describe("Magic Chess — Standard Integration Tests", () => {
     // Now Black tries an illegal move: e7-e5 is valid, but let's try e7-e4 (3 squares)
     errorCaught = false;
     try {
-      await makeMove(program, chessMatchPda, player2, 6, 4, 4, 4); // e7-e4 (illegal 3-square)
+      await makeMove(program, chessMatchPda, player2, 6, 4, 3, 4); // e7-e4 (illegal 3-square)
       console.log("ERROR: Illegal move should have been rejected");
     } catch (err: any) {
       errorCaught = true;
@@ -678,7 +680,10 @@ describe("Magic Chess — Standard Integration Tests", () => {
   // or target devnet with `anchor test --provider.cluster devnet`.
   // ═════════════════════════════════════════════════════════════════════
   it("claims timeout win", async function () {
-    if (isLocalnet) {
+    // Check if MagicBlock Task Scheduler exists on this cluster
+    const MAGICBLOCK_TASK_SCHEDULER = new PublicKey("Magic11111111111111111111111111111111111111");
+    const taskSchedulerInfo = await provider.connection.getAccountInfo(MAGICBLOCK_TASK_SCHEDULER);
+    if (isLocalnet || !taskSchedulerInfo) {
       console.log(
         "  SKIPPED: claim_timeout_win requires MagicBlock Task Scheduler " +
         "(Magic11111111111111111111111111111111111111) deployed on the validator."
@@ -707,7 +712,8 @@ describe("Magic Chess — Standard Integration Tests", () => {
         betAmount,
         new BN(SHORT_TIMEOUT),   // 2-second timeout
         200,
-        platformFeeWallet.publicKey
+        platformFeeWallet.publicKey,
+        false                     // prediction_enabled
       )
       .accounts({
         chessMatch: chessMatchPda,
@@ -1095,12 +1101,16 @@ describe("Magic Chess — Standard Integration Tests", () => {
     // Generate a session keypair
     const sessionKey = Keypair.generate();
 
-    // Fund the session key with a tiny amount of SOL for tx fees
-    const airdropSig = await provider.connection.requestAirdrop(
-      sessionKey.publicKey,
-      0.5 * LAMPORTS_PER_SOL
+    // Fund the session key from the payer wallet (avoids faucet rate limits)
+    const walletPayer = (provider.wallet as any).payer as Keypair;
+    const fundSessionTx = new anchor.web3.Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: walletPayer.publicKey,
+        toPubkey: sessionKey.publicKey,
+        lamports: 0.01 * LAMPORTS_PER_SOL,
+      })
     );
-    await provider.connection.confirmTransaction(airdropSig, "confirmed");
+    await anchor.web3.sendAndConfirmTransaction(provider.connection, fundSessionTx, [walletPayer]);
 
     // Player1 sets a session key with 1-hour expiry
     const expiresAt = new BN(Math.floor(Date.now() / 1000) + 3600);

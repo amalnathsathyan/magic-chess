@@ -40,3 +40,27 @@ export const isGameOverAtom = atom<boolean>((get) => {
   const status = get(matchStatusAtom);
   return status !== "in_progress";
 });
+
+// Actions to sync with SDK
+export const hydrateMatchStateAtom = atom(
+  null,
+  (_get, set, update: {
+    fen: string;
+    status: MatchStatus;
+    moves: string[];
+    config?: {
+      whitePlayer: string;
+      blackPlayer?: string;
+      wagerAmount: number;
+      wagerToken: string;
+      timeControl: { minutes: number; increment: number };
+    };
+  }) => {
+    set(matchFenAtom, update.fen);
+    set(matchStatusAtom, update.status);
+    set(matchMovesAtom, update.moves);
+    if (update.config) {
+      set(matchConfigAtom, update.config);
+    }
+  }
+);

@@ -307,9 +307,9 @@ describe("MagicBlock Ephemeral Rollup — Full Lifecycle", () => {
       payer.publicKey.toBase58(),
       "Player 1 should be payer"
     );
-    assert.equal(
-      matchAccount.gameStatus as any,
-      0, // WaitingForOpponent
+    assert.deepEqual(
+      matchAccount.gameStatus,
+      { waitingForOpponent: {} },
       "Game should be WaitingForOpponent"
     );
     // MagicBlock fields should be unset
@@ -481,19 +481,19 @@ describe("MagicBlock Ephemeral Rollup — Full Lifecycle", () => {
 
     // Fetch via Anchor to decode
     const matchData = await erProgram.account.chessMatch.fetch(chessMatchPda);
-    assert.equal(
-      matchData.gameStatus as any,
-      1, // Active
+    assert.deepEqual(
+      matchData.gameStatus,
+      { active: {} },
       "Game should still be active after one move"
     );
     // After White's move, it should be Black's turn
-    assert.equal(matchData.currentTurn as any, 1, "Should be Black's turn now");
+    assert.deepEqual(matchData.currentTurn, { black: {} }, "Should be Black's turn now");
 
     // The base layer still shows the pre-move state (not yet committed)
     const baseMatchData = await program.account.chessMatch.fetch(chessMatchPda);
-    assert.equal(
-      baseMatchData.currentTurn as any,
-      0, // Still White's turn on base layer
+    assert.deepEqual(
+      baseMatchData.currentTurn,
+      { white: {} },
       "Base layer should still show White's turn (uncommitted)"
     );
 
@@ -521,9 +521,9 @@ describe("MagicBlock Ephemeral Rollup — Full Lifecycle", () => {
 
     // After commit, the base layer should reflect the ER state
     const matchData = await program.account.chessMatch.fetch(chessMatchPda);
-    assert.equal(
-      matchData.currentTurn as any,
-      1, // Black's turn
+    assert.deepEqual(
+      matchData.currentTurn,
+      { black: {} },
       "Base layer should now show Black's turn (after commit)"
     );
 
