@@ -1,27 +1,18 @@
-// helpers.rs — Shared test utilities for the Magic Chess LiteSVM-style test suite.
+// helpers.rs — Shared test utilities for the Magic Chess LiteSVM test suite.
 //
-// Uses solana-program-test (which includes SPL Token + ATA built-in) so that
-// token CPIs inside the program just work without needing to load extra .so files.
+// Uses `anchor-litesvm` (v0.4) for a lightweight in-process Solana VM.
+// All Solana types (Pubkey, Keypair, Instruction, AccountMeta, Signer)
+// are imported from `anchor_litesvm` to avoid type mismatches between
+// different solana-pubkey versions in the dependency tree.
 //
 // Instruction discriminators are the first 8 bytes of sha256("global:<name>").
 
 use anchor_lang::AccountDeserialize;
+use anchor_litesvm::{
+    AccountMeta, AnchorContext, AnchorLiteSVM, Instruction, Keypair, Pubkey, Signer, TestHelpers,
+};
 use magic_chess::state::ChessMatch;
 use sha2::{Digest, Sha256};
-use solana_program_test::{ProgramTest, ProgramTestContext, BanksClient};
-use solana_sdk::{
-    account::Account,
-    instruction::{AccountMeta, Instruction},
-    pubkey::Pubkey,
-    rent::Rent,
-    signature::Keypair,
-    signer::Signer,
-    system_instruction,
-    transaction::Transaction,
-    hash::Hash,
-};
-use spl_associated_token_account as ata;
-use spl_token::state::{Account as TokenAccount, Mint};
 
 // ── Well-known constants ──────────────────────────────────────────────────
 
@@ -30,7 +21,23 @@ pub const CHESS_MATCH_SEED: &[u8] = b"chess_match";
 pub const MATCH_ESCROW_SEED: &[u8] = b"match_escrow";
 
 pub fn program_id() -> Pubkey {
-    PROGRAM_ID_STR.parse().unwrap()
+    PROGRAM_ID_STR.parse().expect("Invalid program ID")
+}
+
+pub fn token_program_id() -> Pubkey {
+    "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA".parse().expect("Invalid token program ID")
+}
+
+pub fn system_program_id() -> Pubkey {
+    Pubkey::new_from_array([0u8; 32])
+}
+
+pub fn ata_program_id() -> Pubkey {
+    "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL".parse().expect("Invalid ATA program ID")
+}
+
+pub fn rent_sysvar_id() -> Pubkey {
+    "SysvarRent111111111111111111111111111111111".parse().expect("Invalid rent sysvar ID")
 }
 
 // ── Program binary loader ─────────────────────────────────────────────────
@@ -54,6 +61,22 @@ pub fn load_program_bytes() -> Vec<u8> {
         "Program .so not found. Tried:\n  {:?}\n  {:?}\nRun `anchor build` first.",
         candidates[0], candidates[1]
     );
+}
+
+/// Try to load the SPL Token program .so from standard locations.
+pub fn load_token_so() -> Option<Vec<u8>> {
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let candidates = [
+        manifest.join("../../target/deploy/spl_token.so"),
+        manifest.join("target/deploy/spl_token.so"),
+        manifest.join("tests/fixtures/spl_token.so"),
+    ];
+    for p in &candidates {
+        if p.exists() {
+            return std::fs::read(p).ok();
+        }
+    }
+    None
 }
 
 // ── Discriminator helpers ─────────────────────────────────────────────────
@@ -83,182 +106,183 @@ pub fn find_escrow_pda(match_id: &str) -> (Pubkey, u8) {
     )
 }
 
-// ── Keypair helpers ───────────────────────────────────────────────────────
+// ── Type conversion ───────────────────────────────────────────────────────
+// solana-pubkey v3 (program) and v4 (litesvm) are different Rust types.
+// Compare via bytes to bridge the gap.
 
-/// Clone a Keypair (solana-sdk does not derive Clone in production).
-/// Uses the from_bytes/to_bytes round-trip.
-pub fn clone_keypair(k: &Keypair) -> Keypair {
-    Keypair::from_bytes(&k.to_bytes()).expect("Keypair clone failed")
+/// Compare pubkey byte slices.
+pub fn pk_eq(a: &[u8], b: &[u8]) -> bool {
+    a == b
 }
 
-// ── ProgramTest setup ─────────────────────────────────────────────────────
+// ── TestSvm context ───────────────────────────────────────────────────────
 
-/// Create a ProgramTest with the Magic Chess program loaded.
-/// The returned ProgramTest has no pre-created payer — use
-/// `ctx.payer` from `start_with_context()` which is auto-funded with ~100 SOL.
-pub fn setup_program_test() -> ProgramTest {
-    let pid = program_id();
-    let mut pt = ProgramTest::default();
-
-    let program_data = load_program_bytes();
-    let min_lamports = Rent::default().minimum_balance(program_data.len());
-
-    pt.add_account(
-        pid,
-        Account {
-            lamports: min_lamports.max(1_000_000_000),
-            data: program_data,
-            owner: solana_sdk::bpf_loader::id(),
-            executable: true,
-            rent_epoch: 0,
-        },
-    );
-
-    pt
+pub struct TestSvm {
+    pub ctx: AnchorContext,
 }
 
-// ── Token helpers ─────────────────────────────────────────────────────────
+impl TestSvm {
+    pub fn new() -> Self {
+        let program_data = load_program_bytes();
+        let mut ctx = AnchorLiteSVM::build_with_program(program_id(), &program_data);
 
-pub async fn create_mint(
-    banks_client: &mut BanksClient,
-    fee_payer: &Keypair,
-    mint: &Keypair,
-    decimals: u8,
-) {
-    let rent = banks_client.get_rent().await.unwrap();
-    let space = Mint::LEN;
-    let lamports = rent.minimum_balance(space);
+        // Try to load SPL Token program for token operations
+        if let Some(token_bytes) = load_token_so() {
+            ctx.svm.add_program(token_program_id(), &token_bytes);
+        }
 
-    let create_ix = system_instruction::create_account(
-        &fee_payer.pubkey(),
-        &mint.pubkey(),
-        lamports,
-        space as u64,
-        &spl_token::id(),
-    );
-    let init_ix = spl_token::instruction::initialize_mint(
-        &spl_token::id(),
-        &mint.pubkey(),
-        &fee_payer.pubkey(),
-        Some(&fee_payer.pubkey()),
-        decimals,
-    )
-    .unwrap();
+        TestSvm { ctx }
+    }
 
-    let blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let tx = Transaction::new_signed_with_payer(
-        &[create_ix, init_ix],
-        Some(&fee_payer.pubkey()),
-        &[fee_payer, mint],
-        blockhash,
-    );
-    banks_client.process_transaction(tx).await.unwrap();
-}
+    pub fn payer_pubkey(&self) -> Pubkey {
+        self.ctx.payer().pubkey()
+    }
 
-pub async fn create_ata(
-    banks_client: &mut BanksClient,
-    fee_payer: &Keypair,
-    mint: &Pubkey,
-    owner: &Pubkey,
-) -> Pubkey {
-    let ata_addr = ata::get_associated_token_address(owner, mint);
-    let create_ix = ata::instruction::create_associated_token_account(
-        &fee_payer.pubkey(),
-        owner,
-        mint,
-        &spl_token::id(),
-    );
-    let blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let tx = Transaction::new_signed_with_payer(
-        &[create_ix],
-        Some(&fee_payer.pubkey()),
-        &[fee_payer],
-        blockhash,
-    );
-    banks_client.process_transaction(tx).await.unwrap();
-    ata_addr
-}
+    pub fn create_funded_account(&mut self, lamports: u64) -> Keypair {
+        self.ctx.create_funded_account(lamports).expect("create_funded_account")
+    }
 
-pub async fn mint_tokens(
-    banks_client: &mut BanksClient,
-    fee_payer: &Keypair,
-    mint: &Pubkey,
-    ata: &Pubkey,
-    amount: u64,
-) {
-    let ix = spl_token::instruction::mint_to(
-        &spl_token::id(),
-        mint,
-        ata,
-        &fee_payer.pubkey(),
-        &[],
-        amount,
-    )
-    .unwrap();
-    let blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let tx = Transaction::new_signed_with_payer(
-        &[ix],
-        Some(&fee_payer.pubkey()),
-        &[fee_payer],
-        blockhash,
-    );
-    banks_client.process_transaction(tx).await.unwrap();
-}
+    pub fn airdrop(&mut self, pubkey: &Pubkey, lamports: u64) {
+        self.ctx.airdrop(pubkey, lamports).expect("airdrop");
+    }
 
-/// Read the SPL token balance of an ATA.
-pub async fn get_token_balance(
-    banks_client: &mut BanksClient,
-    ata: &Pubkey,
-) -> u64 {
-    let acct = banks_client
-        .get_account(*ata)
-        .await
-        .unwrap()
-        .expect("ATA not found");
-    TokenAccount::unpack(&acct.data).unwrap().amount
-}
+    pub fn create_mint(&mut self, decimals: u8) -> Pubkey {
+        // Clone payer via bytes: to_bytes() returns [u8; 64], new_from_array takes [u8; 32]
+        let payer_bytes = self.ctx.payer().to_bytes();
+        let mut secret = [0u8; 32];
+        secret.copy_from_slice(&payer_bytes[..32]);
+        let payer_copy = Keypair::new_from_array(secret);
+        self.ctx.svm.create_token_mint(&payer_copy, decimals)
+            .expect("create_token_mint")
+            .pubkey()
+    }
 
-/// Deserialize the on-chain ChessMatch PDA into a Rust struct.
-pub async fn get_chess_match(
-    banks_client: &mut BanksClient,
-    pda: &Pubkey,
-) -> ChessMatch {
-    let acct = banks_client
-        .get_account(*pda)
-        .await
-        .unwrap()
-        .expect("ChessMatch PDA not found");
-    ChessMatch::try_deserialize(&mut acct.data.as_slice())
-        .expect("Failed to deserialize ChessMatch")
-}
+    pub fn create_ata(&mut self, mint: &Pubkey, owner: &Pubkey) -> Pubkey {
+        // Derive ATA address
+        let ata = Pubkey::find_program_address(
+            &[&owner.to_bytes(), &token_program_id().to_bytes(), &mint.to_bytes()],
+            &ata_program_id(),
+        )
+        .0;
 
-// ── Useful helper: fund any keypair with lamports ────────────────────────
+        // Return existing ATA if already created
+        if self.ctx.svm.get_account(&ata).is_some() {
+            return ata;
+        }
 
-pub async fn fund_keypair(
-    banks_client: &mut BanksClient,
-    fee_payer: &Keypair,
-    target: &Keypair,
-    lamports: u64,
-) {
-    let blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let ix = system_instruction::transfer(
-        &fee_payer.pubkey(),
-        &target.pubkey(),
-        lamports,
-    );
-    let tx = Transaction::new_signed_with_payer(
-        &[ix],
-        Some(&fee_payer.pubkey()),
-        &[fee_payer],
-        blockhash,
-    );
-    banks_client.process_transaction(tx).await.unwrap();
+        // Clone payer to avoid borrow conflict: payer_pubkey() borrows self
+        // and execute_instruction also needs to borrow self mutably.
+        let payer_pk = self.ctx.payer().pubkey();
+
+        // Build the create-ATA instruction manually
+        let ix = Instruction {
+            program_id: ata_program_id(),
+            accounts: vec![
+                AccountMeta::new(payer_pk, true),
+                AccountMeta::new(ata, false),
+                AccountMeta::new_readonly(*owner, false),
+                AccountMeta::new_readonly(*mint, false),
+                AccountMeta::new_readonly(system_program_id(), false),
+                AccountMeta::new_readonly(token_program_id(), false),
+                AccountMeta::new_readonly(rent_sysvar_id(), false),
+            ],
+            data: vec![],
+        };
+
+        // Clone payer to avoid borrow conflict
+        let payer_bytes = self.ctx.payer().to_bytes();
+        let mut payer_secret = [0u8; 32];
+        payer_secret.copy_from_slice(&payer_bytes[..32]);
+        let payer_clone = Keypair::new_from_array(payer_secret);
+        let result = self.ctx.execute_instruction(ix, &[&payer_clone]).expect("create_ata");
+        result.assert_success();
+        ata
+    }
+
+    pub fn mint_tokens(&mut self, mint: &Pubkey, token_account: &Pubkey, amount: u64) {
+        // Clone the payer keypair: to_bytes() returns [u8; 64], new_from_array takes [u8; 32] secret
+        let payer_bytes = self.ctx.payer().to_bytes();
+        let mut secret = [0u8; 32];
+        secret.copy_from_slice(&payer_bytes[..32]);
+        let payer_copy = Keypair::new_from_array(secret);
+        self.ctx.svm.mint_to(mint, token_account, &payer_copy, amount)
+            .expect("mint_to");
+    }
+
+    pub fn send_ix(&mut self, ix: Instruction, signers: &[&Keypair]) {
+        // Clone payer BEFORE mutable borrow of self.ctx.execute_instruction
+        let payer_bytes = self.ctx.payer().to_bytes();
+        let mut payer_secret = [0u8; 32];
+        payer_secret.copy_from_slice(&payer_bytes[..32]);
+        let payer_clone = Keypair::new_from_array(payer_secret);
+
+        // Clone extra signers
+        let extra_clones: Vec<Keypair> = signers.iter().map(|kp| {
+            let bytes = kp.to_bytes();
+            let mut secret = [0u8; 32];
+            secret.copy_from_slice(&bytes[..32]);
+            Keypair::new_from_array(secret)
+        }).collect();
+
+        let all_signers: Vec<&Keypair> = std::iter::once(&payer_clone)
+            .chain(extra_clones.iter())
+            .collect();
+
+        let result = self.ctx.execute_instruction(ix, &all_signers).expect("execute_instruction");
+        result.assert_success();
+    }
+
+    pub fn send_ix_expect_err(&mut self, ix: Instruction, signers: &[&Keypair]) -> String {
+        // Clone payer BEFORE mutable borrow
+        let payer_bytes = self.ctx.payer().to_bytes();
+        let mut payer_secret = [0u8; 32];
+        payer_secret.copy_from_slice(&payer_bytes[..32]);
+        let payer_clone = Keypair::new_from_array(payer_secret);
+
+        let extra_clones: Vec<Keypair> = signers.iter().map(|kp| {
+            let bytes = kp.to_bytes();
+            let mut secret = [0u8; 32];
+            secret.copy_from_slice(&bytes[..32]);
+            Keypair::new_from_array(secret)
+        }).collect();
+
+        let all_signers: Vec<&Keypair> = std::iter::once(&payer_clone)
+            .chain(extra_clones.iter())
+            .collect();
+
+        let result = self.ctx.execute_instruction(ix, &all_signers).expect("execute_instruction");
+        // Return the error string if failed, or panic if succeeded
+        result.error().cloned().unwrap_or_else(|| {
+            panic!("Transaction should have failed but succeeded");
+        })
+    }
+
+    pub fn get_chess_match(&self, pda: &Pubkey) -> ChessMatch {
+        self.ctx.get_account::<ChessMatch>(pda)
+            .unwrap_or_else(|e| panic!("Failed to read ChessMatch at {}: {}", pda, e))
+    }
+
+    pub fn get_token_balance(&self, ata: &Pubkey) -> u64 {
+        // LiteSVM provides `get_balance` via the standard API
+        // Different litesvm-utils versions may name this differently
+        // Fallback: read the raw account and parse the u64 at offset 64
+        if let Some(acct) = self.ctx.svm.get_account(ata) {
+            if acct.data.len() >= 72 {
+                let mut bytes = [0u8; 8];
+                bytes.copy_from_slice(&acct.data[64..72]);
+                return u64::from_le_bytes(bytes);
+            }
+        }
+        panic!("Failed to read balance for {}", ata);
+    }
+
+    pub fn account_exists(&self, pubkey: &Pubkey) -> bool {
+        self.ctx.svm.get_account(pubkey).is_some()
+    }
 }
 
 // ── Instruction builders ──────────────────────────────────────────────────
 
-// === initialize_match ===
-// args: String, u64, i64, u16, Pubkey
 pub fn initialize_match_ix(
     chess_match_pda: &Pubkey,
     player: &Pubkey,
@@ -290,15 +314,13 @@ pub fn initialize_match_ix(
             AccountMeta::new_readonly(*betting_token_mint, false),
             AccountMeta::new(*player_token_account, false),
             AccountMeta::new(*match_escrow, false),
-            AccountMeta::new_readonly(spl_token::id(), false),
-            AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+            AccountMeta::new_readonly(token_program_id(), false),
+            AccountMeta::new_readonly(system_program_id(), false),
         ],
         data,
     }
 }
 
-// === join_match ===
-// args: u64
 pub fn join_match_ix(
     chess_match_pda: &Pubkey,
     player_two: &Pubkey,
@@ -317,16 +339,13 @@ pub fn join_match_ix(
             AccountMeta::new(*player_two, true),
             AccountMeta::new(*player_token_account, false),
             AccountMeta::new(*match_escrow, false),
-            AccountMeta::new_readonly(spl_token::id(), false),
-            AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
+            AccountMeta::new_readonly(token_program_id(), false),
+            AccountMeta::new_readonly(system_program_id(), false),
         ],
         data,
     }
 }
 
-// === make_move ===
-// args: from_row, from_col, to_row, to_col, Option<PieceType>
-// PieceType: Pawn=0, Knight=1, Bishop=2, Rook=3, Queen=4, King=5
 pub fn make_move_ix(
     chess_match_pda: &Pubkey,
     player: &Pubkey,
@@ -360,7 +379,6 @@ pub fn make_move_ix(
     }
 }
 
-// === resign_game ===
 pub fn resign_game_ix(chess_match_pda: &Pubkey, player: &Pubkey) -> Instruction {
     Instruction {
         program_id: program_id(),
@@ -372,7 +390,6 @@ pub fn resign_game_ix(chess_match_pda: &Pubkey, player: &Pubkey) -> Instruction 
     }
 }
 
-// === claim_timeout_win ===
 pub fn claim_timeout_win_ix(
     chess_match_pda: &Pubkey,
     claimer: &Pubkey,
@@ -387,7 +404,6 @@ pub fn claim_timeout_win_ix(
     }
 }
 
-// === process_match_settlement ===
 pub fn process_settlement_ix(
     chess_match_pda: &Pubkey,
     match_escrow: &Pubkey,
@@ -403,13 +419,12 @@ pub fn process_settlement_ix(
             AccountMeta::new(*player_one_ata, false),
             AccountMeta::new(*player_two_ata, false),
             AccountMeta::new(*platform_fee_ata, false),
-            AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(token_program_id(), false),
         ],
         data: discriminator("process_match_settlement").to_vec(),
     }
 }
 
-// === abort_match ===
 pub fn abort_match_ix(
     chess_match_pda: &Pubkey,
     match_escrow: &Pubkey,
@@ -423,13 +438,12 @@ pub fn abort_match_ix(
             AccountMeta::new(*match_escrow, false),
             AccountMeta::new(*player_token_account, false),
             AccountMeta::new(*player, true),
-            AccountMeta::new_readonly(spl_token::id(), false),
+            AccountMeta::new_readonly(token_program_id(), false),
         ],
         data: discriminator("abort_match").to_vec(),
     }
 }
 
-// === close_match ===
 pub fn close_match_ix(chess_match_pda: &Pubkey, payer: &Pubkey) -> Instruction {
     Instruction {
         program_id: program_id(),
@@ -441,8 +455,6 @@ pub fn close_match_ix(chess_match_pda: &Pubkey, payer: &Pubkey) -> Instruction {
     }
 }
 
-// === set_session_key ===
-// args: Pubkey, i64
 pub fn set_session_key_ix(
     chess_match_pda: &Pubkey,
     player: &Pubkey,
@@ -464,7 +476,6 @@ pub fn set_session_key_ix(
     }
 }
 
-// === revoke_session_key ===
 pub fn revoke_session_key_ix(
     chess_match_pda: &Pubkey,
     player: &Pubkey,
@@ -476,54 +487,5 @@ pub fn revoke_session_key_ix(
             AccountMeta::new(*player, true),
         ],
         data: discriminator("revoke_session_key").to_vec(),
-    }
-}
-
-// ── Convenience: send a single-instruction transaction ──────────────────
-//
-// `payer` is the fee payer AND is always included as a signer.
-// `extra_signers` are additional required signers (e.g. player 2, session key).
-
-pub async fn send_tx(
-    banks_client: &mut BanksClient,
-    payer: &Keypair,
-    ix: Instruction,
-    extra_signers: &[&Keypair],
-) {
-    let blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut all_signers: Vec<&Keypair> = vec![payer];
-    all_signers.extend_from_slice(extra_signers);
-
-    let tx = Transaction::new_signed_with_payer(
-        &[ix],
-        Some(&payer.pubkey()),
-        &all_signers,
-        blockhash,
-    );
-    banks_client.process_transaction(tx).await.unwrap();
-}
-
-/// Send a transaction that is *expected* to fail with an Anchor error.
-/// Returns the error log string.
-pub async fn send_tx_expect_err(
-    banks_client: &mut BanksClient,
-    payer: &Keypair,
-    ix: Instruction,
-    extra_signers: &[&Keypair],
-) -> String {
-    let blockhash = banks_client.get_latest_blockhash().await.unwrap();
-    let mut all_signers: Vec<&Keypair> = vec![payer];
-    all_signers.extend_from_slice(extra_signers);
-
-    let tx = Transaction::new_signed_with_payer(
-        &[ix],
-        Some(&payer.pubkey()),
-        &all_signers,
-        blockhash,
-    );
-    let result = banks_client.process_transaction(tx).await;
-    match result {
-        Err(e) => format!("{:?}", e),
-        Ok(()) => panic!("Transaction should have failed but succeeded"),
     }
 }

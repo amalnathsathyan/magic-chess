@@ -1,6 +1,9 @@
 // cu_benchmarks.rs
 //
 // Mollusk-based Compute Unit (CU) benchmarks for the Magic Chess Anchor program.
+// Gated behind `integration-tests` feature via required-features in Cargo.toml.
+
+#![cfg(feature = "integration-tests")]
 //
 // Each benchmark sets up the minimal required accounts, executes an instruction
 // via Mollusk's local SVM, and reports the CU consumed.

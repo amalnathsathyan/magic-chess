@@ -1,29 +1,29 @@
 // tests/integration/payout_full_flow.rs
 //
 // Comprehensive end-to-end payout integration tests for Magic Chess.
-// Uses mollusk-svm for in-process SVM testing (no validator required).
+// Uses litesvm for in-process SVM testing (no validator required).
 //
 // 15 scenarios covering: full game flows, wager edge cases, payout math,
 // state machine edge cases, and timeout scenarios.
 //
-// ── Prerequisites ──────────────────────────────────────────────────────────
+// -- Prerequisites ----------------------------------------------------------
 //   1. Build the program:   anchor build
 //   2. Run the tests:
 //      cargo test --package magic_chess --test payout_full_flow \
 //          --features integration-tests -- --nocapture
-// ───────────────────────────────────────────────────────────────────────────
+// ---------------------------------------------------------------------------
 
-use mollusk_svm::Mollusk;
-
-// ── Separated Solana crates (v3/v4 chain, matching mollusk-svm 0.14.0) ──
-use solana_account::Account;
-use solana_instruction::{AccountMeta, Instruction};
-use solana_pubkey::Pubkey;
-use solana_sdk_ids::system_program;
-
-// ── SHA-256 for instruction discriminators ──
+use litesvm::LiteSVM;
+use solana_sdk::{
+    account::Account,
+    instruction::{AccountMeta, Instruction},
+    message::Message,
+    pubkey::Pubkey,
+    signature::Keypair,
+    signer::Signer,
+    transaction::Transaction,
+};
 use sha2::{Digest, Sha256};
-
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -37,7 +37,6 @@ const PROGRAM_SO_PATH: &str = "../../target/deploy/magic_chess";
 const CHESS_MATCH_SEED: &[u8] = b"chess_match";
 const MATCH_ESCROW_SEED: &[u8] = b"match_escrow";
 
-const ASSOCIATED_TOKEN_PROGRAM_ID_STR: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
 const TOKEN_PROGRAM_ID_STR: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
 // GameStatus enum values
@@ -76,10 +75,6 @@ fn token_program_id() -> Pubkey {
     Pubkey::from_str(TOKEN_PROGRAM_ID_STR).unwrap()
 }
 
-fn associated_token_program_id() -> Pubkey {
-    Pubkey::from_str(ASSOCIATED_TOKEN_PROGRAM_ID_STR).unwrap()
-}
-
 // ============================================================================
 //  Unique Pubkey generator (counter-based, avoids rand dep)
 // ============================================================================
@@ -114,14 +109,17 @@ fn escrow_pda(match_id: &str) -> (Pubkey, u8) {
 //  Associated token address (inline, avoids spl-associated-token-account dep)
 // ============================================================================
 
+const ATA_PROGRAM_ID_STR: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+
 fn get_ata(wallet: &Pubkey, mint: &Pubkey) -> (Pubkey, u8) {
+    let ata_program = Pubkey::from_str(ATA_PROGRAM_ID_STR).unwrap();
     Pubkey::find_program_address(
         &[
             &wallet.to_bytes(),
             &token_program_id().to_bytes(),
             &mint.to_bytes(),
         ],
-        &associated_token_program_id(),
+        &ata_program,
     )
 }
 
@@ -146,7 +144,7 @@ fn acct_disc(name: &str) -> [u8; 8] {
 }
 
 // ============================================================================
-//  Borsh serialization helpers (minimal inline, no borsh dependency needed)
+//  Borsh serialization helpers (minimal inline)
 // ============================================================================
 
 fn push_str(buf: &mut Vec<u8>, s: &str) {
@@ -161,20 +159,14 @@ fn push_pk(buf: &mut Vec<u8>, k: &Pubkey) { buf.extend_from_slice(&k.to_bytes())
 
 // ============================================================================
 //  Raw SPL Token account data builders
-//  Mint: 82 bytes, TokenAccount: 165 bytes
 // ============================================================================
 
 fn build_mint_bytes(authority: &Pubkey, decimals: u8) -> Vec<u8> {
     let mut d = vec![0u8; 82];
-    // COption<Pubkey> tag = Some (4 bytes LE)
     d[0..4].copy_from_slice(&1u32.to_le_bytes());
     d[4..36].copy_from_slice(&authority.to_bytes());
-    // supply = 0 (8 bytes LE at offset 36)
-    // decimals at offset 44
     d[44] = decimals;
-    // is_initialized at offset 45
     d[45] = 1;
-    // freeze_authority COption = None
     d
 }
 
@@ -183,12 +175,7 @@ fn build_token_account_bytes(mint: &Pubkey, owner: &Pubkey, amount: u64) -> Vec<
     d[0..32].copy_from_slice(&mint.to_bytes());
     d[32..64].copy_from_slice(&owner.to_bytes());
     d[64..72].copy_from_slice(&amount.to_le_bytes());
-    // delegate COption = None (offset 72)
-    // state = Initialized (offset 108)
     d[108] = 1u8;
-    // is_native COption = None (offset 109)
-    // delegated_amount = 0 (offset 121)
-    // close_authority COption = None (offset 129)
     d
 }
 
@@ -216,7 +203,7 @@ fn new_unallocated() -> Account {
     Account {
         lamports: 0,
         data: vec![],
-        owner: system_program::ID,
+        owner: solana_sdk::system_program::id(),
         executable: false,
         rent_epoch: 0,
     }
@@ -226,14 +213,13 @@ fn new_funded_signer(_pk: &Pubkey) -> Account {
     Account {
         lamports: FUNDED_LAMPORTS,
         data: vec![],
-        owner: system_program::ID,
+        owner: solana_sdk::system_program::id(),
         executable: false,
         rent_epoch: 0,
     }
 }
 
 fn new_cm_account(serialized_data: Vec<u8>) -> Account {
-    // Pad to at least 4096 bytes so Anchor can serialize back into InitSpace.
     let min_space = 4096usize;
     let mut data = vec![0u8; min_space.max(serialized_data.len())];
     data[..serialized_data.len()].copy_from_slice(&serialized_data);
@@ -242,35 +228,6 @@ fn new_cm_account(serialized_data: Vec<u8>) -> Account {
         data,
         owner: program_id(),
         executable: false,
-        rent_epoch: 0,
-    }
-}
-
-/// Native Loader program ID for marking native programs as executable.
-fn native_loader_id() -> Pubkey {
-    Pubkey::from_str("NativeLoader1111111111111111111111111111111").unwrap()
-}
-
-/// Create an executable system program account required by mollusk-svm.
-fn sys_prog_account() -> Account {
-    Account {
-        lamports: 1,
-        data: vec![],
-        owner: native_loader_id(),
-        executable: true,
-        rent_epoch: 0,
-    }
-}
-
-/// Create an executable SPL Token program account with BPF loader owner.
-/// Owner must be BPF Loader (not Native Loader) because the token program
-/// is deployed as a BPF program via add_program().
-fn tok_prog_account() -> Account {
-    Account {
-        lamports: 1,
-        data: vec![],
-        owner: Pubkey::from_str("BPFLoaderUpgradeab1e11111111111111111111111").unwrap(),
-        executable: true,
         rent_epoch: 0,
     }
 }
@@ -303,101 +260,53 @@ fn build_chess_match_with_turn(
     let mut d = Vec::new();
     d.extend_from_slice(&acct_disc("ChessMatch"));
 
-    // match_id: Borsh String (u32 LE len + bytes, NO padding)
     let idb = match_id.as_bytes();
     d.extend_from_slice(&(idb.len() as u32).to_le_bytes());
     d.extend_from_slice(idb);
 
-    // players: [Pubkey; 2] (fixed 64 bytes)
     d.extend_from_slice(&player_white.to_bytes());
     d.extend_from_slice(&player_black.to_bytes());
 
-    // current_player_idx: u8
     d.push(if current_turn == 0 { 0u8 } else { 1u8 });
-    // current_turn: PlayerColor as u8
     d.push(current_turn);
 
-    // last_move_timestamp: i64
     d.extend_from_slice(&last_move_timestamp.to_le_bytes());
-    // move_timeout_duration: i64
     d.extend_from_slice(&move_timeout.to_le_bytes());
 
-    // game_status: GameStatus as u8
     d.push(game_status);
 
-    // game_end_reason: Option<GameEndReason> — Borsh: 1 byte tag, then variant if Some
     match game_end_reason {
         Some(r) => { d.push(1u8); d.push(r); }
         None => { d.push(0u8); }
     }
 
-    // board: [[Option<Piece>; 8]; 8] — variable Borsh encoding
     d.extend_from_slice(&board_data);
 
-    // castling_rights: 4 bools as u8 (Borsh uses 1 byte per bool)
-    d.push(1u8); // white_kingside
-    d.push(1u8); // white_queenside
-    d.push(1u8); // black_kingside
-    d.push(1u8); // black_queenside
-
-    // en_passant_target: Option<EnPassantSquare> — Borsh: 1 byte tag (None)
-    d.push(0u8);
-
-    // halfmove_clock: u8
-    d.push(0u8);
-    // fullmove_number: u16 LE
-    d.extend_from_slice(&1u16.to_le_bytes());
-
-    // position_history: Vec<u64> — Borsh: u32 LE len + elements (empty = 4 bytes)
-    d.extend_from_slice(&0u32.to_le_bytes());
-
-    // betting_token_mint: Pubkey (32 bytes)
+    d.push(1u8); d.push(1u8); d.push(1u8); d.push(1u8); // castling
+    d.push(0u8); // en passant
+    d.push(0u8); // halfmove clock
+    d.extend_from_slice(&1u16.to_le_bytes()); // fullmove
+    d.extend_from_slice(&0u32.to_le_bytes()); // position history
     d.extend_from_slice(&mint.to_bytes());
-
-    // bet_amount_player_one: u64
     d.extend_from_slice(&bet_amount.to_le_bytes());
-    // bet_amount_player_two: u64
     d.extend_from_slice(&0u64.to_le_bytes());
-
-    // total_pot: u64
     d.extend_from_slice(&total_pot.to_le_bytes());
-
-    // platform_fee_basis_points: u16 LE
     d.extend_from_slice(&fee_bps.to_le_bytes());
-    // platform_fee_wallet: Pubkey (32 bytes)
     d.extend_from_slice(&platform_fee_wallet.to_bytes());
 
-    // payout_processed: bool (Borsh: 1 byte)
     d.push(payout_processed as u8);
-    // prediction_enabled: bool
-    d.push(0u8);
-
-    // delegation_uid: String — Borsh: u32 LE len + bytes (empty = 4 bytes len=0)
-    d.extend_from_slice(&0u32.to_le_bytes());
-
-    // is_delegated: bool
-    d.push(0u8);
-
-    // session_signer: Pubkey (32 bytes)
-    d.extend_from_slice(&Pubkey::default().to_bytes());
-
-    // session_expires_at: i64
-    d.extend_from_slice(&0i64.to_le_bytes());
-
-    // active_task_id: i64
-    d.extend_from_slice(&(-1i64).to_le_bytes());
-
-    // bump: u8
+    d.push(0u8); // prediction_enabled
+    d.extend_from_slice(&0u32.to_le_bytes()); // delegation_uid
+    d.push(0u8); // is_delegated
+    d.extend_from_slice(&Pubkey::default().to_bytes()); // session_signer
+    d.extend_from_slice(&0i64.to_le_bytes()); // session_expires
+    d.extend_from_slice(&(-1i64).to_le_bytes()); // active_task_id
     d.push(bump);
-    // match_escrow_bump: u8
     d.push(escrow_bump);
 
     d
 }
 
-/// Serialize the standard chess starting board with proper Borsh encoding.
-/// Borsh uses variable-length: None = 1 byte, Some(Piece) = 3 bytes.
-/// The board is row-major: [row0_col0, row0_col1, ..., row7_col7].
 fn borsh_ser_board(data: &[Option<(u8, u8)>; 64]) -> Vec<u8> {
     let mut out = Vec::with_capacity(192);
     for sq in data {
@@ -409,24 +318,22 @@ fn borsh_ser_board(data: &[Option<(u8, u8)>; 64]) -> Vec<u8> {
     out
 }
 
-/// Standard starting board as row-major [Option<(piece_type, color)>; 64].
 fn starting_board_array() -> [Option<(u8, u8)>; 64] {
     let mut board = [None; 64];
-    let back = [3u8, 1, 2, 4, 5, 2, 1, 3]; // R,N,B,Q,K,B,N,R
+    let back = [3u8, 1, 2, 4, 5, 2, 1, 3];
     for c in 0..8 {
-        board[0 * 8 + c] = Some((back[c], 0)); // White back rank
-        board[1 * 8 + c] = Some((0, 0));       // White pawns
-        board[6 * 8 + c] = Some((0, 1));       // Black pawns
-        board[7 * 8 + c] = Some((back[c], 1)); // Black back rank
+        board[0 * 8 + c] = Some((back[c], 0));
+        board[1 * 8 + c] = Some((0, 0));
+        board[6 * 8 + c] = Some((0, 1));
+        board[7 * 8 + c] = Some((back[c], 1));
     }
     board
 }
 
-/// Board state after White plays 1. e4 (e2 → e4).
 fn board_after_e4() -> [Option<(u8, u8)>; 64] {
     let mut board = starting_board_array();
-    board[1 * 8 + 4] = None; // e2: remove white pawn
-    board[3 * 8 + 4] = Some((0, 0)); // e4: white pawn
+    board[1 * 8 + 4] = None;
+    board[3 * 8 + 4] = Some((0, 0));
     board
 }
 
@@ -445,7 +352,7 @@ fn ix_init(
         AccountMeta::new(*cm, false), AccountMeta::new(*p, true),
         AccountMeta::new_readonly(*mint, false), AccountMeta::new(*ata, false),
         AccountMeta::new(*epda, false), AccountMeta::new_readonly(token_program_id(), false),
-        AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
     ], data: d }
 }
 
@@ -456,7 +363,7 @@ fn ix_join(bet: u64, p: &Pubkey, ata: &Pubkey, cm: &Pubkey, epda: &Pubkey) -> In
         AccountMeta::new(*cm, false), AccountMeta::new(*p, true),
         AccountMeta::new(*ata, false), AccountMeta::new(*epda, false),
         AccountMeta::new_readonly(token_program_id(), false),
-        AccountMeta::new_readonly(system_program::ID, false),
+        AccountMeta::new_readonly(solana_sdk::system_program::id(), false),
     ], data: d }
 }
 
@@ -495,35 +402,72 @@ fn ix_abort(creator: &Pubkey, cm: &Pubkey, epda: &Pubkey, ata: &Pubkey) -> Instr
 //  Test helpers
 // ============================================================================
 
-fn run(m: &Mollusk, ix: &Instruction, mut accs: Vec<(Pubkey, Account)>) {
-    add_infra_accounts(ix, &mut accs);
-    let r = m.process_instruction(ix, &accs);
-    assert!(r.program_result.is_ok(), "IX failed: {:?}", r.program_result);
+/// Run a single instruction. Signers are derived from the instruction's signer accounts.
+fn run(svm: &mut LiteSVM, payer: &Keypair, ix: &Instruction, accs: &[(Pubkey, Account)]) {
+    // Set up all accounts
+    for (pk, acct) in accs {
+        svm.set_account(*pk, acct);
+    }
+
+    // Collect signers from instruction accounts that are marked as signer
+    let mut signers: Vec<&Keypair> = vec![];
+    for meta in &ix.accounts {
+        if meta.is_signer {
+            // For simplicity, use payer for all signer slots.
+            // The actual signer pubkey is in the account meta.
+        }
+    }
+    signers.push(payer);
+
+    let blockhash = svm.latest_blockhash();
+    let message = Message::new(&[ix.clone()], Some(&payer.pubkey()));
+    let tx = Transaction::new(&signers, message, blockhash);
+    let result = svm.send_transaction(tx).expect("Transaction send failed");
+    assert!(result.tx_result.is_ok(), "IX failed: {:?}", result.tx_result);
 }
 
-fn run_err(m: &Mollusk, ix: &Instruction, mut accs: Vec<(Pubkey, Account)>) {
-    add_infra_accounts(ix, &mut accs);
-    let r = m.process_instruction(ix, &accs);
-    assert!(r.program_result.is_err(), "Expected failure but IX succeeded");
-}
+fn run_err(svm: &mut LiteSVM, payer: &Keypair, ix: &Instruction, accs: &[(Pubkey, Account)]) {
+    for (pk, acct) in accs {
+        svm.set_account(*pk, acct);
+    }
 
-/// Add system program and token program accounts if the instruction references them.
-fn add_infra_accounts(ix: &Instruction, accs: &mut Vec<(Pubkey, Account)>) {
-    let needs_sys = ix.accounts.iter().any(|a| a.pubkey == system_program::ID);
-    let needs_tok = ix.accounts.iter().any(|a| a.pubkey == token_program_id());
-    let has_sys = accs.iter().any(|(pk, _)| *pk == system_program::ID);
-    let has_tok = accs.iter().any(|(pk, _)| *pk == token_program_id());
-    if needs_sys && !has_sys { accs.push((system_program::ID, sys_prog_account())); }
-    if needs_tok && !has_tok { accs.push((token_program_id(), tok_prog_account())); }
+    let signers: Vec<&Keypair> = vec![payer];
+    let blockhash = svm.latest_blockhash();
+    let message = Message::new(&[ix.clone()], Some(&payer.pubkey()));
+    let tx = Transaction::new(&signers, message, blockhash);
+    let result = svm.send_transaction(tx).expect("Transaction send failed");
+    assert!(result.tx_result.is_err(), "Expected failure but IX succeeded");
 }
 
 // ============================================================================
-/// Create a Mollusk instance with magic_chess and all required SPL programs.
-fn create_mollusk() -> Mollusk {
-    let mut m = Mollusk::new(&program_id(), PROGRAM_SO_PATH);
-    m.add_program(&token_program_id(), "spl_token");
-    m.add_program(&associated_token_program_id(), "spl_associated_token_account");
-    m
+//  Create LiteSVM instance with magic_chess program loaded.
+// ============================================================================
+
+fn create_svm() -> (LiteSVM, Keypair) {
+    let mut svm = LiteSVM::new();
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+
+    // Load magic_chess program
+    let so_paths = [
+        manifest.join("../../target/deploy/magic_chess.so"),
+        manifest.join("target/deploy/magic_chess.so"),
+    ];
+    let mut loaded = false;
+    for p in &so_paths {
+        if p.exists() {
+            let bytes = std::fs::read(p).expect("Failed to read program .so");
+            svm.add_program(program_id(), &bytes);
+            loaded = true;
+            break;
+        }
+    }
+    if !loaded {
+        panic!("Program .so not found. Run `anchor build` first.");
+    }
+
+    let payer = Keypair::new();
+    svm.airdrop(&payer.pubkey(), 100_000_000_000).expect("airdrop");
+    (svm, payer)
 }
 
 // ============================================================================
@@ -532,42 +476,37 @@ fn create_mollusk() -> Mollusk {
 
 #[test]
 fn test_full_game_white_wins_checkmate() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t1_cm";
     let (cm_pda, cm_bump) = chess_match_pda(mid);
     let (epda, ebump) = escrow_pda(mid);
     let mint = unique_pk(); let p1 = unique_pk(); let p2 = unique_pk(); let plat = unique_pk();
     let (p1_ata, _) = get_ata(&p1, &mint); let (p2_ata, _) = get_ata(&p2, &mint);
     let (plat_ata, _) = get_ata(&plat, &mint);
-    let payer = unique_pk();
+    let fee_payer = unique_pk();
     const BET: u64 = 100; const FEE: u16 = 500;
 
-    // Init
-    run(&m, &ix_init(mid, BET, 0, FEE, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), vec![
-        (payer, new_funded_signer(&payer)), (p1, new_funded_signer(&p1)),
-        (mint, new_mint_account(&payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
+    run(&mut svm, &payer, &ix_init(mid, BET, 0, FEE, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (p1, new_funded_signer(&p1)),
+        (mint, new_mint_account(&fee_payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
         (epda, new_unallocated()), (cm_pda, new_unallocated()),
     ]);
 
-    // Join
     let cm_w = build_chess_match(mid, &p1, &Pubkey::default(), gs::WAITING, BET, BET, FEE, &plat, 0, 0, cm_bump, ebump, &mint, false, None);
-    run(&m, &ix_join(BET, &p2, &p2_ata, &cm_pda, &epda), vec![
-        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_join(BET, &p2, &p2_ata, &cm_pda, &epda), &[
+        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&fee_payer, 9)),
         (p1_ata, new_token_account(&mint, &p1, 400)), (p2_ata, new_token_account(&mint, &p2, 500)),
         (epda, new_token_account(&mint, &epda, 100)), (cm_pda, new_cm_account(cm_w)),
     ]);
 
-    // Move: e4 (White) — single move to verify chess engine works
     let cm_a = build_chess_match(mid, &p1, &p2, gs::ACTIVE, BET, BET*2, FEE, &plat, 0, 0, cm_bump, ebump, &mint, false, None);
-    run(&m, &ix_move(&p1, &cm_pda, 1, 4, 3, 4, None), vec![(p1, new_funded_signer(&p1)), (cm_pda, new_cm_account(cm_a.clone()))]);
+    run(&mut svm, &payer, &ix_move(&p1, &cm_pda, 1, 4, 3, 4, None), &[(p1, new_funded_signer(&p1)), (cm_pda, new_cm_account(cm_a.clone()))]);
 
-    // P2 resigns → White wins (simulates full game ending)
-    run(&m, &ix_resign(&p2, &cm_pda), vec![(p2, new_funded_signer(&p2)), (cm_pda, new_cm_account(cm_a))]);
+    run(&mut svm, &payer, &ix_resign(&p2, &cm_pda), &[(p2, new_funded_signer(&p2)), (cm_pda, new_cm_account(cm_a))]);
 
-    // Settle: White wins, pot=200, fee=10, winner=190
     let cm_s = build_chess_match(mid, &p1, &p2, gs::WHITE_WINS, BET, BET*2, FEE, &plat, 0, 0, cm_bump, ebump, &mint, false, Some(ger::RESIGNATION));
-    run(&m, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), vec![
-        (payer, new_funded_signer(&payer)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (mint, new_mint_account(&fee_payer, 9)),
         (p1_ata, new_token_account(&mint, &p1, 400)), (p2_ata, new_token_account(&mint, &p2, 400)),
         (plat_ata, new_token_account(&mint, &plat, 0)), (epda, new_token_account(&mint, &epda, 200)),
         (cm_pda, new_cm_account(cm_s)),
@@ -581,38 +520,36 @@ fn test_full_game_white_wins_checkmate() {
 
 #[test]
 fn test_full_game_black_wins_by_resign() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t2_resign";
     let (cm_pda, cm_bump) = chess_match_pda(mid);
     let (epda, ebump) = escrow_pda(mid);
     let mint = unique_pk(); let p1 = unique_pk(); let p2 = unique_pk(); let plat = unique_pk();
     let (p1_ata, _) = get_ata(&p1, &mint); let (p2_ata, _) = get_ata(&p2, &mint);
     let (plat_ata, _) = get_ata(&plat, &mint);
-    let payer = unique_pk();
+    let fee_payer = unique_pk();
     const BET: u64 = 100; const FEE: u16 = 200;
 
-    run(&m, &ix_init(mid, BET, 0, FEE, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), vec![
-        (payer, new_funded_signer(&payer)), (p1, new_funded_signer(&p1)),
-        (mint, new_mint_account(&payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
+    run(&mut svm, &payer, &ix_init(mid, BET, 0, FEE, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (p1, new_funded_signer(&p1)),
+        (mint, new_mint_account(&fee_payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
         (epda, new_unallocated()), (cm_pda, new_unallocated()),
     ]);
     let cm_w = build_chess_match(mid, &p1, &Pubkey::default(), gs::WAITING, BET, BET, FEE, &plat, 0, 0, cm_bump, ebump, &mint, false, None);
-    run(&m, &ix_join(BET, &p2, &p2_ata, &cm_pda, &epda), vec![
-        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_join(BET, &p2, &p2_ata, &cm_pda, &epda), &[
+        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&fee_payer, 9)),
         (p1_ata, new_token_account(&mint, &p1, 400)), (p2_ata, new_token_account(&mint, &p2, 500)),
         (epda, new_token_account(&mint, &epda, 100)), (cm_pda, new_cm_account(cm_w)),
     ]);
 
     let cm_a = build_chess_match(mid, &p1, &p2, gs::ACTIVE, BET, BET*2, FEE, &plat, 0, 0, cm_bump, ebump, &mint, false, None);
-    run(&m, &ix_move(&p1, &cm_pda, 1, 4, 3, 4, None), vec![(p1, new_funded_signer(&p1)), (cm_pda, new_cm_account(cm_a.clone()))]);
+    run(&mut svm, &payer, &ix_move(&p1, &cm_pda, 1, 4, 3, 4, None), &[(p1, new_funded_signer(&p1)), (cm_pda, new_cm_account(cm_a.clone()))]);
 
-    // P1 resigns
-    run(&m, &ix_resign(&p1, &cm_pda), vec![(p1, new_funded_signer(&p1)), (cm_pda, new_cm_account(cm_a))]);
+    run(&mut svm, &payer, &ix_resign(&p1, &cm_pda), &[(p1, new_funded_signer(&p1)), (cm_pda, new_cm_account(cm_a))]);
 
-    // Settle: Black wins
     let cm_s = build_chess_match(mid, &p1, &p2, gs::BLACK_WINS, BET, BET*2, FEE, &plat, 0, 0, cm_bump, ebump, &mint, false, Some(ger::RESIGNATION));
-    run(&m, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), vec![
-        (payer, new_funded_signer(&payer)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (mint, new_mint_account(&fee_payer, 9)),
         (p1_ata, new_token_account(&mint, &p1, 400)), (p2_ata, new_token_account(&mint, &p2, 400)),
         (plat_ata, new_token_account(&mint, &plat, 0)), (epda, new_token_account(&mint, &epda, 200)),
         (cm_pda, new_cm_account(cm_s)),
@@ -626,31 +563,31 @@ fn test_full_game_black_wins_by_resign() {
 
 #[test]
 fn test_full_game_draw_by_stalemate() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t3_draw";
     let (cm_pda, cm_bump) = chess_match_pda(mid);
     let (epda, ebump) = escrow_pda(mid);
     let mint = unique_pk(); let p1 = unique_pk(); let p2 = unique_pk(); let plat = unique_pk();
     let (p1_ata, _) = get_ata(&p1, &mint); let (p2_ata, _) = get_ata(&p2, &mint);
     let (plat_ata, _) = get_ata(&plat, &mint);
-    let payer = unique_pk();
+    let fee_payer = unique_pk();
     const BET: u64 = 100; const FEE: u16 = 100;
 
-    run(&m, &ix_init(mid, BET, 0, FEE, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), vec![
-        (payer, new_funded_signer(&payer)), (p1, new_funded_signer(&p1)),
-        (mint, new_mint_account(&payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
+    run(&mut svm, &payer, &ix_init(mid, BET, 0, FEE, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (p1, new_funded_signer(&p1)),
+        (mint, new_mint_account(&fee_payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
         (epda, new_unallocated()), (cm_pda, new_unallocated()),
     ]);
     let cm_w = build_chess_match(mid, &p1, &Pubkey::default(), gs::WAITING, BET, BET, FEE, &plat, 0, 0, cm_bump, ebump, &mint, false, None);
-    run(&m, &ix_join(BET, &p2, &p2_ata, &cm_pda, &epda), vec![
-        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_join(BET, &p2, &p2_ata, &cm_pda, &epda), &[
+        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&fee_payer, 9)),
         (p1_ata, new_token_account(&mint, &p1, 400)), (p2_ata, new_token_account(&mint, &p2, 500)),
         (epda, new_token_account(&mint, &epda, 100)), (cm_pda, new_cm_account(cm_w)),
     ]);
 
     let cm_d = build_chess_match(mid, &p1, &p2, gs::DRAW, BET, BET*2, FEE, &plat, 0, 0, cm_bump, ebump, &mint, false, Some(ger::STALEMATE));
-    run(&m, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), vec![
-        (payer, new_funded_signer(&payer)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (mint, new_mint_account(&fee_payer, 9)),
         (p1_ata, new_token_account(&mint, &p1, 400)), (p2_ata, new_token_account(&mint, &p2, 400)),
         (plat_ata, new_token_account(&mint, &plat, 0)), (epda, new_token_account(&mint, &epda, 200)),
         (cm_pda, new_cm_account(cm_d)),
@@ -664,16 +601,16 @@ fn test_full_game_draw_by_stalemate() {
 
 #[test]
 fn test_minimum_bet_accepted() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t4_min";
     let (cm_pda, _) = chess_match_pda(mid);
     let (epda, _) = escrow_pda(mid);
     let mint = unique_pk(); let p1 = unique_pk(); let plat = unique_pk();
-    let (p1_ata, _) = get_ata(&p1, &mint); let payer = unique_pk();
+    let (p1_ata, _) = get_ata(&p1, &mint); let fee_payer = unique_pk();
 
-    run(&m, &ix_init(mid, 1, 0, 0, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), vec![
-        (payer, new_funded_signer(&payer)), (p1, new_funded_signer(&p1)),
-        (mint, new_mint_account(&payer, 9)), (p1_ata, new_token_account(&mint, &p1, 10)),
+    run(&mut svm, &payer, &ix_init(mid, 1, 0, 0, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (p1, new_funded_signer(&p1)),
+        (mint, new_mint_account(&fee_payer, 9)), (p1_ata, new_token_account(&mint, &p1, 10)),
         (epda, new_unallocated()), (cm_pda, new_unallocated()),
     ]);
     println!("Test 4 PASSED: minimum_bet_accepted");
@@ -685,21 +622,20 @@ fn test_minimum_bet_accepted() {
 
 #[test]
 fn test_large_bet_with_small_fee() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t5_large";
     let (cm_pda, _) = chess_match_pda(mid);
     let (epda, _) = escrow_pda(mid);
     let mint = unique_pk(); let p1 = unique_pk(); let plat = unique_pk();
-    let (p1_ata, _) = get_ata(&p1, &mint); let payer = unique_pk();
+    let (p1_ata, _) = get_ata(&p1, &mint); let fee_payer = unique_pk();
     const BET: u64 = 1_000_000; const FEE: u16 = 1;
 
-    run(&m, &ix_init(mid, BET, 0, FEE, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), vec![
-        (payer, new_funded_signer(&payer)), (p1, new_funded_signer(&p1)),
-        (mint, new_mint_account(&payer, 9)), (p1_ata, new_token_account(&mint, &p1, 2_000_000)),
+    run(&mut svm, &payer, &ix_init(mid, BET, 0, FEE, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (p1, new_funded_signer(&p1)),
+        (mint, new_mint_account(&fee_payer, 9)), (p1_ata, new_token_account(&mint, &p1, 2_000_000)),
         (epda, new_unallocated()), (cm_pda, new_unallocated()),
     ]);
-    let expected_fee = 2_000_000u64 * FEE as u64 / 10000;
-    println!("Test 5 PASSED: large_bet_with_small_fee (1M tokens, 1bps, fee={})", expected_fee);
+    println!("Test 5 PASSED: large_bet_with_small_fee (1M tokens, 1bps)");
 }
 
 // ============================================================================
@@ -708,31 +644,31 @@ fn test_large_bet_with_small_fee() {
 
 #[test]
 fn test_platform_fee_at_max_allowed() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t6_max";
     let (cm_pda, cm_bump) = chess_match_pda(mid);
     let (epda, ebump) = escrow_pda(mid);
     let mint = unique_pk(); let p1 = unique_pk(); let p2 = unique_pk(); let plat = unique_pk();
     let (p1_ata, _) = get_ata(&p1, &mint); let (p2_ata, _) = get_ata(&p2, &mint);
     let (plat_ata, _) = get_ata(&plat, &mint);
-    let payer = unique_pk();
+    let fee_payer = unique_pk();
     const BET: u64 = 100; const FEE: u16 = 10_000;
 
-    run(&m, &ix_init(mid, BET, 0, FEE, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), vec![
-        (payer, new_funded_signer(&payer)), (p1, new_funded_signer(&p1)),
-        (mint, new_mint_account(&payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
+    run(&mut svm, &payer, &ix_init(mid, BET, 0, FEE, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (p1, new_funded_signer(&p1)),
+        (mint, new_mint_account(&fee_payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
         (epda, new_unallocated()), (cm_pda, new_unallocated()),
     ]);
     let cm_w = build_chess_match(mid, &p1, &Pubkey::default(), gs::WAITING, BET, BET, FEE, &plat, 0, 0, cm_bump, ebump, &mint, false, None);
-    run(&m, &ix_join(BET, &p2, &p2_ata, &cm_pda, &epda), vec![
-        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_join(BET, &p2, &p2_ata, &cm_pda, &epda), &[
+        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&fee_payer, 9)),
         (p1_ata, new_token_account(&mint, &p1, 400)), (p2_ata, new_token_account(&mint, &p2, 500)),
         (epda, new_token_account(&mint, &epda, 100)), (cm_pda, new_cm_account(cm_w)),
     ]);
 
     let cm_s = build_chess_match(mid, &p1, &p2, gs::WHITE_WINS, BET, BET*2, FEE, &plat, 0, 0, cm_bump, ebump, &mint, false, Some(ger::CHECKMATE));
-    run(&m, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), vec![
-        (payer, new_funded_signer(&payer)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (mint, new_mint_account(&fee_payer, 9)),
         (p1_ata, new_token_account(&mint, &p1, 400)), (p2_ata, new_token_account(&mint, &p2, 400)),
         (plat_ata, new_token_account(&mint, &plat, 0)), (epda, new_token_account(&mint, &epda, 200)),
         (cm_pda, new_cm_account(cm_s)),
@@ -746,23 +682,23 @@ fn test_platform_fee_at_max_allowed() {
 
 #[test]
 fn test_unequal_bets_rejected_on_join() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t7_uneq";
     let (cm_pda, cm_bump) = chess_match_pda(mid);
     let (epda, ebump) = escrow_pda(mid);
     let mint = unique_pk(); let p1 = unique_pk(); let p2 = unique_pk(); let plat = unique_pk();
     let (p1_ata, _) = get_ata(&p1, &mint); let (p2_ata, _) = get_ata(&p2, &mint);
-    let payer = unique_pk();
+    let fee_payer = unique_pk();
     const BET: u64 = 100;
 
-    run(&m, &ix_init(mid, BET, 0, 200, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), vec![
-        (payer, new_funded_signer(&payer)), (p1, new_funded_signer(&p1)),
-        (mint, new_mint_account(&payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
+    run(&mut svm, &payer, &ix_init(mid, BET, 0, 200, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (p1, new_funded_signer(&p1)),
+        (mint, new_mint_account(&fee_payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
         (epda, new_unallocated()), (cm_pda, new_unallocated()),
     ]);
     let cm_w = build_chess_match(mid, &p1, &Pubkey::default(), gs::WAITING, BET, BET, 200, &plat, 0, 0, cm_bump, ebump, &mint, false, None);
-    run_err(&m, &ix_join(50, &p2, &p2_ata, &cm_pda, &epda), vec![
-        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&payer, 9)),
+    run_err(&mut svm, &payer, &ix_join(50, &p2, &p2_ata, &cm_pda, &epda), &[
+        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&fee_payer, 9)),
         (p2_ata, new_token_account(&mint, &p2, 500)), (epda, new_token_account(&mint, &epda, 100)),
         (cm_pda, new_cm_account(cm_w)),
     ]);
@@ -775,18 +711,18 @@ fn test_unequal_bets_rejected_on_join() {
 
 #[test]
 fn test_fee_rounds_down_to_zero() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t8_fee0";
     let (cm_pda, cm_bump) = chess_match_pda(mid);
     let (epda, ebump) = escrow_pda(mid);
     let mint = unique_pk(); let p1 = unique_pk(); let p2 = unique_pk(); let plat = unique_pk();
     let (p1_ata, _) = get_ata(&p1, &mint); let (p2_ata, _) = get_ata(&p2, &mint);
     let (plat_ata, _) = get_ata(&plat, &mint);
-    let payer = unique_pk();
+    let fee_payer = unique_pk();
 
     let cm = build_chess_match(mid, &p1, &p2, gs::WHITE_WINS, 100, 199, 5, &plat, 0, 0, cm_bump, ebump, &mint, false, Some(ger::CHECKMATE));
-    run(&m, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), vec![
-        (payer, new_funded_signer(&payer)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (mint, new_mint_account(&fee_payer, 9)),
         (p1_ata, new_token_account(&mint, &p1, 0)), (p2_ata, new_token_account(&mint, &p2, 0)),
         (plat_ata, new_token_account(&mint, &plat, 0)), (epda, new_token_account(&mint, &epda, 199)),
         (cm_pda, new_cm_account(cm)),
@@ -800,18 +736,18 @@ fn test_fee_rounds_down_to_zero() {
 
 #[test]
 fn test_odd_pot_draw_split() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t9_odd";
     let (cm_pda, cm_bump) = chess_match_pda(mid);
     let (epda, ebump) = escrow_pda(mid);
     let mint = unique_pk(); let p1 = unique_pk(); let p2 = unique_pk(); let plat = unique_pk();
     let (p1_ata, _) = get_ata(&p1, &mint); let (p2_ata, _) = get_ata(&p2, &mint);
     let (plat_ata, _) = get_ata(&plat, &mint);
-    let payer = unique_pk();
+    let fee_payer = unique_pk();
 
     let cm = build_chess_match(mid, &p1, &p2, gs::DRAW, 0, 101, 0, &plat, 0, 0, cm_bump, ebump, &mint, false, Some(ger::STALEMATE));
-    run(&m, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), vec![
-        (payer, new_funded_signer(&payer)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (mint, new_mint_account(&fee_payer, 9)),
         (p1_ata, new_token_account(&mint, &p1, 0)), (p2_ata, new_token_account(&mint, &p2, 0)),
         (plat_ata, new_token_account(&mint, &plat, 0)), (epda, new_token_account(&mint, &epda, 101)),
         (cm_pda, new_cm_account(cm)),
@@ -825,19 +761,19 @@ fn test_odd_pot_draw_split() {
 
 #[test]
 fn test_very_high_fee() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t10_high";
     let (cm_pda, cm_bump) = chess_match_pda(mid);
     let (epda, ebump) = escrow_pda(mid);
     let mint = unique_pk(); let p1 = unique_pk(); let p2 = unique_pk(); let plat = unique_pk();
     let (p1_ata, _) = get_ata(&p1, &mint); let (p2_ata, _) = get_ata(&p2, &mint);
     let (plat_ata, _) = get_ata(&plat, &mint);
-    let payer = unique_pk();
+    let fee_payer = unique_pk();
     const FEE: u16 = 5000;
 
     let cm = build_chess_match(mid, &p1, &p2, gs::WHITE_WINS, 500, 1000, FEE, &plat, 0, 0, cm_bump, ebump, &mint, false, Some(ger::CHECKMATE));
-    run(&m, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), vec![
-        (payer, new_funded_signer(&payer)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (mint, new_mint_account(&fee_payer, 9)),
         (p1_ata, new_token_account(&mint, &p1, 0)), (p2_ata, new_token_account(&mint, &p2, 0)),
         (plat_ata, new_token_account(&mint, &plat, 0)), (epda, new_token_account(&mint, &epda, 1000)),
         (cm_pda, new_cm_account(cm)),
@@ -851,7 +787,7 @@ fn test_very_high_fee() {
 
 #[test]
 fn test_cannot_join_after_game_started() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t11_nojoin";
     let (cm_pda, cm_bump) = chess_match_pda(mid);
     let (epda, ebump) = escrow_pda(mid);
@@ -859,7 +795,7 @@ fn test_cannot_join_after_game_started() {
     let (p3_ata, _) = get_ata(&p3, &mint);
 
     let cm = build_chess_match(mid, &p1, &p2, gs::ACTIVE, 100, 200, 200, &unique_pk(), 0, 0, cm_bump, ebump, &mint, false, None);
-    run_err(&m, &ix_join(100, &p3, &p3_ata, &cm_pda, &epda), vec![
+    run_err(&mut svm, &payer, &ix_join(100, &p3, &p3_ata, &cm_pda, &epda), &[
         (p3, new_funded_signer(&p3)), (mint, new_mint_account(&p3, 9)),
         (p3_ata, new_token_account(&mint, &p3, 500)), (epda, new_token_account(&mint, &epda, 200)),
         (cm_pda, new_cm_account(cm)),
@@ -873,14 +809,14 @@ fn test_cannot_join_after_game_started() {
 
 #[test]
 fn test_cannot_make_move_after_game_ended() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t12_nomv";
     let (cm_pda, cm_bump) = chess_match_pda(mid);
     let (epda, ebump) = escrow_pda(mid);
     let mint = unique_pk(); let p1 = unique_pk(); let p2 = unique_pk();
 
     let cm = build_chess_match(mid, &p1, &p2, gs::WHITE_WINS, 100, 200, 200, &unique_pk(), 0, 0, cm_bump, ebump, &mint, false, Some(ger::RESIGNATION));
-    run_err(&m, &ix_move(&p1, &cm_pda, 1, 4, 3, 4, None), vec![
+    run_err(&mut svm, &payer, &ix_move(&p1, &cm_pda, 1, 4, 3, 4, None), &[
         (p1, new_funded_signer(&p1)), (cm_pda, new_cm_account(cm)),
     ]);
     println!("Test 12 PASSED: cannot_make_move_after_game_ended");
@@ -892,7 +828,7 @@ fn test_cannot_make_move_after_game_ended() {
 
 #[test]
 fn test_cannot_abort_active_match() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t13_noabort";
     let (cm_pda, cm_bump) = chess_match_pda(mid);
     let (epda, ebump) = escrow_pda(mid);
@@ -900,7 +836,7 @@ fn test_cannot_abort_active_match() {
     let (p1_ata, _) = get_ata(&p1, &mint);
 
     let cm = build_chess_match(mid, &p1, &p2, gs::ACTIVE, 100, 200, 200, &unique_pk(), 0, 0, cm_bump, ebump, &mint, false, None);
-    run_err(&m, &ix_abort(&p1, &cm_pda, &epda, &p1_ata), vec![
+    run_err(&mut svm, &payer, &ix_abort(&p1, &cm_pda, &epda, &p1_ata), &[
         (p1, new_funded_signer(&p1)), (mint, new_mint_account(&p1, 9)),
         (p1_ata, new_token_account(&mint, &p1, 400)), (epda, new_token_account(&mint, &epda, 200)),
         (cm_pda, new_cm_account(cm)),
@@ -914,34 +850,31 @@ fn test_cannot_abort_active_match() {
 
 #[test]
 fn test_timeout_after_deadline_via_make_move() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t14_to";
     let (cm_pda, cm_bump) = chess_match_pda(mid);
     let (epda, ebump) = escrow_pda(mid);
     let mint = unique_pk(); let p1 = unique_pk(); let p2 = unique_pk(); let plat = unique_pk();
     let (p1_ata, _) = get_ata(&p1, &mint); let (p2_ata, _) = get_ata(&p2, &mint);
     let (plat_ata, _) = get_ata(&plat, &mint);
-    let payer = unique_pk();
+    let fee_payer = unique_pk();
     const BET: u64 = 100; const FEE: u16 = 100;
 
-    // Init + Join with timeout=0 (no MagicBlock CPI, no Clock dependency)
-    run(&m, &ix_init(mid, BET, 0, FEE, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), vec![
-        (payer, new_funded_signer(&payer)), (p1, new_funded_signer(&p1)),
-        (mint, new_mint_account(&payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
+    run(&mut svm, &payer, &ix_init(mid, BET, 0, FEE, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (p1, new_funded_signer(&p1)),
+        (mint, new_mint_account(&fee_payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
         (epda, new_unallocated()), (cm_pda, new_unallocated()),
     ]);
     let cm_w = build_chess_match(mid, &p1, &Pubkey::default(), gs::WAITING, BET, BET, FEE, &plat, 0, 0, cm_bump, ebump, &mint, false, None);
-    run(&m, &ix_join(BET, &p2, &p2_ata, &cm_pda, &epda), vec![
-        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_join(BET, &p2, &p2_ata, &cm_pda, &epda), &[
+        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&fee_payer, 9)),
         (p2_ata, new_token_account(&mint, &p2, 500)), (epda, new_token_account(&mint, &epda, 100)),
         (cm_pda, new_cm_account(cm_w)),
     ]);
 
-    // Settle directly with WhiteWins by timeout (simulates what happens after claim_timeout_win)
-    // The actual timeout claim requires the MagicBlock scheduler; this tests the payout path.
     let cm_s = build_chess_match(mid, &p1, &p2, gs::WHITE_WINS, BET, BET*2, FEE, &plat, 0, 0, cm_bump, ebump, &mint, false, Some(ger::TIMEOUT));
-    run(&m, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), vec![
-        (payer, new_funded_signer(&payer)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (mint, new_mint_account(&fee_payer, 9)),
         (p1_ata, new_token_account(&mint, &p1, 400)), (p2_ata, new_token_account(&mint, &p2, 400)),
         (plat_ata, new_token_account(&mint, &plat, 0)), (epda, new_token_account(&mint, &epda, 200)),
         (cm_pda, new_cm_account(cm_s)),
@@ -955,33 +888,31 @@ fn test_timeout_after_deadline_via_make_move() {
 
 #[test]
 fn test_timeout_not_yet_exceeded() {
-    let m = create_mollusk();
+    let (mut svm, payer) = create_svm();
     let mid = "t15_noto";
     let (cm_pda, cm_bump) = chess_match_pda(mid);
     let (epda, ebump) = escrow_pda(mid);
     let mint = unique_pk(); let p1 = unique_pk(); let p2 = unique_pk(); let plat = unique_pk();
     let (p1_ata, _) = get_ata(&p1, &mint); let (p2_ata, _) = get_ata(&p2, &mint);
     let (plat_ata, _) = get_ata(&plat, &mint);
-    let payer = unique_pk();
+    let fee_payer = unique_pk();
     const BET: u64 = 100;
 
-    // Init + Join
-    run(&m, &ix_init(mid, BET, 0, 200, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), vec![
-        (payer, new_funded_signer(&payer)), (p1, new_funded_signer(&p1)),
-        (mint, new_mint_account(&payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
+    run(&mut svm, &payer, &ix_init(mid, BET, 0, 200, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (p1, new_funded_signer(&p1)),
+        (mint, new_mint_account(&fee_payer, 9)), (p1_ata, new_token_account(&mint, &p1, 500)),
         (epda, new_unallocated()), (cm_pda, new_unallocated()),
     ]);
     let cm_w = build_chess_match(mid, &p1, &Pubkey::default(), gs::WAITING, BET, BET, 200, &plat, 0, 0, cm_bump, ebump, &mint, false, None);
-    run(&m, &ix_join(BET, &p2, &p2_ata, &cm_pda, &epda), vec![
-        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&payer, 9)),
+    run(&mut svm, &payer, &ix_join(BET, &p2, &p2_ata, &cm_pda, &epda), &[
+        (p2, new_funded_signer(&p2)), (mint, new_mint_account(&fee_payer, 9)),
         (p2_ata, new_token_account(&mint, &p2, 500)), (epda, new_token_account(&mint, &epda, 100)),
         (cm_pda, new_cm_account(cm_w)),
     ]);
 
-    // Try to settle while game is still Active — should be rejected (game not concluded)
     let cm_active = build_chess_match(mid, &p1, &p2, gs::ACTIVE, BET, BET*2, 200, &plat, 0, 0, cm_bump, ebump, &mint, false, None);
-    run_err(&m, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), vec![
-        (payer, new_funded_signer(&payer)), (mint, new_mint_account(&payer, 9)),
+    run_err(&mut svm, &payer, &ix_settle(&cm_pda, &epda, &p1_ata, &p2_ata, &plat_ata), &[
+        (fee_payer, new_funded_signer(&fee_payer)), (mint, new_mint_account(&fee_payer, 9)),
         (p1_ata, new_token_account(&mint, &p1, 400)), (p2_ata, new_token_account(&mint, &p2, 400)),
         (plat_ata, new_token_account(&mint, &plat, 0)), (epda, new_token_account(&mint, &epda, 200)),
         (cm_pda, new_cm_account(cm_active)),
@@ -996,6 +927,6 @@ fn test_timeout_not_yet_exceeded() {
 
 #[cfg(test)]
 #[allow(unused_imports)]
-mod _mollusk_available {
-    use mollusk_svm;
+mod _litesvm_available {
+    use litesvm;
 }
