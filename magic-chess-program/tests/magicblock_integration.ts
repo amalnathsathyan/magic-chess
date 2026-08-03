@@ -80,7 +80,7 @@ import {
 import { assert } from "chai";
 
 // @ts-ignore — JSON import may need resolveJsonModule in tsconfig
-import idl from "../target/idl/magic_chess.json";
+import idl from "../target/idl/magic_chess.json" with { type: "json" };
 
 // ═══════════════════════════════════════════════════════════════════════
 // MagicBlock Constants
@@ -243,7 +243,8 @@ describe("MagicBlock Ephemeral Rollup — Full Lifecycle", () => {
         betAmount,
         timeoutDuration,
         feeBps,
-        platformFeeWallet.publicKey
+        platformFeeWallet.publicKey,
+        false                 // prediction_enabled
       )
       .accounts({
         chessMatch: chessMatchPda,

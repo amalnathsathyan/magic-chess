@@ -68,7 +68,7 @@ import {
 import { assert } from "chai";
 
 // @ts-ignore
-import idl from "../target/idl/magic_chess.json";
+import idl from "../target/idl/magic_chess.json" with { type: "json" };
 
 // ═══════════════════════════════════════════════════════════════════════
 // Constants
@@ -247,7 +247,8 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
         betAmount,
         new BN(SHORT_TIMEOUT_SECONDS),
         200,
-        platformFeeWallet.publicKey
+        platformFeeWallet.publicKey,
+        false                 // prediction_enabled
       )
       .accounts({
         chessMatch: chessMatchPda,

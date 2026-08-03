@@ -66,7 +66,7 @@ import {
 import { assert } from "chai";
 
 // @ts-ignore
-import idl from "../target/idl/magic_chess.json";
+import idl from "../target/idl/magic_chess.json" with { type: "json" };
 
 // ═══════════════════════════════════════════════════════════════════════
 // Constants
@@ -221,7 +221,8 @@ describe("MagicBlock Session Key — Authorization Flow", () => {
         betAmount,
         new BN(900),
         200,
-        platformFeeWallet.publicKey
+        platformFeeWallet.publicKey,
+        false                 // prediction_enabled
       )
       .accounts({
         chessMatch: chessMatchPda,
