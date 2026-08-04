@@ -342,12 +342,13 @@ describe("MagicBlock Ephemeral Rollup — Full Lifecycle", () => {
 
     const tx = await program.methods
       .delegateMatch()
-      .accounts({
+      .accountsStrict({
         payer: payer.publicKey,
         chessMatch: chessMatchPda,
         bufferChessMatch: bufferChessMatch,
         delegationRecordChessMatch: delegationRecordChessMatch,
         delegationMetadataChessMatch: delegationMetadataChessMatch,
+        ownerProgram: program.programId,
         delegationProgram: DELEGATION_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })

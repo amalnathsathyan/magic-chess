@@ -326,7 +326,7 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
   // Step 3: Delegate to MagicBlock ER
   // ────────────────────────────────────────────────────────────────────
   it("Step 3 — Delegate match to MagicBlock ER", async () => {
-    const uid = `crank-${matchId}`;
+    // delegation_uid is set by the handler from match_id
 
     // Manually derive delegation PDAs (Anchor TS auto-resolution has
     // issues with cross-program PDA derivation in the IDL).
@@ -345,12 +345,13 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
 
     await program.methods
       .delegateMatch()
-      .accounts({
+      .accountsStrict({
         payer: payer.publicKey,
         chessMatch: chessMatchPda,
         bufferChessMatch: bufferChessMatch,
         delegationRecordChessMatch: delegationRecordChessMatch,
         delegationMetadataChessMatch: delegationMetadataChessMatch,
+        ownerProgram: program.programId,
         delegationProgram: DELEGATION_PROGRAM_ID,
         systemProgram: SystemProgram.programId,
       })
