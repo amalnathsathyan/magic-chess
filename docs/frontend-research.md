@@ -376,7 +376,317 @@ frontend/
 
 ---
 
-## 10. References
+## 10. Devnet Status & Backend Integration (2026-08-04)
+
+### Deployed Program
+
+| Field | Value |
+|-------|-------|
+| Program ID | `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h` |
+| Network | Devnet |
+| Anchor version | 0.32.1 (TS client) / 1.1.2 (Rust) |
+| Deployment slot | 481,100,264+ |
+
+### Working Endpoints
+
+| Endpoint | URL | Purpose |
+|----------|-----|---------|
+| Base RPC | `https://rpc.magicblock.app/devnet` | Init, join, delegate txns |
+| Router API | `https://devnet-router.magicblock.app/` | Resolve ER fqdn |
+| ER (Asia) | `https://devnet-as.magicblock.app/` | Moves, session keys on ER |
+
+### Router API Format (CRITICAL)
+
+The router uses **JSON-RPC POST**, not REST GET. Every integration must use:
+
+```typescript
+const res = await fetch("https://devnet-router.magicblock.app/", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    jsonrpc: "2.0", id: 1,
+    method: "getDelegationStatus",
+    params: [accountPubkey.toBase58()],
+  }),
+});
+const { result } = await res.json();
+// result.isDelegated: boolean
+// result.fqdn: string (may include https:// prefix)
+```
+
+### Instructions Confirmed Working on Devnet
+
+| Instruction | Layer | Status | Notes |
+|-------------|-------|--------|-------|
+| `initializeMatch` | Base | Working | Creates match PDA + escrow |
+| `joinMatch` | Base | Working | Player 2 joins, game becomes Active |
+| `delegateMatch` | Base | Working | Sets `is_delegated` + `delegation_uid`, transfers ownership to DELEGGvXp |
+| `makeMove` (wallet) | ER | Working | Full move validation + board update |
+| `makeMove` (session key) | ER | Working | Signless move via authorized session key |
+| `setSessionKey` | ER | Working | Player authorizes a session signer + expiry |
+| `revokeSessionKey` | ER | Working | Clears session, reverts to wallet-only auth |
+| `claimTimeoutWin` | ER | Working | Manual timeout claim |
+| `resignGame` | ER | Working | Player resigns |
+| `processMatchSettlement` | Base | Working | Escrow payout after game ends |
+
+### delegateMatch Account Resolution
+
+Anchor TS cannot auto-resolve cross-program PDAs for `delegateMatch`. Use this pattern:
+
+```typescript
+const [bufferChessMatch] = PublicKey.findProgramAddressSync(
+  [Buffer.from("buffer"), chessMatchPda.toBuffer()],
+  program.programId
+);
+const [delegationRecord] = PublicKey.findProgramAddressSync(
+  [Buffer.from("delegation"), chessMatchPda.toBuffer()],
+  DELEGATION_PROGRAM_ID
+);
+const [delegationMetadata] = PublicKey.findProgramAddressSync(
+  [Buffer.from("delegation-metadata"), chessMatchPda.toBuffer()],
+  DELEGATION_PROGRAM_ID
+);
+
+await program.methods.delegateMatch().accountsStrict({
+  payer, chessMatch: chessMatchPda,
+  bufferChessMatch, delegationRecordChessMatch: delegationRecord,
+  delegationMetadataChessMatch: delegationMetadata,
+  ownerProgram: program.programId,
+  delegationProgram: DELEGATION_PROGRAM_ID,
+  systemProgram: SystemProgram.programId,
+}).signers([payer]).rpc();
+```
+
+### Session Key Flow for Gasless Moves
+
+```
+1. Wallet generates a session Keypair (client-side, stored in IndexedDB)
+2. Wallet calls setSessionKey(sessionKey.publicKey, expiresAt) on ER
+   └─ Signed by the player's wallet (1 tx)
+3. All subsequent makeMove txs are signed by the session Keypair
+   └─ No wallet popups, no gas fees (ER is gasless)
+4. Session expires or player calls revokeSessionKey()
+   └─ Signed by the player's wallet (1 tx)
+```
+
+The session key needs NO SOL on the ER. The ER processes transactions gasless for delegated accounts. The authorization is enforced by the program:
+- `session_signer != Pubkey::default()` (session must be set)
+- `signer == session_signer` (must match the authorized key)
+- `now < session_expires_at` (must not be expired)
+
+### Known Limitation: Task Scheduler CPI
+
+The `makeMove` handler previously tried to CPI to `Magic11111111111111111111111111111111111111` (Task Scheduler) for auto-timeout-claim scheduling. This program does not exist on the current ER instance, causing a fatal instruction error.
+
+**Fix applied (deployed):** The Task Scheduler CPI is disabled. Manual timeout enforcement works through the existing timeout check in `makeMove` (lines 69-87 in `make_move.rs`) — on every move, the handler checks if the opponent has timed out. Players can also call `claimTimeoutWin` manually.
+
+This means **everything works** for gameplay. The only missing feature is automatic timeout claiming via crank, which can be re-enabled when MagicBlock deploys the Task Scheduler to the ER.
+
+### ER Transaction Construction
+
+```typescript
+// On the ER, use erConnection (NOT baseConnection) for:
+// - makeMove
+// - setSessionKey / revokeSessionKey
+// - claimTimeoutWin / resignGame
+
+const erProvider = new anchor.AnchorProvider(
+  erConnection,
+  new anchor.Wallet(signerKeypair), // wallet or session key
+  { commitment: "confirmed" }
+);
+const erProgram = new anchor.Program(idl, erProvider);
+
+// makeMove: only 2 accounts needed (magic_program auto-resolved from IDL)
+await erProgram.methods
+  .makeMove({ fromRow, fromCol, toRow, toCol, promotion })
+  .accounts({
+    chessMatch: chessMatchPda,
+    player: signerKeypair.publicKey,
+  })
+  .signers([signerKeypair])
+  .rpc();
+```
+
+### Key Program Addresses
+
+| Program | Address |
+|---------|---------|
+| Magic Chess | `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h` |
+| Delegation | `DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh` |
+| Task Scheduler | `Magic11111111111111111111111111111111111111` |
+| Magic Context | `MagicContext1111111111111111111111111111111` |
+| Session Keys | `KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5` |
+
+### PDA Seeds
+
+```typescript
+const CHESS_MATCH_SEED = Buffer.from("chess_match");
+const MATCH_ESCROW_SEED = Buffer.from("match_escrow");
+
+const [chessMatchPda] = PublicKey.findProgramAddressSync(
+  [CHESS_MATCH_SEED, Buffer.from(matchId)],
+  programId
+);
+const [escrowPda] = PublicKey.findProgramAddressSync(
+  [MATCH_ESCROW_SEED, Buffer.from(matchId)],
+  programId
+);
+```
+
+### SPL Token Setup (Devnet)
+
+For wagering, use a devnet SPL mint. In tests we create a fresh mint per match. In production, use a stable devnet USDC mint or the project's own token:
+
+```typescript
+import { createMint, mintTo, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
+
+const mint = await createMint(connection, payer, payer.publicKey, null, 6);
+const ata = (await getOrCreateAssociatedTokenAccount(connection, payer, mint, playerPubkey)).address;
+await mintTo(connection, payer, mint, ata, payer.publicKey, amount);
+```
+
+---
+
+## 11. UI/UX Audit — Senior Design Review
+
+### What's Built (Solid Foundation)
+
+The frontend scaffold is strong. Landing page sections, arena/lobby with filtering, chess components, Jotai state management, Framer Motion animations — all present and well-structured.
+
+**Landing page** (`/`): Clean hero with "Enter Arena" CTA. Sections flow naturally: Hero → HowItWorks → GameModes → WhyMagicBlock → Security. The emerald-on-charcoal color scheme is distinctive. Good trust signals (test count, audit score, MagicBlock integration).
+
+**Arena/Lobby** (`/arena`): Filterable match list with status badges, wager filters, time control filters. Match cards show players, wager, time control, and "Gasless ER" tag. Create match form modal. Clean glass-card aesthetic.
+
+**Chess Components**: All 8 chess-specific components are built and well-designed:
+- `ChessBoard` — react-chessboard wrapper with move highlighting, check detection, drag+click
+- `ChessClock` — dual clock with urgency states (amber pulse <60s, red pulse <10s)
+- `MoveList` — paired notation, auto-scroll, PGN/FEN copy
+- `GameStatus` — full-screen overlay with spring animation, result + payout display
+- `CapturedPieces`, `BoardControls`, `PromotionDialog`, `PlayerCard` — all scaffolded
+
+### What's Missing (Critical Path for Playable Chess)
+
+#### 1. `/play/[matchId]` Page — THE GAME VIEW
+
+This is the single most important page and it does not exist yet. Without it, users can browse matches but cannot play. This page must compose:
+- `ChessBoard` (center, responsive)
+- `ChessClock` (top or sides, dual display)
+- `MoveList` (right sidebar, scrollable)
+- `PlayerCard` × 2 (top, showing player identity + captured pieces)
+- `GameStatus` overlay (on game end)
+- `BoardControls` (flip board, resign, draw offer)
+- `PromotionDialog` (modal on pawn promotion)
+
+**Recommended layout:**
+```
+┌─────────────────────────────────────────────────────┐
+│  [PlayerCard: Black]  │  [ChessClock: Black time]   │
+├──────────────────────────┬──────────────────────────┤
+│                          │                          │
+│                          │                          │
+│     ChessBoard           │     MoveList             │
+│     (responsive,         │     (scrollable,         │
+│      click-to-move)      │      paired notation)    │
+│                          │                          │
+│                          │  [CapturedPieces]        │
+│                          │  [BoardControls]         │
+├──────────────────────────┴──────────────────────────┤
+│  [PlayerCard: White]  │  [ChessClock: White time]   │
+└─────────────────────────────────────────────────────┘
+```
+
+Mobile: stack vertically — clocks on top, board center, move list collapsible below.
+
+#### 2. Session Key Flow in Match UI
+
+When a player enters a match, they should see a session setup prompt:
+- "Enable gasless moves?" toggle/dialog
+- If yes: generate session key → IndexedDB → call `setSessionKey` → 1 wallet confirm
+- Show "Gasless mode active" indicator (green dot + "Gasless" badge)
+- On match end or disconnect: offer to revoke session
+
+The session key must be persisted in IndexedDB (not localStorage) for security. The `useSessionKey` hook (not yet built) should handle: generate, store, load, revoke, expire.
+
+#### 3. Real-Time Board Sync
+
+The current `useChessMatch` hook manages local chess.js state but doesn't sync with on-chain state. For a delegated match on the ER:
+- On mount: fetch chess_match account from ER → hydrate FEN + moves
+- On opponent move: poll ER or use WebSocket to detect state changes
+- After own move: send tx to ER → confirm → update local state
+- Loading state: show skeleton board while fetching
+
+#### 4. Wallet Integration
+
+Privy is configured (`.env.local` has app ID) but not wired into the UI flow:
+- Landing: "Enter Arena" should trigger wallet connect if not connected
+- Arena: show wallet status in header (done in `WalletButton`)
+- Match creation: requires connected wallet with token balance
+- Joining: requires wallet + sufficient token balance for wager
+- Playing: wallet connected for session setup, then session key takes over
+
+#### 5. Transaction Feedback Loop
+
+Every on-chain action needs clear UX:
+- **Pending**: Subtle pulse animation on the piece/submit button (not a blocking spinner)
+- **Confirmed**: Piece slides smoothly, move appears in list, clock switches
+- **Failed**: Piece snaps back, error toast with retry option
+- **Timeout/Network**: Graceful degradation — show "Reconnecting..." banner
+
+#### 6. Match Lifecycle States the UI Must Handle
+
+```
+WaitingForOpponent → Show "Waiting for opponent..." with copy-link button
+Active (your turn) → Highlight your clock, enable piece interaction
+Active (their turn) → Disable interaction, show "Opponent's turn"
+WhiteWins / BlackWins / Draw → Show GameStatus overlay with payout summary
+```
+
+#### 7. Empty States
+
+- Lobby with no matches: "No matches found. Create one?"
+- No moves yet: "Game starts when White makes the first move"
+- Wallet not connected: "Connect wallet to play"
+- No session key: Prompt to enable gasless mode
+
+### Design Polish Needed
+
+| Issue | Severity | Fix |
+|-------|----------|-----|
+| No `/play/[matchId]` page | **Critical** | Build immediately — this is the core product |
+| Mock data in lobby (`MOCK_MATCHES`) | **High** | Wire to SDK `getMatches()` or on-chain account fetch |
+| `useMagicBlock` returns mock tx sigs | **High** | Wire to real `submitMoveTx` from `lib/magicblock.ts` |
+| Hardcoded payout text in `GameStatus` | **Medium** | Read actual pot from on-chain match state |
+| No session key UI | **High** | Build `useSessionKey` hook + setup dialog |
+| No loading skeletons | **Medium** | Add skeleton components for board, move list, match cards |
+| No error boundaries per section | **Medium** | Wrap board, lobby, and clock in error boundaries |
+| No mobile-responsive board sizing | **High** | `boardWidth` should be dynamic based on viewport |
+| Clock not connected to on-chain time | **High** | Read `last_move_timestamp` + `move_timeout_duration` from chain |
+| Sound library exists but not wired | **Low** | Wire `lib/sounds.ts` to move/capture/check events |
+| No PWA manifest/service worker | **Low** | Add for mobile installability |
+
+### Recommended Build Order (Frontend)
+
+```
+1. /play/[matchId] page — compose chess components into game view
+2. Wire useMagicBlock to real SDK (remove mocks)
+3. Wallet connect flow (Privy) in Hero → Arena → Match
+4. Session key setup UI + IndexedDB persistence
+5. Real-time board sync (fetch from ER + poll/subscribe)
+6. Error handling + loading states + empty states
+7. Mobile responsiveness + touch optimization
+8. Sound effects + PWA
+9. Spectator view (/play/[matchId]/spectate)
+10. Prediction market UI
+```
+
+### Verdict
+
+The frontend has excellent bones — landing page, arena, chess components, state management, and animations are all production-quality. The critical missing piece is the game view page (`/play/[matchId]`) that ties everything together. Once that page exists with real SDK integration (not mocks), the app becomes playable. The session key flow will give it the "gasless" MagicBlock advantage. Ship the game view first, polish second.
+
+---
+
+## 12. References
 
 ### Open Source Chess Frontends
 - [react-chessboard v5 (Clariity)](https://github.com/Clariity/react-chessboard) — Board component we're using

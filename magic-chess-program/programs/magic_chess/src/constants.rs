@@ -30,3 +30,5 @@ pub const DELEGATION_PROGRAM_ID: Pubkey =
     pubkey!("DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh");
 pub const TASK_SCHEDULER_ID: Pubkey =
     pubkey!("Magic11111111111111111111111111111111111111");
+pub const MAGIC_CONTEXT_ID: Pubkey =
+    pubkey!("MagicContext1111111111111111111111111111111");
