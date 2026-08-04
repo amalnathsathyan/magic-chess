@@ -47,10 +47,10 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} ${dmSans.variable}`}
       suppressHydrationWarning
     >
-      <body className="min-h-screen flex flex-col bg-background font-body text-foreground antialiased">
+      <body className="flex min-h-screen flex-col md:flex-row bg-[#0a0a0c] font-body text-foreground antialiased pb-[72px] md:pb-0">
         <Providers>
           <Header />
-          <main className="flex-1">
+          <main className="flex-1 overflow-x-hidden">
             {children}
           </main>
         </Providers>
@@ -58,7 +58,7 @@ export default function RootLayout({
           position="bottom-right"
           toastOptions={{
             style: {
-              background: "#12121a",
+              background: "#101015",
               color: "#f0f0f5",
               border: "1px solid rgba(255,255,255,0.06)",
             },

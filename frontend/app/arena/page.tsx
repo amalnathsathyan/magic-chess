@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Filter, Plus, Search } from "lucide-react";
-import { useAtom } from "jotai";
+import { useAtom, useAtomValue } from "jotai";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
 import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
 import { 
@@ -12,6 +12,7 @@ import {
   lobbyTimeFilterAtom, 
   lobbySearchAtom 
 } from "@/store/lobby";
+import { walletAddressAtom } from "@/store/wallet";
 
 // Mock match data for scaffolding
 const MOCK_MATCHES: MatchCardData[] = [
@@ -71,6 +72,8 @@ export default function ArenaPage() {
   const [timeFilter, setTimeFilter] = useAtom(lobbyTimeFilterAtom);
   const [search, setSearch] = useAtom(lobbySearchAtom);
   const [showCreate, setShowCreate] = useState(false);
+  const [localMatches, setLocalMatches] = useState<MatchCardData[]>([]);
+  const walletAddress = useAtomValue(walletAddressAtom);
 
   // Set mock matches in atom on mount for scaffolding
   useEffect(() => {
@@ -226,14 +229,24 @@ export default function ArenaPage() {
         isOpen={showCreate}
         onClose={() => setShowCreate(false)}
         onSubmit={(data) => {
-          console.log("Create match:", data);
+          const newMatch: MatchCardData = {
+            matchId: `demo-${Date.now()}`,
+            whitePlayer: walletAddress || "You",
+            wagerAmount: data.wagerAmount,
+            wagerToken: data.wagerToken,
+            timeControl: `${data.timeControlMinutes}+${data.timeIncrementSeconds}`,
+            status: "open",
+            createdAt: Date.now(),
+            isLocal: true,
+          };
+          setLocalMatches((prev) => [newMatch, ...prev]);
           setShowCreate(false);
         }}
       />
 
       {/* Match list */}
       <div className="grid gap-4">
-        {filteredMatches.length === 0 ? (
+        {filteredMatches.length === 0 && localMatches.length === 0 ? (
           <div className="glass-card flex flex-col items-center justify-center py-16">
             <Filter className="mb-3 h-10 w-10 text-muted" />
             <p className="text-muted-foreground">No matches found</p>
@@ -242,7 +255,7 @@ export default function ArenaPage() {
             </p>
           </div>
         ) : (
-          filteredMatches.map((match) => (
+          [...localMatches, ...filteredMatches].map((match) => (
             <MatchCard key={match.matchId} match={match} />
           ))
         )}

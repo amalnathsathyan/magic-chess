@@ -62,14 +62,14 @@ export function ChessBoard({
         background:
           game.get(move.to as Square) &&
           game.get(move.to as Square)?.color !== game.get(square)?.color
-            ? "radial-gradient(circle, rgba(0,0,0,.1) 85%, transparent 85%)"
-            : "radial-gradient(circle, rgba(0,0,0,.1) 25%, transparent 25%)",
+            ? "radial-gradient(circle, rgba(255,255,255,.25) 85%, transparent 85%)"
+            : "radial-gradient(circle, rgba(255,255,255,.25) 25%, transparent 25%)",
         borderRadius: "50%",
       };
       return move;
     });
     newSquares[square] = {
-      background: "rgba(255, 255, 0, 0.4)",
+      background: "rgba(255, 255, 255, 0.15)",
     };
     setOptionSquares(newSquares);
     return true;
@@ -113,7 +113,7 @@ export function ChessBoard({
   }
 
   function onSquareRightClick(square: Square) {
-    const colour = "rgba(0, 0, 255, 0.4)";
+    const colour = "rgba(255, 255, 255, 0.2)";
     setRightClickedSquares({
       ...rightClickedSquares,
       [square]:
@@ -155,8 +155,8 @@ export function ChessBoard({
   const squareStyles = useMemo(() => {
     const styles: Record<string, React.CSSProperties> = {};
     if (lastMove) {
-      styles[lastMove.from] = { backgroundColor: "rgba(0, 230, 118, 0.3)" };
-      styles[lastMove.to] = { backgroundColor: "rgba(0, 230, 118, 0.3)" };
+      styles[lastMove.from] = { backgroundColor: "rgba(255, 255, 255, 0.15)" };
+      styles[lastMove.to] = { backgroundColor: "rgba(255, 255, 255, 0.15)" };
     }
     if (highlightSquares) {
       for (const [sq, style] of Object.entries(highlightSquares)) {
@@ -181,7 +181,7 @@ export function ChessBoard({
 
   const arrows = useMemo(() => {
     if (!customArrows || customArrows.length === 0) return undefined;
-    return customArrows.map((a) => ({ startSquare: a.from, endSquare: a.to, color: a.color ?? "rgb(0, 230, 118)" }));
+    return customArrows.map((a) => ({ startSquare: a.from, endSquare: a.to, color: a.color ?? "rgba(255, 255, 255, 0.5)" }));
   }, [customArrows]);
 
   return (
@@ -201,11 +201,11 @@ export function ChessBoard({
           boardStyle: {
             width: boardWidth,
             height: boardWidth,
-            borderRadius: "0.75rem",
-            boxShadow: "0 0 24px rgba(0, 230, 118, 0.2)",
+            borderRadius: "4px",
+            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.5)",
           },
-          darkSquareStyle: { backgroundColor: "#1a1a2e" },
-          lightSquareStyle: { backgroundColor: "#16213e" },
+          darkSquareStyle: { backgroundColor: "#1e1e1e" }, // dark charcoal
+          lightSquareStyle: { backgroundColor: "#404040" }, // dark gray
           squareStyles,
           arrows: arrows as any,
         }}

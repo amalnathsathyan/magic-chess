@@ -14,6 +14,7 @@ export interface MatchCardData {
   timeControl: string; // e.g. "5+3", "10+0"
   status: "open" | "in_progress" | "completed";
   createdAt: number;
+  isLocal?: boolean;
 }
 
 interface MatchCardProps {
@@ -101,10 +102,17 @@ export function MatchCard({ match, className }: MatchCardProps) {
               <Clock className="h-4 w-4 text-muted" />
               <span className="font-mono text-sm">{match.timeControl}</span>
             </div>
-            <div className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5">
-              <Zap className="h-3 w-3 text-primary" />
-              <span className="font-mono text-xs text-primary/90">Gasless ER</span>
-            </div>
+            {match.isLocal ? (
+              <div className="flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/5 px-2 py-0.5">
+                <Zap className="h-3 w-3 text-accent" />
+                <span className="font-mono text-xs text-accent/90">Local</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5">
+                <Zap className="h-3 w-3 text-primary" />
+                <span className="font-mono text-xs text-primary/90">Gasless ER</span>
+              </div>
+            )}
           </div>
           
           <div>

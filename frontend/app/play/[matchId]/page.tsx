@@ -1,9 +1,9 @@
 "use client";
 
 import { use, useState, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, Eye } from "lucide-react";
+import { ArrowLeft, Eye, User } from "lucide-react";
 import Link from "next/link";
 import { ChessBoard } from "@/components/chess/ChessBoard";
 import { ChessClock } from "@/components/chess/ChessClock";
@@ -22,6 +22,9 @@ import { useMatch, useMatchEvents, useMagicChessClient } from "@magic-chess/sdk/
 // @ts-ignore
 import { PublicKey } from "@solana/web3.js";
 import { toast } from "sonner";
+import { useChessClock } from "@/hooks/useChessClock";
+import { useAtomValue } from "jotai";
+import { shortAddressAtom } from "@/store/wallet";
 
 interface PlayPageProps {
   params: Promise<{ matchId: string }>;
@@ -30,11 +33,12 @@ interface PlayPageProps {
 export default function PlayPage({ params }: PlayPageProps) {
   const { matchId } = use(params);
   const router = useRouter();
-  
+  const searchParams = useSearchParams();
+
   // SDK Hooks
   let client: any = null;
   let matchContext: any = { match: null, loading: false, refetch: async () => {} };
-  
+
   try {
     client = useMagicChessClient();
     matchContext = useMatch(matchId);
@@ -49,6 +53,21 @@ export default function PlayPage({ params }: PlayPageProps) {
   const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
   const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
   const [promotionSquare, setPromotionSquare] = useState<Square | null>(null);
+  const [orientation, setOrientation] = useState<"white" | "black">("white");
+  const [resigned, setResigned] = useState<"white" | "black" | null>(null);
+  const [firstMoveMade, setFirstMoveMade] = useState(false);
+
+  // Read time control from URL search params
+  const timeParam = searchParams.get("time");
+  const incrementParam = searchParams.get("increment");
+  const initialTimeMs = timeParam ? parseInt(timeParam, 10) : 300_000; // 5 min default
+  const incrementMs = incrementParam ? parseInt(incrementParam, 10) : 2000; // 2 sec default
+
+  // Wire the chess clock hook
+  const clock = useChessClock({
+    initialTimeMs,
+    incrementMs,
+  });
 
   // Sync with on-chain match
   useEffect(() => {
@@ -86,18 +105,25 @@ export default function PlayPage({ params }: PlayPageProps) {
     };
   }, [unsubscribeEvents]);
 
-  // Clock state (mock — 5 minutes each)
-  const [whiteTime] = useState(300_000);
-  const [blackTime] = useState(300_000);
-  const [activeSide] = useState<"white" | "black" | null>("white");
+  // Pause clock when game is over or someone resigned
+  useEffect(() => {
+    if (resigned) {
+      clock.pauseClock();
+    }
+  }, [resigned, clock]);
 
   // Tx status (mock)
   const [txStatus] = useState<"idle" | "submitting" | "confirming" | "success" | "error">("idle");
 
   const handlePieceDrop = useCallback(
     (sourceSquare: Square, targetSquare: Square): boolean => {
+      // Don't allow moves after resignation or game over
+      if (resigned) return false;
+
       try {
         const game = new Chess(fen);
+
+        if (game.isGameOver()) return false;
 
         // Check for promotion
         const piece = game.get(sourceSquare as never);
@@ -111,24 +137,40 @@ export default function PlayPage({ params }: PlayPageProps) {
           return false;
         }
 
+        // Enforce turn — only allow the current side to move
+        const turnColor = game.turn() === "w" ? "white" : "black";
+        if (piece && piece.color !== game.turn()) {
+          return false;
+        }
+
         const move = game.move({
           from: sourceSquare,
           to: targetSquare,
         });
 
         if (move) {
+          // Start clock on first move
+          if (!firstMoveMade) {
+            setFirstMoveMade(true);
+            clock.startClock();
+          }
+
           // Optimistic update
           setFen(game.fen());
           setMoves((prev) => [...prev, move.san]);
           setCurrentMoveIndex((prev) => prev + 1);
           setLastMove({ from: sourceSquare, to: targetSquare });
-          
+
+          // Notify clock: increment the side that just moved and switch
+          clock.onMove(turnColor);
+
           if (game.isGameOver()) {
             sounds.play("game_end");
+            clock.pauseClock();
           } else {
             sounds.playMoveSound(move.san);
           }
-          
+
           // Trigger on-chain move here if client is available
           if (client) {
             // e.g. client.makeMove({ matchId, move: ... })
@@ -142,7 +184,7 @@ export default function PlayPage({ params }: PlayPageProps) {
         return false;
       }
     },
-    [fen, client, matchId]
+    [fen, client, matchId, resigned, firstMoveMade, clock]
   );
 
   const handlePromotion = useCallback(
@@ -157,18 +199,24 @@ export default function PlayPage({ params }: PlayPageProps) {
         );
 
         if (promoMove) {
+          const turnColor = game.turn() === "w" ? "white" : "black";
+
           game.move({ from: promoMove.from as Square, to: promotionSquare, promotion: piece });
           setFen(game.fen());
           setMoves((prev) => [...prev, promoMove.san]);
           setCurrentMoveIndex((prev) => prev + 1);
           setLastMove({ from: promoMove.from as Square, to: promotionSquare });
-          
+
+          // Notify clock: increment the side that just moved and switch
+          clock.onMove(turnColor);
+
           if (game.isGameOver()) {
             sounds.play("game_end");
+            clock.pauseClock();
           } else {
             sounds.playMoveSound(promoMove.san);
           }
-          
+
           // Trigger on-chain move here if client is available
           if (client) {
              // client.makeMove({ matchId, move: ... })
@@ -180,18 +228,21 @@ export default function PlayPage({ params }: PlayPageProps) {
 
       setPromotionSquare(null);
     },
-    [fen, promotionSquare, client, matchId]
+    [fen, promotionSquare, client, matchId, clock]
   );
 
   // Determine game result
   const game = new Chess(fen);
-  const isGameOver = game.isGameOver();
+  const isGameOver = game.isGameOver() || resigned !== null;
   const turn = game.turn();
 
-  let result: "in_progress" | "checkmate" | "stalemate" | "draw" = "in_progress";
+  let result: "in_progress" | "checkmate" | "stalemate" | "draw" | "resign" = "in_progress";
   let winner: "white" | "black" | null = null;
 
-  if (game.isCheckmate()) {
+  if (resigned) {
+    result = "resign";
+    winner = resigned === "white" ? "black" : "white";
+  } else if (game.isCheckmate()) {
     result = "checkmate";
     winner = turn === "w" ? "black" : "white";
   } else if (game.isStalemate()) {
@@ -216,7 +267,7 @@ export default function PlayPage({ params }: PlayPageProps) {
         }
       }
     }
-    
+
     const wCaptured: string[] = []; // Black pieces captured by White
     const bCaptured: string[] = []; // White pieces captured by Black
 
@@ -234,6 +285,57 @@ export default function PlayPage({ params }: PlayPageProps) {
 
   const { wCaptured, bCaptured } = calculateCaptured();
 
+  const shortAddress = useAtomValue(shortAddressAtom);
+
+  // Build player labels: show "You (White)" / "Opponent (Black)" for local demo,
+  // or truncated pubkey if wallet is connected
+  const getPlayerLabel = (side: "white" | "black"): string => {
+    if (side === orientation) {
+      if (shortAddress) return `${shortAddress} (${side === "white" ? "White" : "Black"})`;
+      return `You (${side === "white" ? "White" : "Black"})`;
+    }
+    return `Opponent (${side === "white" ? "White" : "Black"})`;
+  };
+
+  const calculateMaterialAdvantage = (side: "white" | "black") => {
+    const values: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+    let white = 0, black = 0;
+    const board = game.board();
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = board[r][c];
+        if (piece) {
+          if (piece.color === 'w') white += values[piece.type] || 0;
+          else black += values[piece.type] || 0;
+        }
+      }
+    }
+    const diff = side === "white" ? white - black : black - white;
+    return diff > 0 ? `+${diff}` : null;
+  };
+
+  const renderPlayerHeader = (side: "white" | "black") => {
+    const isWhite = side === "white";
+    const isActive = turn === (isWhite ? "w" : "b") && !isGameOver;
+    const time = isWhite ? clock.whiteTime : clock.blackTime;
+    const adv = calculateMaterialAdvantage(side);
+    
+    return (
+      <div className="flex w-full max-w-[560px] items-center justify-between mb-3 mt-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary border border-border overflow-hidden">
+             <User className="h-5 w-5 text-muted-foreground" />
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-sm">{getPlayerLabel(side)}</span>
+            {adv && <span className="text-xs font-medium text-emerald-500">{adv}</span>}
+          </div>
+        </div>
+        <ChessClock time={time} isActive={isActive} />
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <GameStatus
@@ -241,7 +343,7 @@ export default function PlayPage({ params }: PlayPageProps) {
         winner={winner}
         turn={turn === "w" ? "white" : "black"}
       />
-      
+
       {/* Top bar */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
@@ -279,39 +381,19 @@ export default function PlayPage({ params }: PlayPageProps) {
           className="grid gap-6 lg:grid-cols-[1fr_320px]"
         >
           {/* Left column: board */}
-          <div className="flex flex-col items-center gap-4">
-            {/* Black player info + clock + captured pieces */}
-            <div className="flex w-full max-w-[560px] flex-col gap-2">
-              <div className="flex items-end justify-between">
-                <PlayerCard
-                  side="black"
-                  isActive={turn === "b" && !isGameOver}
-                  address="8xTk...9aF1"
-                  wagerAmount={10}
-                  className="flex-1 mr-4"
-                />
-                <ChessClock
-                  whiteTime={whiteTime}
-                  blackTime={blackTime}
-                  activeSide={activeSide}
-                  isPaused={isGameOver}
-                />
-              </div>
-              <CapturedPieces
-                whiteCaptured={wCaptured}
-                blackCaptured={bCaptured}
-                side="white"
-              />
-            </div>
+          <div className="flex flex-col items-center justify-center w-full">
+            {/* Top Player */}
+            {renderPlayerHeader(orientation === "white" ? "black" : "white")}
 
             {/* Chess board */}
-            <div className="relative">
+            <div className="relative w-full max-w-[560px]">
               <ChessBoard
                 fen={fen}
-                orientation="white"
+                orientation={orientation}
                 boardWidth={560}
                 onPieceDrop={handlePieceDrop}
                 lastMove={lastMove}
+                arePiecesDraggable={!isGameOver}
               />
               {promotionSquare && (
                 <PromotionDialog
@@ -322,28 +404,22 @@ export default function PlayPage({ params }: PlayPageProps) {
                 />
               )}
             </div>
-            
-            <BoardControls 
-              onFlipBoard={() => {}}
+
+            {/* Board Controls */}
+            <BoardControls
+              onFlipBoard={() => setOrientation((prev) => prev === "white" ? "black" : "white")}
               onOfferDraw={() => {}}
-              onResign={() => {}}
-              className="w-full max-w-[560px]"
+              onResign={() => {
+                if (!isGameOver) {
+                  const currentTurn = turn === "w" ? "white" : "black";
+                  setResigned(currentTurn);
+                }
+              }}
+              className="w-full max-w-[560px] mt-4 mb-2"
             />
 
-            {/* White player info + captured pieces */}
-            <div className="flex w-full max-w-[560px] flex-col gap-2">
-              <CapturedPieces
-                whiteCaptured={wCaptured}
-                blackCaptured={bCaptured}
-                side="black"
-              />
-              <PlayerCard
-                side="white"
-                isActive={turn === "w" && !isGameOver}
-                address="7xYk...2bR9"
-                wagerAmount={10}
-              />
-            </div>
+            {/* Bottom Player */}
+            {renderPlayerHeader(orientation === "white" ? "white" : "black")}
           </div>
 
           {/* Right column: move list */}

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { PlusCircle, Zap, Trophy } from "lucide-react";
+import { PlusCircle, Zap, Trophy, Eye } from "lucide-react";
 
 const steps = [
   {
@@ -15,6 +15,12 @@ const steps = [
     title: "Gasless Moves",
     description:
       "Play with 50ms latency. MagicBlock Ephemeral Rollups handle all moves off-chain without transaction fees, settling instantly.",
+  },
+  {
+    icon: Eye,
+    title: "Spectator Betting",
+    description:
+      "Prediction pools let spectators wager on ongoing games. Opt-in parimutuel betting, verified on-chain.",
   },
   {
     icon: Trophy,
@@ -43,7 +49,7 @@ export function HowItWorks() {
           </p>
         </motion.div>
 
-        <div className="grid gap-8 md:grid-cols-3">
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
           {steps.map((step, i) => (
             <motion.div
               key={step.title}

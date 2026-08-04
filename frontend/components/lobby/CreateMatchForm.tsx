@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sword, Coins, Clock, LogIn } from "lucide-react";
+import { Sword, Coins, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 // @ts-ignore
@@ -47,7 +47,7 @@ export function CreateMatchForm({
   const [ephemeralRollup, setEphemeralRollup] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { authenticated, login } = usePrivy();
+  const { authenticated } = usePrivy();
   const { wallets } = useWallets();
   const router = useRouter();
 
@@ -62,20 +62,7 @@ export function CreateMatchForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!authenticated) {
-      // Allow local demo match if not connected
-      if (wagerAmount === 0) {
-        toast.success("Starting local demo match...");
-        router.push(`/play/demo-${Date.now()}`);
-        onClose();
-        return;
-      }
-      
-      login();
-      return;
-    }
-
-    const data = {
+    const data: CreateMatchData = {
       wagerAmount,
       wagerToken: "SOL",
       timeControlMinutes: timeControl.minutes,
@@ -87,13 +74,31 @@ export function CreateMatchForm({
 
     onSubmit?.(data);
 
+    const timeParams = `time=${timeControl.minutes * 60 * 1000}&increment=${timeControl.increment * 1000}`;
+
+    // No wallet connected — always do local demo
+    if (!authenticated) {
+      toast.success("Starting local game (connect wallet for on-chain matches)");
+      router.push(`/play/demo-${Date.now()}?${timeParams}`);
+      onClose();
+      return;
+    }
+
+    // Wallet connected but free game — local demo
+    if (wagerAmount === 0) {
+      toast.success("Starting local free game");
+      router.push(`/play/demo-${Date.now()}?${timeParams}`);
+      onClose();
+      return;
+    }
+
+    // Wallet connected AND wager > 0 — try SDK call
     if (client) {
       try {
         setIsSubmitting(true);
         const matchId = `match_${Date.now()}`;
         const wallet = wallets[0];
-        
-        // Dummy values since we don't have the real context for tokens in the form yet
+
         const dummyPubkey = new PublicKey("11111111111111111111111111111111");
         const playerTokenAccount = wallet?.address ? new PublicKey(wallet.address) : dummyPubkey;
 
@@ -106,7 +111,7 @@ export function CreateMatchForm({
           bettingTokenMint: dummyPubkey,
           playerTokenAccount: playerTokenAccount,
         });
-        
+
         toast.success("Match created on-chain!");
         router.push(`/play/${match}`);
         onClose();
@@ -117,9 +122,9 @@ export function CreateMatchForm({
         setIsSubmitting(false);
       }
     } else {
-      // Fallback for demo
-      toast.success("Creating demo match (No Provider)");
-      router.push(`/play/demo-${Date.now()}`);
+      // No SDK client — fallback to local demo
+      toast.success("Starting local game (connect wallet for on-chain matches)");
+      router.push(`/play/demo-${Date.now()}?${timeParams}`);
       onClose();
     }
   };
@@ -236,8 +241,8 @@ export function CreateMatchForm({
               >
                 {!authenticated ? (
                   <>
-                    {wagerAmount === 0 ? <Sword className="h-4 w-4" /> : <LogIn className="h-4 w-4" />}
-                    {wagerAmount === 0 ? "Create Local Demo" : "Login to Create"}
+                    <Sword className="h-4 w-4" />
+                    Create Local Demo
                   </>
                 ) : (
                   <>

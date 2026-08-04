@@ -79,12 +79,10 @@ export default function SpectatePage({ params }: SpectatePageProps) {
         >
           {/* Left: board + clocks */}
           <div className="flex flex-col items-center gap-4">
-            <ChessClock
-              whiteTime={whiteTime}
-              blackTime={blackTime}
-              activeSide={activeSide}
-              isPaused={false}
-            />
+            <div className="flex w-full max-w-[560px] justify-between items-center mb-2">
+              <span className="text-sm font-semibold">Black</span>
+              <ChessClock time={blackTime} isActive={activeSide === "black"} />
+            </div>
 
             <ChessBoard
               fen={fen}
@@ -93,6 +91,11 @@ export default function SpectatePage({ params }: SpectatePageProps) {
               arePiecesDraggable={false}
               lastMove={lastMove}
             />
+
+            <div className="flex w-full max-w-[560px] justify-between items-center mt-2">
+              <span className="text-sm font-semibold">White</span>
+              <ChessClock time={whiteTime} isActive={activeSide === "white"} />
+            </div>
 
             <p className="text-xs text-muted">
               You are in spectator mode. Moves are read-only.

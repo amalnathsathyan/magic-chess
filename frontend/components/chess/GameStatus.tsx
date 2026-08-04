@@ -39,9 +39,10 @@ export function GameStatus({
 }: GameStatusProps) {
   if (result === "in_progress") return null;
 
-  const config = STATUS_CONFIG[result];
-  const Icon = config.icon;
+  const isCheckmate = result === "checkmate";
   const isDraw = result === "stalemate" || result === "draw";
+  const heading = isCheckmate ? (winner === "white" ? "White wins!" : "Black wins!") : (isDraw ? "Draw" : "Game Over");
+  const subHeading = isCheckmate ? "by checkmate" : result;
 
   return (
     <AnimatePresence>
@@ -49,50 +50,41 @@ export function GameStatus({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-md p-4"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
       >
         <motion.div
-          initial={{ scale: 0.9, y: 20 }}
+          initial={{ scale: 0.95, y: 10 }}
           animate={{ scale: 1, y: 0 }}
-          transition={{ type: "spring", bounce: 0.5 }}
+          transition={{ type: "spring", bounce: 0.3 }}
           className={cn(
-            "glass-card w-full max-w-md overflow-hidden flex flex-col items-center text-center p-8",
+            "bg-white w-full max-w-sm rounded-2xl overflow-hidden flex flex-col items-center text-center p-8 shadow-2xl",
             className
           )}
         >
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring", bounce: 0.5 }}
-            className="mb-6 rounded-full bg-primary/10 p-4"
-          >
+          <div className="mb-4 text-gray-900">
             {isDraw ? (
-              <Hand className="h-12 w-12 text-accent" />
+              <Hand className="h-10 w-10 mx-auto opacity-80" />
             ) : (
-              <Trophy className="h-12 w-12 text-primary" />
+              <Trophy className="h-10 w-10 mx-auto text-yellow-500" />
             )}
-          </motion.div>
-
-          <h2 className={cn("mb-2 font-heading text-3xl font-bold", config.color)}>
-            {config.label}
-          </h2>
-          
-          <p className="mb-8 text-muted-foreground">
-            {isDraw ? config.description : `${winner === "white" ? "White" : "Black"} ${config.description}`}
-          </p>
-
-          <div className="w-full space-y-4 mb-8">
-            <div className="rounded-lg bg-secondary/30 p-4 border border-border/50 flex justify-between items-center">
-              <span className="text-sm font-medium text-muted-foreground">Token Payout</span>
-              <span className="font-mono text-lg font-bold text-primary">
-                {isDraw ? "10 USDC (Refund)" : "20 USDC"}
-              </span>
-            </div>
           </div>
 
-          <button className="w-full rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-[0_0_20px_rgba(0,230,118,0.4)]">
-            Claim Winnings
-          </button>
+          <h2 className="mb-1 text-2xl font-bold text-gray-900">
+            {heading}
+          </h2>
+          
+          <p className="mb-8 text-sm text-gray-500 capitalize">
+            {subHeading}
+          </p>
+
+          <div className="flex gap-3 w-full">
+            <button className="flex-1 rounded-full bg-gray-100 hover:bg-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-900 transition-colors">
+              Share
+            </button>
+            <button className="flex-1 rounded-full bg-green-600 hover:bg-green-700 px-4 py-2.5 text-sm font-semibold text-white transition-colors">
+              Play more
+            </button>
+          </div>
         </motion.div>
       </motion.div>
     </AnimatePresence>

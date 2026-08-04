@@ -1,6 +1,4 @@
-@@import "tailwindcss";
-
-/* ── Google Fonts (Space Grotesk, JetBrains Mono, DM Sans) ── */
+@import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Space+Grotesk:wght@300..700&display=swap");
 
 /* ── Theme CSS Variables ── */
@@ -11,9 +9,9 @@
   --font-body: "DM Sans", ui-sans-serif, system-ui, sans-serif;
 
   /* ── Dark mode ("Digital Arena") ── */
-  --color-background: #0a0a0f;
+  --color-background: #0a0a0c;
   --color-foreground: #f0f0f5;
-  --color-card: #12121a;
+  --color-card: #101015;
   --color-card-hover: #181825;
   --color-border: rgba(255, 255, 255, 0.06);
   --color-border-hover: rgba(255, 255, 255, 0.10);

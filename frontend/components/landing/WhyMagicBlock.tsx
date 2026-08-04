@@ -1,34 +1,34 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Zap, Check, X } from "lucide-react";
+import { Zap, Clock, Key, Shield } from "lucide-react";
 
 export function WhyMagicBlock() {
-  const comparison = [
+  const features = [
     {
-      feature: "Transaction Fees",
-      standard: "~0.000005 SOL / move",
-      magic: "Gasless (0 SOL)",
+      icon: Zap,
+      title: "Zero Gas Fees",
+      description: "Play without transaction costs. Ephemeral Rollups process every move without debiting your wallet.",
     },
     {
-      feature: "Latency",
-      standard: "400ms - 2s",
-      magic: "~50ms",
+      icon: Clock,
+      title: "50ms Latency",
+      description: "Experience ultra-fast, seamless gameplay that matches traditional Web2 servers.",
     },
     {
-      feature: "Wallet Confirms",
-      standard: "1 per move",
-      magic: "0 (Session Keys)",
+      icon: Key,
+      title: "Session Keys",
+      description: "Sign one transaction to start. Our on-chain session keys auto-approve all your moves in the background.",
     },
     {
-      feature: "State Settlement",
-      standard: "Continuous L1 Txns",
-      magic: "Ephemeral Rollups",
+      icon: Shield,
+      title: "Trustless & Verifiable",
+      description: "Complete trustless model vs standard platforms. Anyone can create, join, and bet with logic verified on-chain.",
     }
   ];
 
   return (
-    <section className="px-4 py-24 sm:px-6 lg:px-8">
+    <section className="px-4 py-24 sm:px-6 lg:px-8 border-t border-border/50">
       <div className="mx-auto max-w-5xl">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -39,44 +39,40 @@ export function WhyMagicBlock() {
         >
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary">
             <Zap className="h-3.5 w-3.5" />
-            Why MagicBlock
+            Powered by MagicBlock
           </div>
           <h2 className="font-heading text-3xl font-bold sm:text-4xl text-foreground">
             The Future of On-Chain Gaming
           </h2>
           <p className="mt-3 font-body text-muted-foreground">
-            MagicBlock Ephemeral Rollups deliver gasless, instant, provably fair gameplay
+            Seamlessly blending Web3 security with Web2 performance
           </p>
         </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.2, duration: 0.5 }}
-          className="glass-card overflow-hidden"
-        >
-          <div className="grid grid-cols-3 border-b border-border/50 bg-card/50 p-6 text-sm font-heading font-semibold text-foreground sm:text-lg">
-            <div>Feature</div>
-            <div className="text-muted-foreground">Standard On-Chain</div>
-            <div className="flex items-center gap-2 text-primary">
-              <Zap className="h-5 w-5" /> Magic Chess
-            </div>
-          </div>
-          <div className="divide-y divide-border/50">
-            {comparison.map((row, i) => (
-              <div key={i} className="grid grid-cols-3 p-6 text-sm sm:text-base">
-                <div className="font-medium text-foreground">{row.feature}</div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <X className="h-4 w-4 text-destructive" /> {row.standard}
-                </div>
-                <div className="flex items-center gap-2 text-primary">
-                  <Check className="h-4 w-4" /> {row.magic}
-                </div>
+        <div className="grid gap-6 sm:grid-cols-2">
+          {features.map((feature, i) => (
+            <motion.div
+              key={i}
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.1, duration: 0.5 }}
+              className="glass-card p-6 flex items-start gap-4"
+            >
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <feature.icon className="h-6 w-6" />
               </div>
-            ))}
-          </div>
-        </motion.div>
+              <div>
+                <h3 className="font-heading text-xl font-semibold text-foreground mb-2">
+                  {feature.title}
+                </h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  {feature.description}
+                </p>
+              </div>
+            </motion.div>
+          ))}
+        </div>
       </div>
     </section>
   );
