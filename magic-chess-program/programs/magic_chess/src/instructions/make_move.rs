@@ -189,8 +189,12 @@ pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()
         is_stalemate: move_result == MoveResult::Stalemate,
     });
 
-    // 7. Schedule timeout crank task for opponent if game is still active
-    if chess_match.game_status == GameStatus::Active && chess_match.move_timeout_duration > 0 {
+    // 7. Schedule timeout crank task for opponent if game is still active.
+    // Skip when delegated — Magic111 Task Scheduler not available on ER.
+    if chess_match.game_status == GameStatus::Active
+        && chess_match.move_timeout_duration > 0
+        && !chess_match.is_delegated
+    {
         // Cancel previous task (opponent's now-obsolete timeout)
         if chess_match.active_task_id >= 0 {
             schedule_timeout::invoke_cancel_task(
