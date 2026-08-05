@@ -338,7 +338,7 @@
 │  Sign in with Google ──────> 5 seconds   │
 │  Embedded wallet created ──> automatic   │
 │  Buy USDC with card ───────> MoonPay     │
-│  Start playing ────────────> <60 sec     │
+│  Start playing ────────────> \<60 sec     │
 │                                          │
 │  Gameplay:                               │
 │  Create match ─────────────> 1 click     │
@@ -951,7 +951,7 @@ White (Player 1)              Black (Player 2)
 | 600M+ | Online chess players worldwide |
 | 0 | On-chain chess protocols that exist |
 | 2 | Wallet confirmations in the entire user journey |
-| <50ms | Per-move latency on MagicBlock ER |
+| \<50ms | Per-move latency on MagicBlock ER |
 | $0 | Gas fees visible to users |
 | 60 seconds | Time from landing page to playing chess |
 

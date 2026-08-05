@@ -368,7 +368,7 @@ frontend/
 | Clock warning | Ticking (accelerating) | Time pressure signal |
 
 ### Implementation
-- Web Audio API for <50ms latency
+- Web Audio API for \<50ms latency
 - Base64-encoded WAV files (sub-5KB each) bundled, no network requests
 - Mute toggle persisted in localStorage
 - Volume control per sound category
@@ -546,6 +546,24 @@ const ata = (await getOrCreateAssociatedTokenAccount(connection, payer, mint, pl
 await mintTo(connection, payer, mint, ata, payer.publicKey, amount);
 ```
 
+### Frontend Integration Patterns (Implemented)
+
+The frontend already implements the correct MagicBlock integration patterns. These are the reference implementations to follow when wiring the play page:
+
+**`frontend/lib/magicblock.ts`** (123 lines) — Real delegation-aware move submission:
+- `submitMoveTx()` checks delegation status via Router API JSON-RPC
+- If delegated: constructs `makeMove` instruction, signs + sends to ER connection
+- If not delegated: falls back to base RPC via `client.makeMove()`
+- Uses `getDelegationStatus`, `getERConnection`, `findChessMatchPda` from `@magic-chess/sdk`
+
+**`frontend/hooks/useMagicBlock.ts`** (85 lines) — React hook with graceful degradation:
+- Imports real `useMagicChessClient` from `@magic-chess/sdk/react`
+- `submitMove()` calls real `submitMoveTx` when wallet is connected
+- Falls back to local mock (500ms delay) when disconnected or in demo mode
+- Session management is scaffolded (placeholder, not yet using IndexedDB)
+
+These patterns are correct and should be connected to the play page's move handlers (currently commented out as `// client.makeMove({ matchId, move: ... })`).
+
 ---
 
 ## 11. UI/UX Audit — Senior Design Review
@@ -560,25 +578,38 @@ The frontend scaffold is strong. Landing page sections, arena/lobby with filteri
 
 **Chess Components**: All 8 chess-specific components are built and well-designed:
 - `ChessBoard` — react-chessboard wrapper with move highlighting, check detection, drag+click
-- `ChessClock` — dual clock with urgency states (amber pulse <60s, red pulse <10s)
+- `ChessClock` — dual clock with urgency states (amber pulse \<60s, red pulse \<10s)
 - `MoveList` — paired notation, auto-scroll, PGN/FEN copy
 - `GameStatus` — full-screen overlay with spring animation, result + payout display
 - `CapturedPieces`, `BoardControls`, `PromotionDialog`, `PlayerCard` — all scaffolded
 
 ### What's Missing (Critical Path for Playable Chess)
 
-#### 1. `/play/[matchId]` Page — THE GAME VIEW
+#### 1. `/play/[matchId]` Page — WIRE TO REAL SDK (page exists, needs integration)
 
-This is the single most important page and it does not exist yet. Without it, users can browse matches but cannot play. This page must compose:
-- `ChessBoard` (center, responsive)
-- `ChessClock` (top or sides, dual display)
-- `MoveList` (right sidebar, scrollable)
-- `PlayerCard` × 2 (top, showing player identity + captured pieces)
-- `GameStatus` overlay (on game end)
-- `BoardControls` (flip board, resign, draw offer)
-- `PromotionDialog` (modal on pawn promotion)
+The page **exists** (`frontend/app/play/[matchId]/page.tsx`, 362 lines) and already composes all 8 chess components in the recommended layout described below. However, it currently uses hardcoded mock data that must be replaced with real on-chain state:
 
-**Recommended layout:**
+**What's already built (keep):**
+- Full component composition: ChessBoard, ChessClock, MoveList, CapturedPieces, GameStatus, PromotionDialog, PlayerCard, BoardControls, TransactionStatus
+- Promotion flow (pawn reaches 8th rank → dialog → piece selection)
+- Captured pieces calculation from board state diff
+- Game result detection (checkmate/stalemate/draw) with GameStatus overlay
+- Back-to-arena navigation, spectate link, match ID display
+- Sound effects wired via `sounds.playMoveSound()` and `sounds.play("game_end")`
+- SDK hooks imported: `useMagicChessClient`, `useMatch`, `useMatchEvents`
+- Framer Motion page entrance animation
+
+**What's mocked and needs wiring:**
+| Mock | Current Value | Replace With |
+|------|--------------|--------------|
+| Clock times | `useState(300_000)` hardcoded 5min | On-chain `last_move_timestamp` + `move_timeout_duration` |
+| Tx status | `useState<"idle">("idle")` always idle | Real tx lifecycle from `useMagicBlock().submitMove()` |
+| Player addresses | `"8xTk...9aF1"`, `"7xYk...2bR9"` | On-chain `match.whitePlayer` / `match.blackPlayer` |
+| `client.makeMove` | Commented out `// client.makeMove(...)` | Uncomment and wire to `submitMoveTx` from `lib/magicblock.ts` |
+| Board width | Hardcoded `560` | Dynamic `useViewportSize` or container query |
+| FEN init | Standard starting position | On-chain `match.boardFen` from account data |
+
+**Recommended layout (already implemented in the page):**
 ```
 ┌─────────────────────────────────────────────────────┐
 │  [PlayerCard: Black]  │  [ChessClock: Black time]   │
@@ -600,35 +631,40 @@ Mobile: stack vertically — clocks on top, board center, move list collapsible 
 
 #### 2. Session Key Flow in Match UI
 
+The delegation infrastructure is already built in `frontend/lib/magicblock.ts` (`submitMoveTx` checks delegation status via Router API JSON-RPC and routes to ER). What's needed is the user-facing session key flow:
+
 When a player enters a match, they should see a session setup prompt:
 - "Enable gasless moves?" toggle/dialog
 - If yes: generate session key → IndexedDB → call `setSessionKey` → 1 wallet confirm
 - Show "Gasless mode active" indicator (green dot + "Gasless" badge)
 - On match end or disconnect: offer to revoke session
 
-The session key must be persisted in IndexedDB (not localStorage) for security. The `useSessionKey` hook (not yet built) should handle: generate, store, load, revoke, expire.
+The session key must be persisted in IndexedDB (not localStorage) for security. The `useSessionKey` hook (not yet built) should handle: generate, store, load, revoke, expire. The underlying `setSessionKey` and `revokeSessionKey` instructions are confirmed working on devnet (see Section 10).
 
-#### 3. Real-Time Board Sync
+#### 3. Real-Time Board Sync (On-Chain)
 
-The current `useChessMatch` hook manages local chess.js state but doesn't sync with on-chain state. For a delegated match on the ER:
-- On mount: fetch chess_match account from ER → hydrate FEN + moves
-- On opponent move: poll ER or use WebSocket to detect state changes
-- After own move: send tx to ER → confirm → update local state
-- Loading state: show skeleton board while fetching
+The `useChessMatch` hook (`frontend/hooks/useChessMatch.ts`, 87 lines) exists and manages local chess.js state via Jotai atoms, but does not sync with on-chain state. For a delegated match on the ER:
+- On mount: fetch chess_match account from ER → hydrate FEN + moves (replace the hardcoded `"rnbqkbnr/..."` initial FEN in the play page)
+- On opponent move: poll ER or use WebSocket to detect state changes. The play page already subscribes to `useMatchEvents` which provides `onMoveMade` and `onGameEnded` callbacks.
+- After own move: send tx to ER via `submitMoveTx` → confirm → update local state (currently commented out as `// client.makeMove(...)`)
+- Loading state: show skeleton board while fetching (not yet implemented)
 
 #### 4. Wallet Integration
 
-Privy is configured (`.env.local` has app ID) but not wired into the UI flow:
+Privy is configured (`.env.local` has `NEXT_PUBLIC_PRIVY_APP_ID`) but not fully wired into the UI flow:
 - Landing: "Enter Arena" should trigger wallet connect if not connected
 - Arena: show wallet status in header (done in `WalletButton`)
 - Match creation: requires connected wallet with token balance
 - Joining: requires wallet + sufficient token balance for wager
 - Playing: wallet connected for session setup, then session key takes over
 
+The `useMagicBlock` hook already imports `useMagicChessClient` from the SDK and checks `client.wallet` before submitting moves. The missing piece is the Privy provider wrapping and connect-flow triggers at each route entry point.
+
 #### 5. Transaction Feedback Loop
 
-Every on-chain action needs clear UX:
-- **Pending**: Subtle pulse animation on the piece/submit button (not a blocking spinner)
+The `TransactionStatus` component exists (rendered in the play page header) but the tx status is hardcoded to `"idle"`. Every on-chain action needs clear UX wired to real state:
+
+- **Pending**: Subtle pulse animation on the piece/submit button (not a blocking spinner). `useMagicBlock().isSubmitting` already tracks this — connect it to the UI.
 - **Confirmed**: Piece slides smoothly, move appears in list, clock switches
 - **Failed**: Piece snaps back, error toast with retry option
 - **Timeout/Network**: Graceful degradation — show "Reconnecting..." banner
@@ -651,38 +687,40 @@ WhiteWins / BlackWins / Draw → Show GameStatus overlay with payout summary
 
 ### Design Polish Needed
 
-| Issue | Severity | Fix |
+| Issue | Severity | Status / Fix |
 |-------|----------|-----|
-| No `/play/[matchId]` page | **Critical** | Build immediately — this is the core product |
-| Mock data in lobby (`MOCK_MATCHES`) | **High** | Wire to SDK `getMatches()` or on-chain account fetch |
-| `useMagicBlock` returns mock tx sigs | **High** | Wire to real `submitMoveTx` from `lib/magicblock.ts` |
-| Hardcoded payout text in `GameStatus` | **Medium** | Read actual pot from on-chain match state |
-| No session key UI | **High** | Build `useSessionKey` hook + setup dialog |
+| `/play/[matchId]` page uses hardcoded mocks | **Critical** | Page EXISTS (362 lines, all 8 components composed). Wire clock, FEN, player addresses, tx status, and `client.makeMove` calls to real on-chain data (see mock table in Section 11.1). |
+| Mock data in lobby (`MOCK_MATCHES`) | **High** | Wire to SDK `getMatches()` or on-chain account fetch. `lobbyMatchesAtom` and `refreshLobbyAtom` are scaffolded, ready for SDK integration. |
+| `useMagicBlock` session management is placeholder | **High** | Move submission (`submitMoveTx`) is real (delegation check + ER routing). Session creation (`connect()`) uses `Date.now()` placeholder — replace with real `useSessionKey` hook + IndexedDB. |
+| No session key UI | **High** | Build `useSessionKey` hook + setup dialog. Underlying `setSessionKey` / `revokeSessionKey` instructions confirmed working on devnet. `lib/magicblock.ts` already has delegation check patterns. |
+| Clock not connected to on-chain time | **High** | Read `last_move_timestamp` + `move_timeout_duration` from chain. `ChessClock` component is built; just needs real time values instead of `useState(300_000)`. |
+| No mobile-responsive board sizing | **High** | `boardWidth={560}` is hardcoded. Replace with dynamic `useViewportSize` or container query. |
+| Hardcoded payout text in `GameStatus` | **Medium** | Read actual pot from on-chain match state. `GameStatus` component is built and integrated in the play page. |
 | No loading skeletons | **Medium** | Add skeleton components for board, move list, match cards |
 | No error boundaries per section | **Medium** | Wrap board, lobby, and clock in error boundaries |
-| No mobile-responsive board sizing | **High** | `boardWidth` should be dynamic based on viewport |
-| Clock not connected to on-chain time | **High** | Read `last_move_timestamp` + `move_timeout_duration` from chain |
-| Sound library exists but not wired | **Low** | Wire `lib/sounds.ts` to move/capture/check events |
+| Sound library partially wired | **Low** | `lib/sounds.ts` exists. Play page already calls `sounds.playMoveSound()` and `sounds.play("game_end")`. Wire remaining events (capture, check, clock warning). |
 | No PWA manifest/service worker | **Low** | Add for mobile installability |
 
 ### Recommended Build Order (Frontend)
 
 ```
-1. /play/[matchId] page — compose chess components into game view
-2. Wire useMagicBlock to real SDK (remove mocks)
-3. Wallet connect flow (Privy) in Hero → Arena → Match
-4. Session key setup UI + IndexedDB persistence
-5. Real-time board sync (fetch from ER + poll/subscribe)
+1. Wire /play/[matchId] to real SDK — page exists (362 lines, all 8 components composed).
+   Replace hardcoded mocks: clock times, tx status, player addresses, FEN, boardWidth.
+   Uncomment client.makeMove calls and connect to submitMoveTx from lib/magicblock.ts.
+2. Wallet connect flow (Privy) in Hero → Arena → Match
+3. Session key setup UI + IndexedDB persistence (useSessionKey hook)
+4. Real-time board sync (fetch from ER + poll/subscribe via useMatchEvents)
+5. Wire lobby to SDK (replace MOCK_MATCHES with on-chain fetch)
 6. Error handling + loading states + empty states
-7. Mobile responsiveness + touch optimization
-8. Sound effects + PWA
+7. Mobile responsiveness + touch optimization (dynamic boardWidth)
+8. Sound effects (wire remaining events) + PWA
 9. Spectator view (/play/[matchId]/spectate)
 10. Prediction market UI
 ```
 
 ### Verdict
 
-The frontend has excellent bones — landing page, arena, chess components, state management, and animations are all production-quality. The critical missing piece is the game view page (`/play/[matchId]`) that ties everything together. Once that page exists with real SDK integration (not mocks), the app becomes playable. The session key flow will give it the "gasless" MagicBlock advantage. Ship the game view first, polish second.
+The frontend has excellent bones — landing page, arena, all 8 chess components, state management (Jotai), animations (Framer Motion), and the game view page (`/play/[matchId]`, 362 lines) are all built. The critical path is now **integration, not construction**: wire the play page's hardcoded mocks to real on-chain data, connect the wallet flow, implement session keys for gasless moves, and sync board state with the ER. The delegation infrastructure in `lib/magicblock.ts` (delegation check + ER move submission) is already correct and ready to connect. The session key flow will give the "gasless" MagicBlock advantage. Wire the mocks first, ship playable chess second, polish third.
 
 ---
 
@@ -709,16 +747,3 @@ The frontend has excellent bones — landing page, arena, chess components, stat
 - [MagicBlock Documentation](https://docs.magicblock.gg)
 - [Delegation Program](https://explorer.solana.com/address/DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh)
 - [Ephemeral Rollup Endpoints](https://docs.magicblock.gg/endpoints)
-
----
-
-## 8. Next Steps
-
-1. **Initialize Next.js 15 project** in `frontend/` with Tailwind CSS 4, shadcn/ui, Jotai, react-chessboard
-2. **Build landing page first** — sets visual language for entire app. Hero with ambient chess board animation.
-3. **Implement Privy auth** + wallet connection flow
-4. **Build lobby** — match creation, join, live game list
-5. **Build game view** — board, clock, move list, game status overlay
-6. **Build spectator view** — read-only board + prediction pool
-7. **Integrate MagicBlock ER** — delegation, session keys, move submission
-8. **Polish** — sounds, animations, mobile responsiveness, PWA

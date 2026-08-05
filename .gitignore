@@ -10,6 +10,9 @@ dist/
 .anchor/
 agent-findings/
 
+# Planning documents (not ready for official docs)
+docs/planning/
+
 # Frontend generated content
 frontend/node_modules/
 frontend/.next/
@@ -27,3 +30,6 @@ magic-chess-program/target/
 # Claude Code local settings (user-specific permissions)
 .claude/settings.local.json
 skills-lock.json
+
+# Marketing campaign (X posts, drafts — public-build content)
+marketing/

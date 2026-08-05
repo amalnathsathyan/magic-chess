@@ -135,7 +135,7 @@ Session keys eliminate per-move wallet approvals. Instead of signing every trans
    └─ set_session_key(session_signer, expires_at)
    
 2. USE: Session key signs all moves on the ER
-   └─ No wallet popups, <50ms confirmations
+   └─ No wallet popups, \<50ms confirmations
    
 3. REVOKE: Session key revoked at match end or expiry
    └─ revoke_session_key()
