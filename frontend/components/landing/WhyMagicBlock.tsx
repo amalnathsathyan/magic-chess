@@ -23,7 +23,7 @@ export function WhyMagicBlock() {
     {
       icon: Shield,
       title: "Trustless & Verifiable",
-      description: "Complete trustless model vs standard platforms. Anyone can create, join, and bet with logic verified on-chain.",
+      description: "Complete trustless model vs standard platforms. Anyone can create, join, and predict with logic verified on-chain.",
     }
   ];
 

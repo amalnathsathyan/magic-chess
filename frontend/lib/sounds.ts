@@ -117,8 +117,7 @@ class SoundManager {
 
     audio.currentTime = 0;
     audio.play().catch(() => {
-      // Fallback to synthesis
-      this.playSynthesis(sound);
+      // Silently fail if audio file is missing or blocked by browser policy
     });
   }
 

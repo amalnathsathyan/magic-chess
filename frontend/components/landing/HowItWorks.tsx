@@ -18,9 +18,9 @@ const steps = [
   },
   {
     icon: Eye,
-    title: "Spectator Betting",
+    title: "Spectator Predictions",
     description:
-      "Prediction pools let spectators wager on ongoing games. Opt-in parimutuel betting, verified on-chain.",
+      "Prediction pools let spectators predict the outcome of ongoing games. Opt-in parimutuel predictions, verified on-chain.",
   },
   {
     icon: Trophy,

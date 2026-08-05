@@ -27,6 +27,7 @@ export interface CreateMatchData {
   rated: boolean;
   side: "white" | "black" | "random";
   ephemeralRollup: boolean;
+  enablePredictions: boolean;
 }
 
 const TIME_CONTROLS = [
@@ -45,6 +46,7 @@ export function CreateMatchForm({
   const [timeControl, setTimeControl] = useState(TIME_CONTROLS[1]);
   const [side, setSide] = useState<"white" | "black" | "random">("random");
   const [ephemeralRollup, setEphemeralRollup] = useState(true);
+  const [enablePredictions, setEnablePredictions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { authenticated } = usePrivy();
@@ -70,6 +72,7 @@ export function CreateMatchForm({
       rated: true,
       side,
       ephemeralRollup,
+      enablePredictions,
     };
 
     onSubmit?.(data);
@@ -229,6 +232,28 @@ export function CreateMatchForm({
                     className={cn(
                       "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
                       ephemeralRollup ? "translate-x-4" : "translate-x-1"
+                    )}
+                  />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border border-border bg-card/50 p-3">
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium">Prediction Market</span>
+                  <span className="text-xs text-muted-foreground">Allow spectators to predict winner</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEnablePredictions(!enablePredictions)}
+                  className={cn(
+                    "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary/20",
+                    enablePredictions ? "bg-primary" : "bg-muted"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                      enablePredictions ? "translate-x-4" : "translate-x-1"
                     )}
                   />
                 </button>

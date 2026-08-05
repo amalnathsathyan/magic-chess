@@ -25,6 +25,8 @@ import { toast } from "sonner";
 import { useChessClock } from "@/hooks/useChessClock";
 import { useAtomValue } from "jotai";
 import { shortAddressAtom } from "@/store/wallet";
+import { useMagicBlock } from "@/hooks/useMagicBlock";
+import { useWallets, usePrivy } from "@privy-io/react-auth";
 
 interface PlayPageProps {
   params: Promise<{ matchId: string }>;
@@ -112,8 +114,38 @@ export default function PlayPage({ params }: PlayPageProps) {
     }
   }, [resigned, clock]);
 
-  // Tx status (mock)
-  const [txStatus] = useState<"idle" | "submitting" | "confirming" | "success" | "error">("idle");
+  const { submitMove } = useMagicBlock();
+  const [txStatus, setTxStatus] = useState<"idle" | "submitting" | "confirming" | "success" | "error">("idle");
+  const [txSignature, setTxSignature] = useState<string | undefined>();
+  const { authenticated } = usePrivy();
+  const { wallets } = useWallets();
+  const wallet = wallets[0];
+
+  const handleJoinMatch = async () => {
+    if (!client || !match) return;
+    try {
+      setTxStatus("submitting");
+      setTxSignature(undefined);
+      const dummyPubkey = new PublicKey("11111111111111111111111111111111");
+      const playerTokenAccount = wallet?.address ? new PublicKey(wallet.address) : dummyPubkey;
+
+      const res = await client.joinMatch({
+        matchId,
+        betAmount: match.betAmount,
+        playerTokenAccount,
+      });
+      setTxSignature(res.signature);
+      setTxStatus("success");
+      toast.success("Joined match!");
+      setTimeout(() => setTxStatus("idle"), 5000);
+      refetch();
+    } catch (e) {
+      console.error(e);
+      setTxStatus("error");
+      toast.error("Failed to join match");
+      setTimeout(() => setTxStatus("idle"), 5000);
+    }
+  };
 
   const handlePieceDrop = useCallback(
     (sourceSquare: Square, targetSquare: Square): boolean => {
@@ -172,8 +204,24 @@ export default function PlayPage({ params }: PlayPageProps) {
           }
 
           // Trigger on-chain move here if client is available
-          if (client) {
-            // e.g. client.makeMove({ matchId, move: ... })
+          if (client && wallet && !matchId.startsWith("demo-")) {
+            setTxStatus("submitting");
+            setTxSignature(undefined);
+            submitMove(matchId, sourceSquare, targetSquare).then(sig => {
+              if (sig) {
+                setTxSignature(sig);
+                setTxStatus("success");
+                toast.success("Move submitted");
+                setTimeout(() => setTxStatus("idle"), 5000);
+              } else {
+                setTxStatus("error");
+              }
+            }).catch(e => {
+              console.error(e);
+              setTxStatus("error");
+              toast.error("Failed to submit move on-chain");
+              setTimeout(() => setTxStatus("idle"), 5000);
+            });
           }
 
           return true;
@@ -218,8 +266,24 @@ export default function PlayPage({ params }: PlayPageProps) {
           }
 
           // Trigger on-chain move here if client is available
-          if (client) {
-             // client.makeMove({ matchId, move: ... })
+          if (client && wallet && !matchId.startsWith("demo-")) {
+             setTxStatus("submitting");
+             setTxSignature(undefined);
+             submitMove(matchId, promoMove.from, promotionSquare, piece).then(sig => {
+               if (sig) {
+                 setTxSignature(sig);
+                 setTxStatus("success");
+                 toast.success("Move submitted");
+                 setTimeout(() => setTxStatus("idle"), 5000);
+               } else {
+                 setTxStatus("error");
+               }
+             }).catch(e => {
+               console.error(e);
+               setTxStatus("error");
+               toast.error("Failed to submit move on-chain");
+               setTimeout(() => setTxStatus("idle"), 5000);
+             });
           }
         }
       } catch {
@@ -359,6 +423,18 @@ export default function PlayPage({ params }: PlayPageProps) {
             <span className="hidden font-mono text-xs text-muted sm:inline">
               Match ID: {matchId}
             </span>
+            {match && (
+              <>
+                <span className="hidden text-sm text-muted sm:inline">|</span>
+                <span className="hidden font-mono text-xs text-muted sm:inline">
+                  Wager: {Number(match.betAmount) / 1e9} per player
+                </span>
+                <span className="hidden text-sm text-muted sm:inline">|</span>
+                <span className="hidden font-mono text-xs text-muted sm:inline">
+                  Mint: {match.bettingTokenMint?.toBase58() === "11111111111111111111111111111111" ? "Native SOL" : (match.bettingTokenMint?.toBase58().slice(0, 4) + "..." + match.bettingTokenMint?.toBase58().slice(-4))}
+                </span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <Link
@@ -368,13 +444,33 @@ export default function PlayPage({ params }: PlayPageProps) {
               <Eye className="h-3.5 w-3.5" />
               Spectate
             </Link>
-            <TransactionStatus status={txStatus} />
+            <div className="absolute top-16 right-4 z-50">
+               <TransactionStatus status={txStatus} signature={txSignature} onDismiss={() => setTxStatus("idle")} />
+            </div>
           </div>
         </div>
       </header>
 
       {/* Game layout */}
-      <div className="mx-auto max-w-6xl px-4 py-6">
+      <div className="mx-auto max-w-6xl px-4 py-6 relative">
+        {match?.state?.joinable && authenticated && wallet?.address !== match?.playerOne?.toBase58() && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/50 backdrop-blur-sm">
+            <div className="glass-card p-6 flex flex-col items-center gap-4 text-center">
+              <h2 className="font-heading text-xl font-bold">Match is Open</h2>
+              <p className="text-muted-foreground text-sm max-w-sm">
+                Wager: {Number(match.betAmount) / 1e9} SOL. Join to play as Black.
+              </p>
+              <button
+                onClick={handleJoinMatch}
+                disabled={txStatus === "submitting" || txStatus === "confirming"}
+                className="bg-primary text-primary-foreground px-6 py-2 rounded-lg font-semibold hover:bg-primary/90 disabled:opacity-50"
+              >
+                {txStatus === "submitting" || txStatus === "confirming" ? "Joining..." : "Join Match"}
+              </button>
+            </div>
+          </div>
+        )}
+
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -422,7 +518,7 @@ export default function PlayPage({ params }: PlayPageProps) {
             {renderPlayerHeader(orientation === "white" ? "white" : "black")}
           </div>
 
-          {/* Right column: move list */}
+          {/* Right column: move list & predictions */}
           <div className="flex flex-col gap-4">
             <MoveList
               moves={moves}
@@ -430,6 +526,29 @@ export default function PlayPage({ params }: PlayPageProps) {
               currentMoveIndex={currentMoveIndex}
               className="flex-1 min-h-[400px]"
             />
+
+            {/* Prediction Market Panel */}
+            {match && (
+              <div className="glass-card p-4 flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-heading text-sm font-bold text-primary">Prediction Market</h3>
+                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">Live</span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Predict the winner of this match. Parimutuel pool splits the total wagered amount among the winning predictors.
+                </div>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <button className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/50 p-2 hover:bg-card hover:border-primary/50 transition-colors">
+                    <span className="font-semibold text-sm">White</span>
+                    <span className="text-xs text-muted-foreground mt-1">Pool: 0 SOL</span>
+                  </button>
+                  <button className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/50 p-2 hover:bg-card hover:border-primary/50 transition-colors">
+                    <span className="font-semibold text-sm">Black</span>
+                    <span className="text-xs text-muted-foreground mt-1">Pool: 0 SOL</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </motion.div>
       </div>

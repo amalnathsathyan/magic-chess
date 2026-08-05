@@ -66,6 +66,8 @@ const MOCK_MATCHES: MatchCardData[] = [
   },
 ];
 
+import { useMatches } from "@magic-chess/sdk/react";
+
 export default function ArenaPage() {
   const [filter, setFilter] = useAtom(lobbyFilterAtom);
   const [wagerFilter, setWagerFilter] = useAtom(lobbyWagerFilterAtom);
@@ -75,12 +77,22 @@ export default function ArenaPage() {
   const [localMatches, setLocalMatches] = useState<MatchCardData[]>([]);
   const walletAddress = useAtomValue(walletAddressAtom);
 
-  // Set mock matches in atom on mount for scaffolding
-  useEffect(() => {
-    // Ideally this would be set by an SDK listener
-  }, []);
+  const { matches: liveMatches, loading } = useMatches();
 
-  const filteredMatches = MOCK_MATCHES.filter((m) => {
+  const sdkMatches: MatchCardData[] = (liveMatches || []).map((m: any) => ({
+    matchId: m.matchId,
+    whitePlayer: m.playerOne?.toBase58() || "Unknown",
+    blackPlayer: m.playerTwo?.toBase58(),
+    wagerAmount: m.betAmount ? Number(m.betAmount) / 1e9 : 0,
+    wagerToken: "SOL",
+    timeControl: m.moveTimeoutDuration ? `${m.moveTimeoutDuration / 60}+0` : "Unknown",
+    status: m.state?.joinable ? "open" : (m.state?.inProgress ? "in_progress" : "completed"),
+    createdAt: Date.now(), // Fallback if no creation time
+  }));
+
+  const allMatches = [...localMatches, ...sdkMatches];
+
+  const filteredMatches = allMatches.filter((m) => {
     if (filter === "open" && m.status !== "open") return false;
     if (filter === "live" && m.status !== "in_progress") return false;
 
@@ -246,7 +258,9 @@ export default function ArenaPage() {
 
       {/* Match list */}
       <div className="grid gap-4">
-        {filteredMatches.length === 0 && localMatches.length === 0 ? (
+        {loading ? (
+          <div className="flex justify-center py-8 text-muted-foreground">Loading matches...</div>
+        ) : filteredMatches.length === 0 ? (
           <div className="glass-card flex flex-col items-center justify-center py-16">
             <Filter className="mb-3 h-10 w-10 text-muted" />
             <p className="text-muted-foreground">No matches found</p>
@@ -255,7 +269,7 @@ export default function ArenaPage() {
             </p>
           </div>
         ) : (
-          [...localMatches, ...filteredMatches].map((match) => (
+          filteredMatches.map((match) => (
             <MatchCard key={match.matchId} match={match} />
           ))
         )}
