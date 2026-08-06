@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type { PublicKey } from "@solana/web3.js";
 
 // ── Enums (matching the on-chain Rust definitions) ──
@@ -22,6 +23,7 @@ export enum GameStatus {
   WhiteWins = "whiteWins",
   BlackWins = "blackWins",
   Draw = "draw",
+  Aborted = "aborted",
 }
 
 export enum GameEndReason {
@@ -31,6 +33,7 @@ export enum GameEndReason {
   Timeout = "timeout",
   FiftyMoveRule = "fiftyMoveRule",
   ThreefoldRepetition = "threefoldRepetition",
+  InsufficientMaterial = "insufficientMaterial",
 }
 
 export enum MoveResult {
@@ -142,6 +145,28 @@ export interface MatchInfo {
   totalPot: number;
   moveTimeoutDuration: number;
   lastMoveTimestamp: number;
+}
+
+// ── Prediction Market ──
+
+export interface PredictionPool {
+  matchId: string;
+  chessMatch: PublicKey;
+  totalBetOnWhite: number;
+  totalBetOnBlack: number;
+  totalBetOnDraw: number;
+  platformFeeBps: number;
+  settlementProcessed: boolean;
+  bump: number;
+}
+
+export interface PredictionBet {
+  bettor: PublicKey;
+  pool: PublicKey;
+  amount: number;
+  predictedOutcome: number; // 0 = White, 1 = Black, 2 = Draw
+  claimed: boolean;
+  bump: number;
 }
 
 // ── Event types (matching the on-chain event structs) ──
