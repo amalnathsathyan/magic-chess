@@ -8,14 +8,10 @@ use crate::state::{ChessMatch, GameStatus, PredictionBet, PredictionPool};
 
 #[derive(Accounts)]
 pub struct CancelPredictionBet<'info> {
-    /// The ChessMatch — must be WaitingForOpponent or Aborted.
+    /// The ChessMatch — must be WaitingForOpponent or Aborted, or be settled with no winners.
     #[account(
         seeds = [CHESS_MATCH_SEED, chess_match.match_id.as_bytes()],
         bump = chess_match.bump,
-        constraint = (
-            chess_match.game_status == GameStatus::WaitingForOpponent ||
-            chess_match.game_status == GameStatus::Aborted
-        ) @ ChessError::CannotCancelActiveMatch,
     )]
     pub chess_match: Account<'info, ChessMatch>,
 
@@ -68,6 +64,14 @@ pub fn handle_cancel_prediction_bet(ctx: Context<CancelPredictionBet>) -> Result
     let prediction_pool = &mut ctx.accounts.prediction_pool;
     let prediction_bet = &ctx.accounts.prediction_bet;
     let chess_match = &ctx.accounts.chess_match;
+
+    let can_cancel = chess_match.game_status == GameStatus::WaitingForOpponent
+        || chess_match.game_status == GameStatus::Aborted
+        || (chess_match.game_status == GameStatus::WhiteWins && prediction_pool.total_bet_on_white == 0)
+        || (chess_match.game_status == GameStatus::BlackWins && prediction_pool.total_bet_on_black == 0)
+        || (chess_match.game_status == GameStatus::Draw && prediction_pool.total_bet_on_draw == 0);
+
+    require!(can_cancel, ChessError::CannotCancelActiveMatch);
 
     let refund_amount = prediction_bet.amount;
 

@@ -18,7 +18,7 @@ import type {
   Move,
   MoveResult,
 } from "./types";
-import { findChessMatchPda, findMatchEscrowPda } from "./pda";
+import { findChessMatchPda, findMatchEscrowPda, findPredictionPoolPda } from "./pda";
 import { MAGIC_PROGRAM_ID, MAGIC_CONTEXT_ID } from "./magicblock";
 
 const TOKEN_PROGRAM = TOKEN_PROGRAM_ID;
@@ -390,6 +390,149 @@ export class MagicChessClient {
         );
       })
       .map((a: any) => toMatchInfo(a.account));
+  }
+  // ── Prediction Market ────────────────────────────────────────
+
+  async initializePredictionPool(
+    matchId: string
+  ): Promise<{ signature: TransactionSignature }> {
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+    const [predictionPoolPda] = findPredictionPoolPda(matchId, this.programId);
+    const [predictionPoolVaultPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("prediction_pool_vault"), predictionPoolPda.toBuffer()],
+      this.programId
+    );
+    const match = await this.getMatch(matchId);
+    if (!match) throw new Error("Match not found");
+
+    const sig = await this.program.methods
+      .initializePredictionPool()
+      .accounts({
+        payer: this.wallet?.publicKey,
+        chessMatch: chessMatchPda,
+        predictionPool: predictionPoolPda,
+        predictionPoolVault: predictionPoolVaultPda,
+        bettingTokenMintAccount: match.bettingTokenMint,
+        systemProgram: SYSTEM_PROGRAM,
+        tokenProgram: TOKEN_PROGRAM,
+      })
+      .rpc();
+
+    return { signature: sig };
+  }
+
+  async placePredictionBet(
+    matchId: string,
+    predictedOutcome: number, // 0 = White, 1 = Black, 2 = Draw
+    betAmount: number,
+    bettorTokenAccount: PublicKey
+  ): Promise<{ signature: TransactionSignature }> {
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+    const [predictionPoolPda] = findPredictionPoolPda(matchId, this.programId);
+    const [predictionPoolVaultPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("prediction_pool_vault"), predictionPoolPda.toBuffer()],
+      this.programId
+    );
+    const [predictionBetPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("prediction_bet"), predictionPoolPda.toBuffer(), this.wallet!.publicKey.toBuffer()],
+      this.programId
+    );
+
+    const sig = await this.program.methods
+      .placePredictionBet(new (require('bn.js'))(betAmount), predictedOutcome)
+      .accounts({
+        chessMatch: chessMatchPda,
+        predictionPool: predictionPoolPda,
+        predictionBet: predictionBetPda,
+        predictionPoolVault: predictionPoolVaultPda,
+        bettorTokenAccount: bettorTokenAccount,
+        bettor: this.wallet?.publicKey,
+        tokenProgram: TOKEN_PROGRAM,
+        systemProgram: SYSTEM_PROGRAM,
+      })
+      .rpc();
+
+    return { signature: sig };
+  }
+
+  async cancelPredictionBet(
+    matchId: string,
+    bettorTokenAccount: PublicKey
+  ): Promise<{ signature: TransactionSignature }> {
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+    const [predictionPoolPda] = findPredictionPoolPda(matchId, this.programId);
+    const [predictionPoolVaultPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("prediction_pool_vault"), predictionPoolPda.toBuffer()],
+      this.programId
+    );
+    const [predictionBetPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("prediction_bet"), predictionPoolPda.toBuffer(), this.wallet!.publicKey.toBuffer()],
+      this.programId
+    );
+
+    const sig = await this.program.methods
+      .cancelPredictionBet()
+      .accounts({
+        chessMatch: chessMatchPda,
+        predictionPool: predictionPoolPda,
+        predictionBet: predictionBetPda,
+        predictionPoolVault: predictionPoolVaultPda,
+        bettorTokenAccount: bettorTokenAccount,
+        bettor: this.wallet?.publicKey,
+        tokenProgram: TOKEN_PROGRAM,
+      })
+      .rpc();
+
+    return { signature: sig };
+  }
+
+  async settlePredictionPool(
+    matchId: string
+  ): Promise<{ signature: TransactionSignature }> {
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+    const [predictionPoolPda] = findPredictionPoolPda(matchId, this.programId);
+
+    const sig = await this.program.methods
+      .settlePredictionPool()
+      .accounts({
+        chessMatch: chessMatchPda,
+        predictionPool: predictionPoolPda,
+        payer: this.wallet?.publicKey,
+      })
+      .rpc();
+
+    return { signature: sig };
+  }
+
+  async claimPredictionWinnings(
+    matchId: string,
+    bettorTokenAccount: PublicKey
+  ): Promise<{ signature: TransactionSignature }> {
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+    const [predictionPoolPda] = findPredictionPoolPda(matchId, this.programId);
+    const [predictionPoolVaultPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("prediction_pool_vault"), predictionPoolPda.toBuffer()],
+      this.programId
+    );
+    const [predictionBetPda] = PublicKey.findProgramAddressSync(
+      [Buffer.from("prediction_bet"), predictionPoolPda.toBuffer(), this.wallet!.publicKey.toBuffer()],
+      this.programId
+    );
+
+    const sig = await this.program.methods
+      .claimPredictionWinnings()
+      .accounts({
+        chessMatch: chessMatchPda,
+        predictionPool: predictionPoolPda,
+        predictionBet: predictionBetPda,
+        predictionPoolVault: predictionPoolVaultPda,
+        bettorTokenAccount: bettorTokenAccount,
+        bettor: this.wallet?.publicKey,
+        tokenProgram: TOKEN_PROGRAM,
+      })
+      .rpc();
+
+    return { signature: sig };
   }
 }
 

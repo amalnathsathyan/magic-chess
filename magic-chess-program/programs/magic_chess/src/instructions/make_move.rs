@@ -146,6 +146,18 @@ pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()
                 reason: chess_match.game_end_reason.unwrap(), // We just set it
             });
         }
+        MoveResult::InsufficientMaterial => {
+            chess_match.game_status = GameStatus::Draw;
+            chess_match.game_end_reason = Some(GameEndReason::InsufficientMaterial);
+            chess_match.last_move_timestamp = now;
+
+            emit!(GameEndedEvent {
+                match_id: chess_match.match_id.clone(),
+                status: chess_match.game_status,
+                winner: None,
+                reason: GameEndReason::InsufficientMaterial,
+            });
+        }
         MoveResult::ThreefoldRepetition => {
             chess_match.game_status = GameStatus::Draw;
             chess_match.game_end_reason = Some(GameEndReason::ThreefoldRepetition);
@@ -186,7 +198,7 @@ pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()
             chess_logic::is_king_in_check(&chess_match.board, chess_match.current_turn)
         } else { false },
         is_checkmate: move_result == MoveResult::Checkmate,
-        is_stalemate: move_result == MoveResult::Stalemate,
+        is_stalemate: move_result == MoveResult::Stalemate || move_result == MoveResult::ThreefoldRepetition || move_result == MoveResult::InsufficientMaterial,
     });
 
     // 7. Schedule timeout crank task for opponent if game is still active.

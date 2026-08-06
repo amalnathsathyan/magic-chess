@@ -196,7 +196,7 @@ pub fn validate_and_apply_move(
     }
 
     if is_insufficient_material(&game_state.board) {
-        return Ok(MoveResult::Stalemate);
+        return Ok(MoveResult::InsufficientMaterial);
     }
 
     if game_state.halfmove_clock >= 100 {

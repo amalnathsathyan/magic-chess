@@ -45,7 +45,7 @@ pub enum GameEndReason {
     FiftyMoveRule,
     ThreefoldRepetition,
     Aborted,
-    // InsufficientMaterial, // Potentially later
+    InsufficientMaterial,
 }
 
 // Result of a single move, used internally by chess_logic
@@ -55,5 +55,6 @@ pub enum MoveResult {
     Checkmate,          // Opponent is checkmated by this move
     Stalemate,          // Game is a stalemate after this move
     ThreefoldRepetition, // Threefold repetition draw claimed by this move
+    InsufficientMaterial, // Insufficient material draw
     // Check,           // If you want to explicitly signal a check without ending the game
 }

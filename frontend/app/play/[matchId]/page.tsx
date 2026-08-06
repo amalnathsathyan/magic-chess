@@ -27,7 +27,8 @@ import { useAtomValue } from "jotai";
 import { shortAddressAtom } from "@/store/wallet";
 import { useMagicBlock } from "@/hooks/useMagicBlock";
 import { useWallets, usePrivy } from "@privy-io/react-auth";
-
+import { PredictionBars } from "@/components/chess/PredictionBars";
+import { usePredictionPool } from "@/hooks/usePredictionPool";
 interface PlayPageProps {
   params: Promise<{ matchId: string }>;
 }
@@ -49,6 +50,7 @@ export default function PlayPage({ params }: PlayPageProps) {
   }
 
   const { match, loading, refetch } = matchContext;
+  const { pool, loading: poolLoading } = usePredictionPool(matchId);
 
   const [fen, setFen] = useState("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
   const [moves, setMoves] = useState<string[]>([]);
@@ -537,15 +539,33 @@ export default function PlayPage({ params }: PlayPageProps) {
                 <div className="text-xs text-muted-foreground">
                   Predict the winner of this match. Parimutuel pool splits the total wagered amount among the winning predictors.
                 </div>
-                <div className="grid grid-cols-2 gap-2 mt-2">
+                <div className="grid grid-cols-3 gap-2 mt-2">
                   <button className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/50 p-2 hover:bg-card hover:border-primary/50 transition-colors">
                     <span className="font-semibold text-sm">White</span>
-                    <span className="text-xs text-muted-foreground mt-1">Pool: 0 SOL</span>
+                    <span className="text-xs text-muted-foreground mt-1">
+                      Pool: {pool ? (pool.totalBetOnWhite / 1e9).toFixed(2) : 0} SOL
+                    </span>
+                  </button>
+                  <button className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/50 p-2 hover:bg-card hover:border-accent/50 transition-colors">
+                    <span className="font-semibold text-sm">Draw</span>
+                    <span className="text-xs text-muted-foreground mt-1">
+                      Pool: {pool ? (pool.totalBetOnDraw / 1e9).toFixed(2) : 0} SOL
+                    </span>
                   </button>
                   <button className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/50 p-2 hover:bg-card hover:border-primary/50 transition-colors">
                     <span className="font-semibold text-sm">Black</span>
-                    <span className="text-xs text-muted-foreground mt-1">Pool: 0 SOL</span>
+                    <span className="text-xs text-muted-foreground mt-1">
+                      Pool: {pool ? (pool.totalBetOnBlack / 1e9).toFixed(2) : 0} SOL
+                    </span>
                   </button>
+                </div>
+                
+                <div className="mt-4">
+                  <PredictionBars 
+                    poolWhite={pool?.totalBetOnWhite || 0}
+                    poolBlack={pool?.totalBetOnBlack || 0}
+                    poolDraw={pool?.totalBetOnDraw || 0}
+                  />
                 </div>
               </div>
             )}
