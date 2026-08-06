@@ -19,14 +19,14 @@ const nextConfig: NextConfig = {
 
   // Webpack config for local SDK symlink resolution
   webpack: (config) => {
-    // Resolve symlinks so local `file:` linked packages work
-    config.resolve.symlinks = true;
-    // SDK lives outside frontend/ — webpack walks up from real path
-    // and misses frontend/node_modules. Add it explicitly.
-    config.resolve.modules = [
-      ...(config.resolve.modules || []),
-      path.resolve(__dirname, "node_modules"),
-    ];
+    // SDK files live outside frontend/. Webpack resolves from real path
+    // (../sdk/) and misses frontend/node_modules. Alias explicitly.
+    const frontendNodeModules = path.resolve(__dirname, "node_modules");
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@solana/web3.js": path.resolve(frontendNodeModules, "@solana/web3.js"),
+      "@solana/spl-token": path.resolve(frontendNodeModules, "@solana/spl-token"),
+    };
     return config;
   },
 };
