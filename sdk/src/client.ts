@@ -105,15 +105,30 @@ export class MagicChessClient {
   /**
    * Abort a match while it is still in WaitingForOpponent status.
    *
-   * NOTE: This instruction does NOT yet exist in the on-chain program.
-   * When implemented, it should refund Player 1's bet minus any platform fee.
-   * Until then, this method throws.
+   * Refunds Player 1's bet from escrow and closes the escrow token account.
+   *
+   * @param matchId - The match to abort
+   * @param playerTokenAccount - Player 1's token account (ATA) for receiving refund
    */
-  async abortMatch(matchId: string): Promise<{ signature: TransactionSignature }> {
-    throw new Error(
-      "abortMatch: instruction not yet implemented in the on-chain program. " +
-        "See agent-findings/04-ts-sdk-design.md for details."
-    );
+  async abortMatch(
+    matchId: string,
+    playerTokenAccount: PublicKey
+  ): Promise<{ signature: TransactionSignature }> {
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+    const [matchEscrowPda] = findMatchEscrowPda(matchId, this.programId);
+
+    const sig = await this.program.methods
+      .abortMatch()
+      .accounts({
+        chessMatch: chessMatchPda,
+        matchEscrowTokenAccount: matchEscrowPda,
+        playerTokenAccount,
+        playerSigner: this.wallet?.publicKey,
+        tokenProgram: TOKEN_PROGRAM,
+      })
+      .rpc();
+
+    return { signature: sig };
   }
 
   // ── Gameplay ─────────────────────────────────────────────────
