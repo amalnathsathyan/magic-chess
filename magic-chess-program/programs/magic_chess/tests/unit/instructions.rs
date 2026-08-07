@@ -54,8 +54,10 @@ fn make_match(board: [[Option<Piece>; 8]; 8], current_turn: PlayerColor) -> Ches
         prediction_enabled: false,
         delegation_uid: String::new(),
         is_delegated: false,
-        session_signer: Pubkey::default(),
-        session_expires_at: 0,
+        white_session_signer: Pubkey::default(),
+        white_session_expires_at: 0,
+        black_session_signer: Pubkey::default(),
+        black_session_expires_at: 0,
         active_task_id: -1,
         bump: 0,
         match_escrow_bump: 0,
@@ -70,9 +72,9 @@ fn standard_match(current_turn: PlayerColor) -> ChessMatch {
 /// Simulate the session key validation check used in set_session_key.rs.
 /// Session is valid if: session_signer != default() AND signer == session_signer AND now < expires_at.
 fn is_session_valid(chess_match: &ChessMatch, signer: Pubkey, now: i64) -> bool {
-    chess_match.session_signer != Pubkey::default()
-        && signer == chess_match.session_signer
-        && now < chess_match.session_expires_at
+    chess_match.white_session_signer != Pubkey::default()
+        && signer == chess_match.white_session_signer
+        && now < chess_match.white_session_expires_at
 }
 
 /// Derive the match escrow PDA for a given match_id and program_id.
@@ -158,8 +160,10 @@ fn match_initialized_correctly() {
         prediction_enabled: false,
         delegation_uid: String::new(),
         is_delegated: false,
-        session_signer: Pubkey::default(),
-        session_expires_at: 0,
+        white_session_signer: Pubkey::default(),
+        white_session_expires_at: 0,
+        black_session_signer: Pubkey::default(),
+        black_session_expires_at: 0,
         active_task_id: -1,
         bump: 0,
         match_escrow_bump: 0,
@@ -181,8 +185,8 @@ fn match_initialized_correctly() {
     assert_eq!(game.move_timeout_duration, timeout_duration);
     assert!(!game.payout_processed);
     assert!(!game.prediction_enabled);
-    assert_eq!(game.session_signer, Pubkey::default());
-    assert_eq!(game.session_expires_at, 0);
+    assert_eq!(game.white_session_signer, Pubkey::default());
+    assert_eq!(game.white_session_expires_at, 0);
     assert_eq!(game.active_task_id, -1);
     assert!(!game.is_delegated);
     assert_eq!(game.delegation_uid, "");
@@ -814,16 +818,16 @@ fn revoke_clears_session() {
     let future = 2_000_000i64;
 
     // First set a session.
-    game.session_signer = session_key;
-    game.session_expires_at = future;
+    game.white_session_signer = session_key;
+    game.white_session_expires_at = future;
     assert!(is_session_valid(&game, session_key, future - 1));
 
     // Simulate revoke.
-    game.session_signer = Pubkey::default();
-    game.session_expires_at = 0;
+    game.white_session_signer = Pubkey::default();
+    game.white_session_expires_at = 0;
 
-    assert_eq!(game.session_signer, Pubkey::default());
-    assert_eq!(game.session_expires_at, 0);
+    assert_eq!(game.white_session_signer, Pubkey::default());
+    assert_eq!(game.white_session_expires_at, 0);
     assert!(!is_session_valid(&game, session_key, 1_000_000));
 }
 

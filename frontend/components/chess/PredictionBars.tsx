@@ -47,6 +47,11 @@ export function PredictionBars({ poolWhite, poolBlack, poolDraw, className = "" 
       <div className="text-[10px] text-zinc-500 text-center mt-1">
         Total Pool: {(total / 1e9).toFixed(2)} SOL
       </div>
+      {total > 0 && (
+        <div className="text-[9px] text-zinc-600 text-center leading-tight">
+          Fee split: 75% winners · 10% match winner · 5% match loser · 10% platform
+        </div>
+      )}
     </div>
   );
 }

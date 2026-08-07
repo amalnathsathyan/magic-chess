@@ -127,8 +127,10 @@ pub fn handle_initialize_match(
     chess_match_account.payout_processed = false;
     chess_match_account.prediction_enabled = prediction_enabled_arg;
 
-    chess_match_account.session_signer = Pubkey::default();
-    chess_match_account.session_expires_at = 0;
+    chess_match_account.white_session_signer = Pubkey::default();
+    chess_match_account.white_session_expires_at = 0;
+    chess_match_account.black_session_signer = Pubkey::default();
+    chess_match_account.black_session_expires_at = 0;
     chess_match_account.active_task_id = -1;
 
     chess_match_account.bump = ctx.bumps.chess_match;
