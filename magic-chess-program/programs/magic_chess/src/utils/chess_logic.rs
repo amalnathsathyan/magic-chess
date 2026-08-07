@@ -210,12 +210,12 @@ pub fn validate_and_apply_move(
         }
     }
 
-    if is_insufficient_material(&game_state.board) {
-        return Ok(MoveResult::InsufficientMaterial);
+    if game_state.halfmove_clock >= 100 {
+        return Ok(MoveResult::FiftyMoveRule);
     }
 
-    if game_state.halfmove_clock >= 100 {
-        return Ok(MoveResult::Stalemate);
+    if is_insufficient_material(&game_state.board) {
+        return Ok(MoveResult::InsufficientMaterial);
     }
 
     if is_threefold_repetition(&game_state.position_history, current_hash) {
@@ -285,8 +285,10 @@ pub fn is_insufficient_material(board: &[[Option<Piece>; 8]; 8]) -> bool {
     let mut black_knights = 0u8;
     let mut white_other = 0u8;
     let mut black_other = 0u8;
-    let mut white_bishop_square_color: Option<bool> = None;
-    let mut black_bishop_square_color: Option<bool> = None;
+    // Count bishops on light-colored squares of the chessboard (NOT player White).
+    // A bishop never changes square color; two same-colored bishops cannot force checkmate.
+    let mut white_bishops_on_light: u8 = 0;
+    let mut black_bishops_on_light: u8 = 0;
 
     for row in 0..8 {
         for col in 0..8 {
@@ -296,10 +298,10 @@ pub fn is_insufficient_material(board: &[[Option<Piece>; 8]; 8]) -> bool {
                         let square_is_light = (row + col) % 2 == 0;
                         if piece.color == PlayerColor::White {
                             white_bishops += 1;
-                            white_bishop_square_color = Some(square_is_light);
+                            if square_is_light { white_bishops_on_light += 1; }
                         } else {
                             black_bishops += 1;
-                            black_bishop_square_color = Some(square_is_light);
+                            if square_is_light { black_bishops_on_light += 1; }
                         }
                     }
                     PieceType::Knight => {
@@ -352,10 +354,23 @@ pub fn is_insufficient_material(board: &[[Option<Piece>; 8]; 8]) -> bool {
 
     // K+B vs K+B where bishops are on same color squares
     if white_bishops == 1 && white_knights == 0 && black_bishops == 1 && black_knights == 0 {
-        if let (Some(w_color), Some(b_color)) = (white_bishop_square_color, black_bishop_square_color) {
-            if w_color == b_color {
-                return true;
-            }
+        let w_on_light = white_bishops_on_light == 1;
+        let b_on_light = black_bishops_on_light == 1;
+        if w_on_light == b_on_light {
+            return true;
+        }
+    }
+
+    // K+B+B vs K: both bishops on same square color → cannot force checkmate.
+    // 2 bishops same color means both on light (on_light==2) or both on dark (on_light==0).
+    if white_bishops == 2 && white_knights == 0 && black_pieces == 0 {
+        if white_bishops_on_light == 0 || white_bishops_on_light == 2 {
+            return true;
+        }
+    }
+    if black_bishops == 2 && black_knights == 0 && white_pieces == 0 {
+        if black_bishops_on_light == 0 || black_bishops_on_light == 2 {
+            return true;
         }
     }
 
@@ -637,7 +652,7 @@ pub fn is_king_in_check(board: &[[Option<Piece>; 8]; 8], king_color: PlayerColor
 const POSITION_HISTORY_CAP: usize = 200;
 
 /// Push a position hash into the history, evicting the oldest entry if at capacity.
-fn push_position_hash(history: &mut Vec<u64>, hash: u64) {
+pub fn push_position_hash(history: &mut Vec<u64>, hash: u64) {
     if history.len() >= POSITION_HISTORY_CAP {
         history.remove(0);
     }
