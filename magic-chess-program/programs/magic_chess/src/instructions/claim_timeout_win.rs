@@ -116,23 +116,32 @@ pub fn handle_claim_timeout_win(ctx: Context<ClaimTimeoutWin>) -> Result<()> {
         &ctx.accounts.claimer_signer.to_account_info(),
     )?;
 
-    // 9. Schedule undelegation task to fire after settlement completes.
-    // Settlement fires in 5s; undelegation fires in 10s to ensure it runs after.
-    let undelegation_task_id = base_id.wrapping_add(20_000); // Offset for undelegation tasks
+    // 9. Schedule undelegation task only if match was delegated to ER.
+    // Undelegation fires after settlement completes so the account returns
+    // to base-layer ownership.
+    if chess_match.is_delegated {
+        let undelegation_task_id = base_id.wrapping_add(20_000); // Offset for undelegation tasks
 
-    schedule_timeout::invoke_schedule_task(
-        undelegation_task_id,
-        10_000, // 10-second delay (settlement fires at 5s, this fires 5s later)
-        1,      // Fire once
-        &ctx.accounts.claimer_signer.to_account_info(),
-    )?;
+        schedule_timeout::invoke_schedule_task(
+            undelegation_task_id,
+            10_000, // 10-second delay (settlement fires at 5s, this fires 5s later)
+            1,      // Fire once
+            &ctx.accounts.claimer_signer.to_account_info(),
+        )?;
 
-    msg!(
-        "Settlement task {} and undelegation task {} scheduled for match {}",
-        settlement_task_id,
-        undelegation_task_id,
-        chess_match.match_id
-    );
+        msg!(
+            "Settlement task {} and undelegation task {} scheduled for match {}",
+            settlement_task_id,
+            undelegation_task_id,
+            chess_match.match_id
+        );
+    } else {
+        msg!(
+            "Settlement task {} scheduled for match {} (not delegated, skipping undelegation)",
+            settlement_task_id,
+            chess_match.match_id
+        );
+    }
 
     Ok(())
 }

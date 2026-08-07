@@ -34,6 +34,13 @@ pub fn handle_delegate_match(ctx: Context<DelegateMatch>) -> Result<()> {
 
         let match_id = chess_match.match_id.clone();
 
+        // Authorization: only match players can delegate
+        let payer = ctx.accounts.payer.key();
+        require!(
+            payer == chess_match.players[0] || payer == chess_match.players[1],
+            crate::errors::ChessError::UnauthorizedSigner
+        );
+
         // Mark the account as delegated before the CPI transfers ownership.
         // delegation_uid uses a deterministic prefix so it can be looked up.
         chess_match.is_delegated = true;

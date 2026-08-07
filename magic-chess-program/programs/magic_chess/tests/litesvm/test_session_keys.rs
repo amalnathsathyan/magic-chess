@@ -52,7 +52,7 @@ fn test_set_session_key() {
 
     let session_keypair = Keypair::new();
     let session_pk = session_keypair.pubkey();
-    let expires_at: i64 = 2_000_000_000;
+    let expires_at: i64 = 604_800; // 7 days (MAX_SESSION_KEY_TTL)
 
     let set_ix = set_session_key_ix(&match_pda, &p1_pk, &session_pk, expires_at);
     svm.send_ix(set_ix, &[]);
@@ -74,7 +74,7 @@ fn test_valid_session_move() {
         setup_active_match_no_timeout(&mut svm, &p1_pk, "test-session-002");
 
     let session = svm.create_funded_account(1_000_000_000);
-    let expires_at: i64 = 2_000_000_000;
+    let expires_at: i64 = 604_800; // 7 days (MAX_SESSION_KEY_TTL)
     let set_ix = set_session_key_ix(
         &match_pda, &p1_pk, &session.pubkey(), expires_at,
     );
@@ -130,7 +130,7 @@ fn test_revoke_session() {
         setup_active_match_no_timeout(&mut svm, &p1_pk, "test-session-004");
 
     let session = svm.create_funded_account(1_000_000_000);
-    let expires_at: i64 = 2_000_000_000;
+    let expires_at: i64 = 604_800; // 7 days (MAX_SESSION_KEY_TTL)
     let set_ix = set_session_key_ix(
         &match_pda, &p1_pk, &session.pubkey(), expires_at,
     );

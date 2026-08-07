@@ -413,6 +413,7 @@ pub fn process_settlement_ix(
     player_one_ata: &Pubkey,
     player_two_ata: &Pubkey,
     platform_fee_ata: &Pubkey,
+    payer: &Pubkey,
 ) -> Instruction {
     Instruction {
         program_id: program_id(),
@@ -422,6 +423,7 @@ pub fn process_settlement_ix(
             AccountMeta::new(*player_one_ata, false),
             AccountMeta::new(*player_two_ata, false),
             AccountMeta::new(*platform_fee_ata, false),
+            AccountMeta::new(*payer, false),
             AccountMeta::new_readonly(token_program_id(), false),
         ],
         data: discriminator("process_match_settlement").to_vec(),

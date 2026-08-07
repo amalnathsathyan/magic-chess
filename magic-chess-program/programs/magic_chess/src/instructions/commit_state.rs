@@ -13,6 +13,14 @@ pub struct CommitState<'info> {
 }
 
 pub fn handle_commit_state(ctx: Context<CommitState>) -> Result<()> {
+    // Authorization: only match players can commit state
+    let payer = ctx.accounts.payer.key();
+    let players = ctx.accounts.chess_match.players;
+    require!(
+        payer == players[0] || payer == players[1],
+        crate::errors::ChessError::UnauthorizedSigner
+    );
+
     MagicIntentBundleBuilder::new(
         ctx.accounts.payer.to_account_info(),
         ctx.accounts.magic_context.to_account_info(),

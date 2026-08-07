@@ -269,11 +269,12 @@ fn ix_resign(p: &Pubkey, cm: &Pubkey) -> Instruction {
     ], data: ix_disc("resign_game").to_vec() }
 }
 
-fn ix_settle(cm: &Pubkey, epda: &Pubkey, p1: &Pubkey, p2: &Pubkey, plat: &Pubkey) -> Instruction {
+fn ix_settle(cm: &Pubkey, epda: &Pubkey, p1: &Pubkey, p2: &Pubkey, plat: &Pubkey, payer: &Pubkey) -> Instruction {
     Instruction { program_id: program_id(), accounts: vec![
         AccountMeta::new(*cm, false), AccountMeta::new(*epda, false),
         AccountMeta::new(*p1, false), AccountMeta::new(*p2, false),
-        AccountMeta::new(*plat, false), AccountMeta::new_readonly(token_program_id(), false),
+        AccountMeta::new(*plat, false), AccountMeta::new(*payer, false),
+        AccountMeta::new_readonly(token_program_id(), false),
     ], data: ix_disc("process_match_settlement").to_vec() }
 }
 
@@ -361,7 +362,7 @@ fn test_full_game_white_wins_checkmate() {
 
     // Settle
     svm.send_ix(
-        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata),
+        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata, &ms.p1_kp.pubkey()),
         &[],
     );
 
@@ -396,7 +397,7 @@ fn test_full_game_black_wins_by_resign() {
     assert_eq!(cm.game_status.clone() as u8, 3); // BlackWins
 
     svm.send_ix(
-        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata),
+        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata, &ms.p1_kp.pubkey()),
         &[],
     );
 
@@ -499,7 +500,7 @@ fn test_platform_fee_at_max_allowed() {
     svm.send_ix(ix_resign(&ms.p1_kp.pubkey(), &ms.cm_pda), &[&ms.p1_kp]);
 
     svm.send_ix(
-        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata),
+        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata, &ms.p1_kp.pubkey()),
         &[],
     );
 
@@ -561,7 +562,7 @@ fn test_fee_rounds_down_to_zero() {
     svm.send_ix(ix_resign(&ms.p2_kp.pubkey(), &ms.cm_pda), &[&ms.p2_kp]);
 
     svm.send_ix(
-        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata),
+        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata, &ms.p1_kp.pubkey()),
         &[],
     );
 
@@ -597,7 +598,7 @@ fn test_very_high_fee() {
     svm.send_ix(ix_resign(&ms.p1_kp.pubkey(), &ms.cm_pda), &[&ms.p1_kp]);
 
     svm.send_ix(
-        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata),
+        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata, &ms.p1_kp.pubkey()),
         &[],
     );
 
@@ -686,7 +687,7 @@ fn test_timeout_after_deadline_via_make_move() {
     svm.send_ix(ix_resign(&ms.p2_kp.pubkey(), &ms.cm_pda), &[&ms.p2_kp]);
 
     svm.send_ix(
-        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata),
+        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata, &ms.p1_kp.pubkey()),
         &[],
     );
 
@@ -707,7 +708,7 @@ fn test_timeout_not_yet_exceeded() {
 
     // Match is Active. Try to settle — should fail because game hasn't ended.
     svm.send_ix_expect_err(
-        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata),
+        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata, &ms.p1_kp.pubkey()),
         &[],
     );
     println!("Test 15 PASSED: timeout_not_yet_exceeded (settlement rejected while Active)");
