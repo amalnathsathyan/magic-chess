@@ -39,8 +39,10 @@ fn make_match(board: [[Option<Piece>; 8]; 8], current_turn: PlayerColor) -> Ches
         prediction_enabled: false,
         delegation_uid: String::new(),
         is_delegated: false,
-        session_signer: Pubkey::default(),
-        session_expires_at: 0,
+        white_session_signer: Pubkey::default(),
+        white_session_expires_at: 0,
+        black_session_signer: Pubkey::default(),
+        black_session_expires_at: 0,
         active_task_id: -1,
         bump: 0,
         match_escrow_bump: 0,
@@ -52,12 +54,17 @@ fn standard_match(current_turn: PlayerColor) -> ChessMatch {
     make_match(chess_logic::initialize_chess_board(), current_turn)
 }
 
-/// Simulate the session key validation check used in make_move.rs.
-/// Session is valid if: session_signer != default() AND signer == session_signer AND now < expires_at.
-fn is_session_valid(chess_match: &ChessMatch, signer: Pubkey, now: i64) -> bool {
-    chess_match.session_signer != Pubkey::default()
-        && signer == chess_match.session_signer
-        && now < chess_match.session_expires_at
+/// Simulate the per-player session key validation check used in make_move.rs.
+/// Session is valid if the per-color signer != default() AND signer matches AND not expired.
+fn is_session_valid(chess_match: &ChessMatch, color: PlayerColor, signer: Pubkey, now: i64) -> bool {
+    let (session_signer, expires_at) = if color == PlayerColor::White {
+        (chess_match.white_session_signer, chess_match.white_session_expires_at)
+    } else {
+        (chess_match.black_session_signer, chess_match.black_session_expires_at)
+    };
+    session_signer != Pubkey::default()
+        && signer == session_signer
+        && now < expires_at
 }
 
 // ===========================================================================
@@ -71,9 +78,9 @@ fn session_key_default_is_disabled() {
     let game = standard_match(PlayerColor::White);
     let now: i64 = 1_000_000;
 
-    assert_eq!(game.session_signer, Pubkey::default());
-    assert_eq!(game.session_expires_at, 0);
-    assert!(!is_session_valid(&game, Pubkey::new_unique(), now));
+    assert_eq!(game.white_session_signer, Pubkey::default());
+    assert_eq!(game.white_session_expires_at, 0);
+    assert!(!is_session_valid(&game, PlayerColor::White, Pubkey::new_unique(), now));
 }
 
 #[test]
@@ -84,10 +91,10 @@ fn session_key_valid_when_set() {
     let session_key = Pubkey::new_unique();
     let future = 2_000_000;
 
-    game.session_signer = session_key;
-    game.session_expires_at = future;
+    game.white_session_signer = session_key;
+    game.white_session_expires_at = future;
 
-    assert!(is_session_valid(&game, session_key, future - 1));
+    assert!(is_session_valid(&game, PlayerColor::White, session_key, future - 1));
 }
 
 #[test]
@@ -98,10 +105,10 @@ fn session_key_invalid_wrong_signer() {
     let wrong_signer = Pubkey::new_unique();
     let future = 2_000_000;
 
-    game.session_signer = session_key;
-    game.session_expires_at = future;
+    game.white_session_signer = session_key;
+    game.white_session_expires_at = future;
 
-    assert!(!is_session_valid(&game, wrong_signer, future - 1));
+    assert!(!is_session_valid(&game, PlayerColor::White, wrong_signer, future - 1));
 }
 
 #[test]
@@ -111,10 +118,10 @@ fn session_key_invalid_expired() {
     let session_key = Pubkey::new_unique();
     let past = 500_000;
 
-    game.session_signer = session_key;
-    game.session_expires_at = past;
+    game.white_session_signer = session_key;
+    game.white_session_expires_at = past;
 
-    assert!(!is_session_valid(&game, session_key, past + 100));
+    assert!(!is_session_valid(&game, PlayerColor::White, session_key, past + 100));
 }
 
 #[test]
@@ -123,10 +130,10 @@ fn session_key_default_signer_rejected() {
     // session, even if the signer also happens to be Pubkey::default().
     let mut game = standard_match(PlayerColor::White);
 
-    game.session_signer = Pubkey::default();
-    game.session_expires_at = 2_000_000;
+    game.white_session_signer = Pubkey::default();
+    game.white_session_expires_at = 2_000_000;
 
-    assert!(!is_session_valid(&game, Pubkey::default(), 1_000_000));
+    assert!(!is_session_valid(&game, PlayerColor::White, Pubkey::default(), 1_000_000));
 }
 
 #[test]
@@ -136,17 +143,17 @@ fn session_key_revoke_clears_fields() {
     let session_key = Pubkey::new_unique();
 
     // Set a session first.
-    game.session_signer = session_key;
-    game.session_expires_at = 2_000_000;
+    game.white_session_signer = session_key;
+    game.white_session_expires_at = 2_000_000;
 
     // Simulate revoke (matching revoke_session_key.rs logic).
-    game.session_signer = Pubkey::default();
-    game.session_expires_at = 0;
+    game.white_session_signer = Pubkey::default();
+    game.white_session_expires_at = 0;
 
-    assert_eq!(game.session_signer, Pubkey::default());
-    assert_eq!(game.session_expires_at, 0);
+    assert_eq!(game.white_session_signer, Pubkey::default());
+    assert_eq!(game.white_session_expires_at, 0);
     // And the session is no longer valid.
-    assert!(!is_session_valid(&game, session_key, 1_000_000));
+    assert!(!is_session_valid(&game, PlayerColor::White, session_key, 1_000_000));
 }
 
 #[test]
@@ -177,15 +184,15 @@ fn session_key_expires_exactly_at_timestamp() {
     let session_key = Pubkey::new_unique();
     let now: i64 = 1_000_000;
 
-    game.session_signer = session_key;
-    game.session_expires_at = now;
+    game.white_session_signer = session_key;
+    game.white_session_expires_at = now;
 
     // 1 second before — valid.
-    assert!(is_session_valid(&game, session_key, now - 1));
+    assert!(is_session_valid(&game, PlayerColor::White, session_key, now - 1));
     // Exactly at — NOT valid (strict `<`).
-    assert!(!is_session_valid(&game, session_key, now));
+    assert!(!is_session_valid(&game, PlayerColor::White, session_key, now));
     // 1 second after — NOT valid.
-    assert!(!is_session_valid(&game, session_key, now + 1));
+    assert!(!is_session_valid(&game, PlayerColor::White, session_key, now + 1));
 }
 
 // ===========================================================================
@@ -336,8 +343,8 @@ fn all_magicblock_fields_have_correct_defaults() {
 
     assert_eq!(game.delegation_uid, "");
     assert!(!game.is_delegated);
-    assert_eq!(game.session_signer, Pubkey::default());
-    assert_eq!(game.session_expires_at, 0);
+    assert_eq!(game.white_session_signer, Pubkey::default());
+    assert_eq!(game.white_session_expires_at, 0);
     assert_eq!(game.active_task_id, -1);
 }
 
@@ -349,8 +356,8 @@ fn magicblock_fields_persist_after_move() {
 
     game.delegation_uid = "magic-test".to_string();
     game.is_delegated = true;
-    game.session_signer = session_key;
-    game.session_expires_at = 9_999_999;
+    game.white_session_signer = session_key;
+    game.white_session_expires_at = 9_999_999;
     game.active_task_id = 42;
 
     // Make a valid pawn move (white pawn from (1,0) to (2,0)).
@@ -362,8 +369,8 @@ fn magicblock_fields_persist_after_move() {
     // All MagicBlock fields are unchanged.
     assert_eq!(game.delegation_uid, "magic-test");
     assert!(game.is_delegated);
-    assert_eq!(game.session_signer, session_key);
-    assert_eq!(game.session_expires_at, 9_999_999);
+    assert_eq!(game.white_session_signer, session_key);
+    assert_eq!(game.white_session_expires_at, 9_999_999);
     assert_eq!(game.active_task_id, 42);
 }
 
@@ -377,29 +384,29 @@ fn session_and_delegation_independent() {
     let future = 9_999_999;
 
     // Both set.
-    game.session_signer = session_key;
-    game.session_expires_at = future;
+    game.white_session_signer = session_key;
+    game.white_session_expires_at = future;
     game.is_delegated = true;
     game.delegation_uid = "dual-state".to_string();
 
     assert!(game.is_delegated);
     assert_eq!(game.delegation_uid, "dual-state");
-    assert!(is_session_valid(&game, session_key, future - 1));
+    assert!(is_session_valid(&game, PlayerColor::White, session_key, future - 1));
 
     // Revoke session — delegation still active.
-    game.session_signer = Pubkey::default();
-    game.session_expires_at = 0;
+    game.white_session_signer = Pubkey::default();
+    game.white_session_expires_at = 0;
 
     assert!(game.is_delegated);
     assert_eq!(game.delegation_uid, "dual-state");
-    assert!(!is_session_valid(&game, session_key, future - 1));
+    assert!(!is_session_valid(&game, PlayerColor::White, session_key, future - 1));
 
     // Undelegate — session remains revoked (still inactive).
     game.is_delegated = false;
 
     assert!(!game.is_delegated);
-    assert_eq!(game.session_signer, Pubkey::default());
-    assert_eq!(game.session_expires_at, 0);
+    assert_eq!(game.white_session_signer, Pubkey::default());
+    assert_eq!(game.white_session_expires_at, 0);
 }
 
 // ===========================================================================
@@ -415,33 +422,33 @@ fn full_session_lifecycle_simulation() {
     let future = now + 3_600; // 1 hour from now
 
     // Step 1: Init — session is disabled.
-    assert_eq!(game.session_signer, Pubkey::default());
-    assert_eq!(game.session_expires_at, 0);
-    assert!(!is_session_valid(&game, session_key, now));
+    assert_eq!(game.white_session_signer, Pubkey::default());
+    assert_eq!(game.white_session_expires_at, 0);
+    assert!(!is_session_valid(&game, PlayerColor::White, session_key, now));
 
     // Step 2: Set session key (emulating set_session_key handler).
-    game.session_signer = session_key;
-    game.session_expires_at = future;
-    assert!(is_session_valid(&game, session_key, now));
-    assert!(!is_session_valid(&game, Pubkey::new_unique(), now)); // wrong signer
+    game.white_session_signer = session_key;
+    game.white_session_expires_at = future;
+    assert!(is_session_valid(&game, PlayerColor::White, session_key, now));
+    assert!(!is_session_valid(&game, PlayerColor::White, Pubkey::new_unique(), now)); // wrong signer
 
     // Step 3: Make move with session key.
     // Simulate: White's turn, session key signs the move. The check passes
     // because `is_valid_session` returns true.
     let white_player = game.players[0];
     assert_ne!(white_player, session_key); // session key is different from player wallet
-    assert!(is_session_valid(&game, session_key, now));
+    assert!(is_session_valid(&game, PlayerColor::White, session_key, now));
     // (actual move logic is tested elsewhere; here we just verify auth)
 
     // Step 4: Revoke session (emulating revoke_session_key handler).
-    game.session_signer = Pubkey::default();
-    game.session_expires_at = 0;
-    assert!(!is_session_valid(&game, session_key, now));
+    game.white_session_signer = Pubkey::default();
+    game.white_session_expires_at = 0;
+    assert!(!is_session_valid(&game, PlayerColor::White, session_key, now));
 
     // Step 5: Session is rejected after revoke.
-    assert_eq!(game.session_signer, Pubkey::default());
-    assert_eq!(game.session_expires_at, 0);
-    assert!(!is_session_valid(&game, session_key, now + 100));
+    assert_eq!(game.white_session_signer, Pubkey::default());
+    assert_eq!(game.white_session_expires_at, 0);
+    assert!(!is_session_valid(&game, PlayerColor::White, session_key, now + 100));
 
     // Even the real player wallet should still be checked directly
     // (not via session), which is a separate authorization path.

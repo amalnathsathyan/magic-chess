@@ -52,11 +52,18 @@ pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()
         chess_match.players[1] // Assuming players[1] is Black
     };
 
-    // Authorization: signer must be the actual player OR a valid session key
+    // Authorization: signer must be the actual player OR a valid per-player session key.
+    // Session keys are per-color — white's session can only move for white, black's for black.
     let is_authorized_player = player_key == expected_player_key_for_turn;
-    let is_valid_session = chess_match.session_signer != Pubkey::default()
-        && player_key == chess_match.session_signer
-        && now < chess_match.session_expires_at;
+    let is_valid_session = if chess_match.current_turn == PlayerColor::White {
+        chess_match.white_session_signer != Pubkey::default()
+            && player_key == chess_match.white_session_signer
+            && now < chess_match.white_session_expires_at
+    } else {
+        chess_match.black_session_signer != Pubkey::default()
+            && player_key == chess_match.black_session_signer
+            && now < chess_match.black_session_expires_at
+    };
 
     require!(
         is_authorized_player || is_valid_session,

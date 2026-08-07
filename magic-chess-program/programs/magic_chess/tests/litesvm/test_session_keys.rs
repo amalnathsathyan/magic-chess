@@ -58,8 +58,8 @@ fn test_set_session_key() {
     svm.send_ix(set_ix, &[]);
 
     let cm = svm.get_chess_match(&match_pda);
-    assert!(pk_eq(&session_pk.to_bytes(), &cm.session_signer.to_bytes()));
-    assert_eq!(cm.session_expires_at, expires_at);
+    assert!(pk_eq(&session_pk.to_bytes(), &cm.white_session_signer.to_bytes()));
+    assert_eq!(cm.white_session_expires_at, expires_at);
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -146,10 +146,10 @@ fn test_revoke_session() {
 
     let cm = svm.get_chess_match(&match_pda);
     assert!(
-        pk_eq(&Pubkey::default().to_bytes(), &cm.session_signer.to_bytes()),
+        pk_eq(&Pubkey::default().to_bytes(), &cm.white_session_signer.to_bytes()),
         "Session should be cleared after revoke"
     );
-    assert_eq!(cm.session_expires_at, 0);
+    assert_eq!(cm.white_session_expires_at, 0);
 
     // Black moves to advance turn back to White
     let b_mv = make_move_ix(&match_pda, &p2.pubkey(), 6, 4, 4, 4, None);

@@ -41,11 +41,13 @@ pub struct ChessMatch {
 
     // ── MagicBlock Ephemeral Rollups ──
     #[max_len(MAX_DELEGATION_UID_LEN)]
-    pub delegation_uid: String,       // MagicBlock delegation uid for this match
-    pub is_delegated: bool,           // Whether account is currently delegated to ER
-    pub session_signer: Pubkey,       // Current session key (if active)
-    pub session_expires_at: i64,      // Unix timestamp when session expires
-    pub active_task_id: i64,          // Current scheduled crank task ID (-1 = none)
+    pub delegation_uid: String,          // MagicBlock delegation uid for this match
+    pub is_delegated: bool,              // Whether account is currently delegated to ER
+    pub white_session_signer: Pubkey,    // Session key for White player (if active)
+    pub white_session_expires_at: i64,   // Unix timestamp when White's session expires
+    pub black_session_signer: Pubkey,    // Session key for Black player (if active)
+    pub black_session_expires_at: i64,   // Unix timestamp when Black's session expires
+    pub active_task_id: i64,             // Current scheduled crank task ID (-1 = none)
 
     pub bump: u8,
     pub match_escrow_bump: u8,          // Bump for the escrow token account PDA

@@ -13,7 +13,7 @@ pub struct SetSessionKey<'info> {
         bump = chess_match.bump,
     )]
     pub chess_match: Account<'info, ChessMatch>,
-    /// Must be one of the two players
+    /// Must be one of the two players — determines which color's session is set.
     pub player: Signer<'info>,
 }
 
@@ -25,11 +25,11 @@ pub fn handle_set_session_key(
     let chess_match = &mut ctx.accounts.chess_match;
     let player = ctx.accounts.player.key();
 
-    // Only players in this match can set session keys
-    require!(
-        player == chess_match.players[0] || player == chess_match.players[1],
-        ChessError::UnauthorizedSigner
-    );
+    // Determine which color this player is, then bind session key to that color.
+    let is_white = player == chess_match.players[0];
+    let is_black = player == chess_match.players[1];
+    require!(is_white || is_black, ChessError::UnauthorizedSigner);
+    require!(is_white != is_black, ChessError::DuplicateAccounts); // belt-and-suspenders
 
     // Session expiry must be in the future
     let clock = Clock::get()?;
@@ -38,9 +38,18 @@ pub fn handle_set_session_key(
         ChessError::InvalidSession
     );
 
-    chess_match.session_signer = session_signer;
-    chess_match.session_expires_at = expires_at;
+    if is_white {
+        chess_match.white_session_signer = session_signer;
+        chess_match.white_session_expires_at = expires_at;
+    } else {
+        chess_match.black_session_signer = session_signer;
+        chess_match.black_session_expires_at = expires_at;
+    }
 
-    msg!("Session key set for match {}", chess_match.match_id);
+    msg!(
+        "Session key set for match {} player {:?}",
+        chess_match.match_id,
+        if is_white { PlayerColor::White } else { PlayerColor::Black }
+    );
     Ok(())
 }
