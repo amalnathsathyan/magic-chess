@@ -75,12 +75,6 @@ pub fn handle_cancel_prediction_bet(ctx: Context<CancelPredictionBet>) -> Result
 
     let refund_amount = prediction_bet.amount;
 
-    // Defense-in-depth: verify vault has sufficient balance before transfer
-    require!(
-        ctx.accounts.prediction_pool_vault.amount >= refund_amount,
-        ChessError::MathError
-    );
-
     // Update pool totals based on which outcome was bet on
     match prediction_bet.predicted_outcome {
         0 => {
