@@ -17,6 +17,7 @@ export function usePredictionPool(matchId: string) {
     const fetchPool = async () => {
       try {
         const [poolPda] = findPredictionPoolPda(matchId, client.programId);
+        // @ts-ignore
         const account = await client.program.account.predictionPool.fetch(poolPda);
         setPool({
           totalBetOnWhite: account.totalBetOnWhite.toNumber(),
