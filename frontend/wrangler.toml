@@ -1,0 +1,13 @@
+# Cloudflare Pages configuration for Magic Chess frontend
+# Deploy: npx wrangler pages deploy .vercel/output/static
+
+name = "magic-chess"
+compatibility_date = "2025-08-07"
+
+# Build output — Next.js static export via @cloudflare/next-on-pages
+pages_build_output_dir = ".vercel/output/static"
+
+# Environment variables (set in Cloudflare Dashboard for secrets)
+[vars]
+NEXT_PUBLIC_RPC_ENDPOINT = "https://api.devnet.solana.com"
+NEXT_PUBLIC_PROGRAM_ID = "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h"
