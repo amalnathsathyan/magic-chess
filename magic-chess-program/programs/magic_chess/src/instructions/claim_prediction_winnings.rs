@@ -79,7 +79,8 @@ pub fn handle_claim_prediction_winnings(ctx: Context<ClaimPredictionWinnings>) -
         ChessError::NothingToClaim,
     );
 
-    // Calculate payout
+    // Calculate payout from the winners' share (75% of losing pool + 100% of winning pool).
+    // The platform/match-winner/match-loser shares were already transferred during settle_prediction_pool.
     let total_pool = prediction_pool
         .total_bet_on_white
         .checked_add(prediction_pool.total_bet_on_black)
@@ -100,17 +101,15 @@ pub fn handle_claim_prediction_winnings(ctx: Context<ClaimPredictionWinnings>) -
         .checked_sub(winning_pool_total)
         .ok_or(ChessError::MathError)?;
 
-    // Deduct platform fee from losing pool
-    let platform_fee = losing_pool
-        .checked_mul(prediction_pool.platform_fee_bps as u64)
+    // Winners share: winning_pool + 75% of losing_pool (rest already transferred in settle)
+    let winners_share_of_losing_pool = (losing_pool as u128)
+        .checked_mul(PREDICTION_WINNERS_SHARE_BPS as u128)
         .ok_or(ChessError::MathError)?
-        .checked_div(PLATFORM_FEE_MAX_BPS as u64)
-        .ok_or(ChessError::MathError)?;
+        .checked_div(PLATFORM_FEE_MAX_BPS as u128)
+        .ok_or(ChessError::MathError)? as u64;
 
     let winner_share_pool = winning_pool_total
-        .checked_add(losing_pool)
-        .ok_or(ChessError::MathError)?
-        .checked_sub(platform_fee)
+        .checked_add(winners_share_of_losing_pool)
         .ok_or(ChessError::MathError)?;
 
     // Individual payout = (bettor_amount / winning_pool_total) * winner_share_pool

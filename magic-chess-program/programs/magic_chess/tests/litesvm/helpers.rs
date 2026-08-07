@@ -579,6 +579,10 @@ pub fn place_prediction_bet_ix(
 pub fn settle_prediction_pool_ix(
     chess_match_pda: &Pubkey,
     prediction_pool: &Pubkey,
+    prediction_pool_vault: &Pubkey,
+    match_winner_ata: &Pubkey,
+    match_loser_ata: &Pubkey,
+    platform_fee_ata: &Pubkey,
     caller: &Pubkey,
 ) -> Instruction {
     Instruction {
@@ -586,7 +590,12 @@ pub fn settle_prediction_pool_ix(
         accounts: vec![
             AccountMeta::new_readonly(*chess_match_pda, false),
             AccountMeta::new(*prediction_pool, false),
-            AccountMeta::new(*caller, true),
+            AccountMeta::new(*prediction_pool_vault, false),
+            AccountMeta::new(*match_winner_ata, false),
+            AccountMeta::new(*match_loser_ata, false),
+            AccountMeta::new(*platform_fee_ata, false),
+            AccountMeta::new(*caller, false),
+            AccountMeta::new_readonly(token_program_id(), false),
         ],
         data: discriminator("settle_prediction_pool").to_vec(),
     }

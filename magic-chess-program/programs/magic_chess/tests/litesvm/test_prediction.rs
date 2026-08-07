@@ -338,7 +338,7 @@ fn test_multiple_bettors_accumulate() {
 fn test_settle_prediction_pool_after_white_wins() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();
-    let (_p2, mint, match_pda, _escrow, _p1_ata, _p2_ata, _platform_ata) =
+    let (_p2, mint, match_pda, _escrow, p1_ata, p2_ata, platform_ata) =
         setup_match_for_prediction(&mut svm, &p1_pk, "pred-settle-001");
 
     let (pool_pda, _) = find_prediction_pool_pda("pred-settle-001");
@@ -351,7 +351,7 @@ fn test_settle_prediction_pool_after_white_wins() {
 
     set_game_status(&mut svm, &match_pda, GameStatus::WhiteWins, GameEndReason::Checkmate);
 
-    let settle_ix = settle_prediction_pool_ix(&match_pda, &pool_pda, &p1_pk);
+    let settle_ix = settle_prediction_pool_ix(&match_pda, &pool_pda, &vault_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk);
     svm.send_ix(settle_ix, &[]);
 
     let pool: PredictionPool = svm.ctx.get_account(&pool_pda).unwrap();
@@ -362,7 +362,7 @@ fn test_settle_prediction_pool_after_white_wins() {
 fn test_cannot_settle_twice() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();
-    let (_p2, mint, match_pda, _escrow, _p1_ata, _p2_ata, _platform_ata) =
+    let (_p2, mint, match_pda, _escrow, p1_ata, p2_ata, platform_ata) =
         setup_match_for_prediction(&mut svm, &p1_pk, "pred-settle-002");
 
     let (pool_pda, _) = find_prediction_pool_pda("pred-settle-002");
@@ -375,10 +375,10 @@ fn test_cannot_settle_twice() {
 
     set_game_status(&mut svm, &match_pda, GameStatus::Draw, GameEndReason::Stalemate);
 
-    let settle_ix = settle_prediction_pool_ix(&match_pda, &pool_pda, &p1_pk);
+    let settle_ix = settle_prediction_pool_ix(&match_pda, &pool_pda, &vault_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk);
     svm.send_ix(settle_ix, &[]);
 
-    let settle_ix2 = settle_prediction_pool_ix(&match_pda, &pool_pda, &p1_pk);
+    let settle_ix2 = settle_prediction_pool_ix(&match_pda, &pool_pda, &vault_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk);
     let err = svm.send_ix_expect_err(settle_ix2, &[]);
     assert!(!err.is_empty(), "Expected error but transaction succeeded");
 }
@@ -387,7 +387,7 @@ fn test_cannot_settle_twice() {
 fn test_cannot_settle_while_active() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();
-    let (_p2, mint, match_pda, _escrow, _p1_ata, _p2_ata, _platform_ata) =
+    let (_p2, mint, match_pda, _escrow, p1_ata, p2_ata, platform_ata) =
         setup_match_for_prediction(&mut svm, &p1_pk, "pred-settle-active");
 
     let (pool_pda, _) = find_prediction_pool_pda("pred-settle-active");
@@ -398,7 +398,7 @@ fn test_cannot_settle_while_active() {
     );
     svm.send_ix(init_ix, &[]);
 
-    let settle_ix = settle_prediction_pool_ix(&match_pda, &pool_pda, &p1_pk);
+    let settle_ix = settle_prediction_pool_ix(&match_pda, &pool_pda, &vault_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk);
     let err = svm.send_ix_expect_err(settle_ix, &[]);
     assert!(
         err.contains("InstructionError") || err.contains("Custom") || err.contains("AlreadyProcessed"),
@@ -414,7 +414,7 @@ fn test_cannot_settle_while_active() {
 fn test_claim_winnings_after_white_wins() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();
-    let (_p2, mint, match_pda, _escrow, _p1_ata, _p2_ata, _platform_ata) =
+    let (_p2, mint, match_pda, _escrow, p1_ata, p2_ata, platform_ata) =
         setup_match_for_prediction(&mut svm, &p1_pk, "pred-claim-001");
 
     let (pool_pda, _) = find_prediction_pool_pda("pred-claim-001");
@@ -444,7 +444,7 @@ fn test_claim_winnings_after_white_wins() {
     ), &[&s2]);
 
     set_game_status(&mut svm, &match_pda, GameStatus::WhiteWins, GameEndReason::Checkmate);
-    svm.send_ix(settle_prediction_pool_ix(&match_pda, &pool_pda, &p1_pk), &[]);
+    svm.send_ix(settle_prediction_pool_ix(&match_pda, &pool_pda, &vault_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk), &[]);
 
     let balance_before = svm.get_token_balance(&s1_ata);
     let claim_ix = claim_prediction_winnings_ix(
@@ -452,14 +452,14 @@ fn test_claim_winnings_after_white_wins() {
     );
     svm.send_ix(claim_ix, &[&s1]);
     let balance_after = svm.get_token_balance(&s1_ata);
-    assert_eq!(balance_after - balance_before, 100_000);
+    assert_eq!(balance_after - balance_before, 90_000);
 }
 
 #[test]
 fn test_loser_claims_nothing() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();
-    let (_p2, mint, match_pda, _escrow, _p1_ata, _p2_ata, _platform_ata) =
+    let (_p2, mint, match_pda, _escrow, p1_ata, p2_ata, platform_ata) =
         setup_match_for_prediction(&mut svm, &p1_pk, "pred-loser-001");
 
     let (pool_pda, _) = find_prediction_pool_pda("pred-loser-001");
@@ -480,7 +480,7 @@ fn test_loser_claims_nothing() {
     ), &[&loser]);
 
     set_game_status(&mut svm, &match_pda, GameStatus::WhiteWins, GameEndReason::Checkmate);
-    svm.send_ix(settle_prediction_pool_ix(&match_pda, &pool_pda, &p1_pk), &[]);
+    svm.send_ix(settle_prediction_pool_ix(&match_pda, &pool_pda, &vault_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk), &[]);
 
     let claim_ix = claim_prediction_winnings_ix(
         &match_pda, &pool_pda, &loser_bet_pda, &vault_pda, &loser_ata, &loser.pubkey(),
@@ -494,7 +494,7 @@ fn test_loser_claims_nothing() {
 fn test_cannot_double_claim() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();
-    let (_p2, mint, match_pda, _escrow, _p1_ata, _p2_ata, _platform_ata) =
+    let (_p2, mint, match_pda, _escrow, p1_ata, p2_ata, platform_ata) =
         setup_match_for_prediction(&mut svm, &p1_pk, "pred-dblclaim");
 
     let (pool_pda, _) = find_prediction_pool_pda("pred-dblclaim");
@@ -515,7 +515,7 @@ fn test_cannot_double_claim() {
     ), &[&winner]);
 
     set_game_status(&mut svm, &match_pda, GameStatus::WhiteWins, GameEndReason::Checkmate);
-    svm.send_ix(settle_prediction_pool_ix(&match_pda, &pool_pda, &p1_pk), &[]);
+    svm.send_ix(settle_prediction_pool_ix(&match_pda, &pool_pda, &vault_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk), &[]);
 
     let claim_ix = claim_prediction_winnings_ix(
         &match_pda, &pool_pda, &bet_pda, &vault_pda, &winner_ata, &winner.pubkey(),
@@ -639,6 +639,7 @@ fn test_full_prediction_flow_with_platform_fee() {
     let platform_fee_wallet = Keypair::new();
     let mint = svm.create_mint(9);
     let p1_ata = svm.create_ata(&mint, &p1_pk);
+    let platform_ata = svm.create_ata(&mint, &platform_fee_wallet.pubkey());
     svm.mint_tokens(&mint, &p1_ata, 1_000_000);
 
     let (match_pda, _) = find_chess_match_pda("pred-fullflow");
@@ -696,17 +697,17 @@ fn test_full_prediction_flow_with_platform_fee() {
     ), &[&s3]);
 
     set_game_status(&mut svm, &match_pda, GameStatus::WhiteWins, GameEndReason::Checkmate);
-    svm.send_ix(settle_prediction_pool_ix(&match_pda, &pool_pda, &p1_pk), &[]);
+    svm.send_ix(settle_prediction_pool_ix(&match_pda, &pool_pda, &vault_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk), &[]);
 
-    // Winner claims
-    // Math: total=600k, winning=200k, losing=400k
-    // platform_fee = 400k * 10% = 40k
-    // winner_share = 200k + 400k - 40k = 560k
-    // individual = (200k / 200k) * 560k = 560k
+    // Winner claims — new split math:
+    // total=600k, winning=200k, losing=400k
+    // settle transfers: 10% loser→winner=40k, 5%→loser=20k, 10%→platform=40k
+    // vault remaining: 200k + 75% of 400k = 200k + 300k = 500k
+    // s1 bet 200k / 200k winning * 500k = 500k
     let balance_before = svm.get_token_balance(&s1_ata);
     svm.send_ix(claim_prediction_winnings_ix(
         &match_pda, &pool_pda, &b1_pda, &vault_pda, &s1_ata, &s1.pubkey(),
     ), &[&s1]);
     let balance_after = svm.get_token_balance(&s1_ata);
-    assert_eq!(balance_after - balance_before, 560_000);
+    assert_eq!(balance_after - balance_before, 500_000);
 }

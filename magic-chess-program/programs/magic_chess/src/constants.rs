@@ -11,6 +11,12 @@ pub const MIN_BET_AMOUNT: u64 = 1;
 pub const PLATFORM_FEE_MAX_BPS: u16 = 10_000;
 pub const PLATFORM_FEE_DEFAULT_BPS: u16 = 200;
 
+// ── Prediction Pool Fee Split (basis points of losing pool) ──
+pub const PREDICTION_WINNERS_SHARE_BPS: u16 = 7_500;       // 75% → correct predictors
+pub const PREDICTION_MATCH_WINNER_SHARE_BPS: u16 = 1_000;  // 10% → match winner
+pub const PREDICTION_MATCH_LOSER_SHARE_BPS: u16 = 500;     //  5% → match loser
+pub const PREDICTION_PLATFORM_SHARE_BPS: u16 = 1_000;      // 10% → platform wallet
+
 // ── PDA Seeds ──
 pub const CHESS_MATCH_SEED: &[u8] = b"chess_match";
 pub const MATCH_ESCROW_SEED: &[u8] = b"match_escrow";
