@@ -85,7 +85,7 @@ export type MagicChess = {
       args: [];
     },
   ];
-  accounts: [{ name: "chessMatch" }],
+  accounts: [{ name: "chessMatch" }, { name: "predictionPool" }, { name: "predictionBet" }],
   events: [
     { name: "matchCreatedEvent" },
     { name: "playerJoinedEvent" },

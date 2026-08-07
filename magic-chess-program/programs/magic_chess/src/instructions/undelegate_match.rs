@@ -13,6 +13,14 @@ pub struct UndelegateMatch<'info> {
 }
 
 pub fn handle_undelegate_match(ctx: Context<UndelegateMatch>) -> Result<()> {
+    // Authorization: only match players can undelegate
+    let payer = ctx.accounts.payer.key();
+    let players = ctx.accounts.chess_match.players;
+    require!(
+        payer == players[0] || payer == players[1],
+        crate::errors::ChessError::UnauthorizedSigner
+    );
+
     let chess_match_info = ctx.accounts.chess_match.to_account_info();
     let payer_info = ctx.accounts.payer.to_account_info();
     let magic_ctx = ctx.accounts.magic_context.to_account_info();

@@ -24,6 +24,9 @@ pub const PREDICTION_POOL_SEED: &[u8] = b"prediction_pool";
 pub const PREDICTION_POOL_VAULT_SEED: &[u8] = b"prediction_pool_vault";
 pub const PREDICTION_BET_SEED: &[u8] = b"prediction_bet";
 
+// ── Session Keys ──
+pub const MAX_SESSION_KEY_TTL: i64 = 7 * 24 * 60 * 60; // 7 days
+
 // ── Game Defaults ──
 pub const DEFAULT_MOVE_TIMEOUT_RAPID: i64 = 900;
 pub const DEFAULT_MOVE_TIMEOUT_BLITZ: i64 = 180;

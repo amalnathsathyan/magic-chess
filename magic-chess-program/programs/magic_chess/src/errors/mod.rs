@@ -121,4 +121,6 @@ pub enum ChessError {
     MatchNotAborted,
     #[msg("Cannot cancel bet on an Active match.")]
     CannotCancelActiveMatch,
+    #[msg("Move timeout duration must be non-negative.")]
+    InvalidTimeoutDuration,
 }
