@@ -17,3 +17,6 @@ mod test_session_keys;
 
 #[cfg(test)]
 mod test_prediction;
+
+#[cfg(test)]
+mod test_security;
