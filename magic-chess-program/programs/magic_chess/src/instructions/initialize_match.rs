@@ -103,6 +103,16 @@ pub fn handle_initialize_match(
     chess_match_account.board = chess_logic::initialize_chess_board();
     chess_match_account.castling_rights = CastlingRights::default();
     chess_match_account.en_passant_target = None;
+
+    // Record initial position hash so first occurrence counts for threefold repetition
+    let initial_hash = chess_logic::compute_zobrist_hash(
+        &chess_match_account.board,
+        &chess_match_account.castling_rights,
+        chess_match_account.en_passant_target,
+        chess_match_account.current_turn,
+    );
+    chess_logic::push_position_hash(&mut chess_match_account.position_history, initial_hash);
+
     chess_match_account.halfmove_clock = 0;
     chess_match_account.fullmove_number = 1;
 

@@ -56,5 +56,5 @@ pub enum MoveResult {
     Stalemate,          // Game is a stalemate after this move
     ThreefoldRepetition, // Threefold repetition draw claimed by this move
     InsufficientMaterial, // Insufficient material draw
-    // Check,           // If you want to explicitly signal a check without ending the game
+    FiftyMoveRule,        // Fifty-move rule draw
 }

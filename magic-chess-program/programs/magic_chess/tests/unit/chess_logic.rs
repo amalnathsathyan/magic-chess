@@ -1038,15 +1038,15 @@ fn fifty_move_rule_draw() {
     });
     let mut game = make_match(board, PlayerColor::White);
     // Set the halfmove clock to 99; after the knight move it becomes 100 and
-    // the >= 100 check triggers a stalemate (treated as draw).
+    // the >= 100 check triggers a fifty-move rule draw.
     game.halfmove_clock = 99;
 
     let result = chess_logic::validate_and_apply_move(
         &mut game, 0, 1, 2, 2, PlayerColor::White, None,
     );
     assert!(result.is_ok());
-    // After incrementing, halfmove_clock >= 100, so the result should be Stalemate.
-    assert_eq!(result.unwrap(), MoveResult::Stalemate);
+    // After incrementing, halfmove_clock >= 100, so the result should be FiftyMoveRule.
+    assert_eq!(result.unwrap(), MoveResult::FiftyMoveRule);
 }
 
 #[test]

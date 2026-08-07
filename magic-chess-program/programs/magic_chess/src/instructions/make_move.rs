@@ -131,19 +131,26 @@ pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()
         }
         MoveResult::Stalemate => {
             chess_match.game_status = GameStatus::Draw;
-            // chess_logic already updated halfmove_clock. Check it here for reason.
-            if chess_match.halfmove_clock >= 100 {
-                 chess_match.game_end_reason = Some(GameEndReason::FiftyMoveRule);
-            } else {
-                 chess_match.game_end_reason = Some(GameEndReason::Stalemate);
-            }
-            chess_match.last_move_timestamp = now; // Record time of game-ending move
+            chess_match.game_end_reason = Some(GameEndReason::Stalemate);
+            chess_match.last_move_timestamp = now;
 
             emit!(GameEndedEvent {
-                match_id: chess_match.match_id.clone(), // Assuming String
+                match_id: chess_match.match_id.clone(),
                 status: chess_match.game_status,
-                winner: None, // No winner in a draw
-                reason: chess_match.game_end_reason.unwrap(), // We just set it
+                winner: None,
+                reason: GameEndReason::Stalemate,
+            });
+        }
+        MoveResult::FiftyMoveRule => {
+            chess_match.game_status = GameStatus::Draw;
+            chess_match.game_end_reason = Some(GameEndReason::FiftyMoveRule);
+            chess_match.last_move_timestamp = now;
+
+            emit!(GameEndedEvent {
+                match_id: chess_match.match_id.clone(),
+                status: chess_match.game_status,
+                winner: None,
+                reason: GameEndReason::FiftyMoveRule,
             });
         }
         MoveResult::InsufficientMaterial => {
@@ -198,7 +205,7 @@ pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()
             chess_logic::is_king_in_check(&chess_match.board, chess_match.current_turn)
         } else { false },
         is_checkmate: move_result == MoveResult::Checkmate,
-        is_stalemate: move_result == MoveResult::Stalemate || move_result == MoveResult::ThreefoldRepetition || move_result == MoveResult::InsufficientMaterial,
+        is_stalemate: move_result == MoveResult::Stalemate || move_result == MoveResult::ThreefoldRepetition || move_result == MoveResult::InsufficientMaterial || move_result == MoveResult::FiftyMoveRule,
     });
 
     // 7. Schedule timeout crank task for opponent if game is still active.
