@@ -31,10 +31,15 @@ pub fn handle_set_session_key(
     require!(is_white || is_black, ChessError::UnauthorizedSigner);
     require!(is_white != is_black, ChessError::DuplicateAccounts); // belt-and-suspenders
 
-    // Session expiry must be in the future
+    // Session expiry must be in the future and within max TTL
     let clock = Clock::get()?;
+    let now = clock.unix_timestamp;
     require!(
-        expires_at > clock.unix_timestamp,
+        expires_at > now,
+        ChessError::InvalidSession
+    );
+    require!(
+        expires_at.saturating_sub(now) <= MAX_SESSION_KEY_TTL,
         ChessError::InvalidSession
     );
 

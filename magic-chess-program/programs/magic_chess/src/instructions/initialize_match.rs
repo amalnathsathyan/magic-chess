@@ -85,7 +85,19 @@ pub fn handle_initialize_match(
         ChessError::InvalidPlatformFee
     );
 
-    // 4. Initialize ChessMatch account fields
+    // 4. Validate platform_fee_wallet is not zero pubkey
+    require!(
+        platform_fee_wallet_arg != Pubkey::default(),
+        ChessError::InvalidPlatformFeeWallet
+    );
+
+    // 5. Validate move_timeout_duration is non-negative
+    require!(
+        move_timeout_duration_arg >= 0,
+        ChessError::InvalidTimeoutDuration
+    );
+
+    // 6. Initialize ChessMatch account fields
     let actual_betting_token_mint_key = ctx.accounts.betting_token_mint_account.key();
 
     chess_match_account.match_id = match_id_arg.clone();

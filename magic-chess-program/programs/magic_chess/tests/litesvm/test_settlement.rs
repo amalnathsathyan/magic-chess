@@ -67,7 +67,7 @@ fn test_winner_payout() {
     let plat_before = svm.get_token_balance(&platform_ata);
 
     let settle_ix = process_settlement_ix(
-        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata,
+        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk,
     );
     svm.send_ix(settle_ix, &[]);
 
@@ -83,7 +83,7 @@ fn test_winner_payout() {
     assert_eq!(p2_after, p2_before);
     assert_eq!(plat_after, plat_before + fee);
 
-    assert_eq!(svm.get_token_balance(&escrow_pda), 0);
+    assert!(!svm.account_exists(&escrow_pda), "Escrow should be closed after settlement");
     assert!(svm.get_chess_match(&match_pda).payout_processed);
 }
 
@@ -124,7 +124,7 @@ fn test_draw_payout() {
     let plat_before = svm.get_token_balance(&platform_ata);
 
     let settle_ix = process_settlement_ix(
-        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata,
+        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk,
     );
     svm.send_ix(settle_ix, &[]);
 
@@ -183,7 +183,7 @@ fn test_platform_fee_calculation() {
     let plat_before = svm.get_token_balance(&platform_ata);
 
     let settle_ix = process_settlement_ix(
-        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata,
+        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk,
     );
     svm.send_ix(settle_ix, &[]);
 
@@ -212,13 +212,13 @@ fn test_duplicate_settlement_rejected() {
     svm.send_ix(resign_ix, &[&p2]);
 
     let settle_ix = process_settlement_ix(
-        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata,
+        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk,
     );
     svm.send_ix(settle_ix, &[]);
 
     // Second settlement should fail
     let settle_ix2 = process_settlement_ix(
-        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata,
+        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk,
     );
     let err = svm.send_ix_expect_err(settle_ix2, &[]);
     assert!(err.contains("PayoutAlreadyProcessed") || err.contains("0x1792") || err.contains("AlreadyProcessed"),
@@ -241,9 +241,9 @@ fn test_escrow_fully_drained_after_settlement() {
     svm.send_ix(resign_ix, &[&p2]);
 
     let settle_ix = process_settlement_ix(
-        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata,
+        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk,
     );
     svm.send_ix(settle_ix, &[]);
 
-    assert_eq!(svm.get_token_balance(&escrow_pda), 0, "Escrow must be fully drained");
+    assert!(!svm.account_exists(&escrow_pda), "Escrow must be closed after settlement");
 }
