@@ -130,6 +130,21 @@ pub fn validate_and_apply_move(
 
     update_castling_rights(&mut game_state.castling_rights, &piece_to_move_actual, from_row, from_col);
 
+    // Revoke castling right if a piece was captured on a rook's starting square
+    // (e.g., rook captured without ever moving — the right must die with the rook)
+    if let Some(ref captured) = actual_captured_piece {
+        if captured.piece_type == PieceType::Rook {
+            let rights = &mut game_state.castling_rights;
+            match (to_row, to_col) {
+                (0, 0) => rights.white_queenside = false,
+                (0, 7) => rights.white_kingside = false,
+                (7, 0) => rights.black_queenside = false,
+                (7, 7) => rights.black_kingside = false,
+                _ => {} // capture not on a corner — no castling right to revoke
+            }
+        }
+    }
+
     if piece_to_move_actual.piece_type == PieceType::King {
         let col_diff = to_col as i8 - from_col as i8;
         if col_diff.abs() == 2 { 
