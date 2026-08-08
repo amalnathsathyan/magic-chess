@@ -70,22 +70,30 @@ export function playerRoutes(app: FastifyInstance): void {
       const offset = (page - 1) * Math.min(limit, 100);
       const effectiveLimit = Math.min(limit, 100);
 
-      const conditions = [
-        `(white_player = '${pubkey}' OR black_player = '${pubkey}')`,
-      ];
+      // Parameterized query — same pattern as matches.ts
+      const conditions: string[] = [];
+      const params: (string | number)[] = [];
+
+      conditions.push(
+        `(white_player = $${params.length + 1} OR black_player = $${params.length + 1})`
+      );
+      params.push(pubkey);
+
       if (status) {
         if (status === "Completed") {
           conditions.push(
             `game_status IN ('WhiteWins', 'BlackWins', 'Draw')`
           );
         } else {
-          conditions.push(`game_status = '${status}'`);
+          conditions.push(`game_status = $${params.length + 1}`);
+          params.push(status);
         }
       }
       const where = `WHERE ${conditions.join(" AND ")}`;
 
       const countResult = await sql.unsafe(
-        `SELECT COUNT(*) as total FROM matches ${where}`
+        `SELECT COUNT(*) as total FROM matches ${where}`,
+        params
       );
       const total = Number(countResult[0]?.total ?? 0);
 
@@ -98,7 +106,8 @@ export function playerRoutes(app: FastifyInstance): void {
         FROM matches
         ${where}
         ORDER BY created_at DESC
-        LIMIT ${effectiveLimit} OFFSET ${offset}`
+        LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, effectiveLimit, offset]
       );
 
       reply.send({

@@ -30,4 +30,7 @@ export const config = {
       process.env.PROGRAM_ID ||
       "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h",
   },
+
+  // Shared secret for sync endpoint auth
+  apiKey: process.env.API_KEY || "dev-api-key-change-in-production",
 } as const;
