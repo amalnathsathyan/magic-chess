@@ -12,6 +12,10 @@
 
 <br/>
 
+**🎮 Live Demo:** [arena.chessmagic.workers.dev](https://arena.chessmagic.workers.dev/)
+
+<br/>
+
 **Magic Chess** is a decentralized, trustless chess arena built on Solana. By leveraging **MagicBlock's Ephemeral Rollups (ER)**, we deliver a seamless, traditional Web2 chess experience—featuring **50ms latency** and **0 gas fees**—while retaining the security, immutability, and wager capabilities of Web3.
 
 Whether you're a builder, a player, or a judge, Magic Chess showcases the cutting edge of what's possible with Solana's composability and MagicBlock's infrastructure.
