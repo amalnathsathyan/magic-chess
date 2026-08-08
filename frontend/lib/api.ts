@@ -5,6 +5,8 @@
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+const API_KEY =
+  process.env.NEXT_PUBLIC_API_KEY || "dev-api-key-change-in-production";
 
 async function fetchApi<T>(
   path: string,
@@ -14,6 +16,7 @@ async function fetchApi<T>(
     ...init,
     headers: {
       "Content-Type": "application/json",
+      "X-API-Key": API_KEY,
       ...init?.headers,
     },
   });

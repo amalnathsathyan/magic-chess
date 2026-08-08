@@ -642,6 +642,16 @@ export default function PlayPage({ params }: PlayPageProps) {
                 if (!isGameOver) {
                   const currentTurn = turn === "w" ? "white" : "black";
                   setResigned(currentTurn);
+                  // Submit resignation on-chain if not demo mode
+                  if (client && wallet && !matchId.startsWith("demo-")) {
+                    client.resign(matchId).then(() => {
+                      toast.success("Resigned — game ended on-chain");
+                      refetch();
+                    }).catch((e: any) => {
+                      console.error("Resign transaction failed:", e);
+                      toast.error("Failed to resign on-chain");
+                    });
+                  }
                 }
               }}
               className="w-full max-w-[560px] mt-4 mb-2"

@@ -1,11 +1,20 @@
 import type { FastifyInstance } from "fastify";
 import { sql } from "../db/pool.js";
+import { config } from "../config.js";
 import {
   initMatch,
   applyMove,
   removeMatch,
   rebuildBoardState,
 } from "../services/boardCache.js";
+
+// ── Auth helper ──
+function requireApiKey(request: { headers: Record<string, string | undefined> }): void {
+  const key = request.headers["x-api-key"];
+  if (!key || key !== config.apiKey) {
+    throw { statusCode: 401, message: "Unauthorized — invalid or missing X-API-Key" };
+  }
+}
 
 // ── Types for sync payloads ──
 
@@ -93,6 +102,7 @@ export function syncRoutes(app: FastifyInstance): void {
   app.post<{ Body: SyncMatchCreated }>(
     "/api/sync/match-created",
     async (request, reply) => {
+      requireApiKey(request);
       const {
         matchId,
         creator,
@@ -129,6 +139,7 @@ export function syncRoutes(app: FastifyInstance): void {
   app.post<{ Body: SyncPlayerJoined }>(
     "/api/sync/player-joined",
     async (request, reply) => {
+      requireApiKey(request);
       const {
         matchId,
         playerTwo,
@@ -158,6 +169,7 @@ export function syncRoutes(app: FastifyInstance): void {
   app.post<{ Body: SyncMoveMade }>(
     "/api/sync/move-made",
     async (request, reply) => {
+      requireApiKey(request);
       const {
         matchId,
         player,
@@ -250,6 +262,7 @@ export function syncRoutes(app: FastifyInstance): void {
   app.post<{ Body: SyncGameEnded }>(
     "/api/sync/game-ended",
     async (request, reply) => {
+      requireApiKey(request);
       const { matchId, status, winner, reason, signature, slot } =
         request.body;
 
@@ -284,6 +297,7 @@ export function syncRoutes(app: FastifyInstance): void {
   app.post<{ Body: SyncPayout }>(
     "/api/sync/payout",
     async (request, reply) => {
+      requireApiKey(request);
       const { matchId, signature, slot } = request.body;
 
       await sql`
