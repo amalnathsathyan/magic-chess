@@ -9,8 +9,13 @@ import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { useMagicChessClient } from "@magic-chess/sdk/react";
 // @ts-ignore
 import { PublicKey } from "@solana/web3.js";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
+
+// Wrapped SOL mint on devnet/mainnet
+const WRAPPED_SOL_MINT = new PublicKey("So11111111111111111111111111111111111111112");
 
 interface CreateMatchFormProps {
   isOpen: boolean;
@@ -101,23 +106,45 @@ export function CreateMatchForm({
         setIsSubmitting(true);
         const matchId = `match_${Date.now()}`;
         const wallet = wallets[0];
+        if (!wallet?.address) {
+          toast.error("No wallet found");
+          setIsSubmitting(false);
+          return;
+        }
 
-        const dummyPubkey = new PublicKey("11111111111111111111111111111111");
-        const playerTokenAccount = wallet?.address ? new PublicKey(wallet.address) : dummyPubkey;
+        const walletPubkey = new PublicKey(wallet.address);
+        // Derive the player's wrapped SOL ATA
+        const playerTokenAccount = getAssociatedTokenAddressSync(
+          WRAPPED_SOL_MINT,
+          walletPubkey
+        );
+        // ponytail: platform fees go to match creator for MVP testing
+        const platformFeeWallet = walletPubkey;
 
-        const { match } = await client.createMatch({
+        const { match, signature } = await client.createMatch({
           matchId,
-          betAmount: wagerAmount * 1e9,
+          betAmount: wagerAmount * 1e9, // SOL to lamports
           moveTimeoutDuration: timeControl.minutes * 60,
-          platformFeeBasisPoints: 100,
-          platformFeeWallet: dummyPubkey,
-          bettingTokenMint: dummyPubkey,
-          playerTokenAccount: playerTokenAccount,
+          platformFeeBasisPoints: 100, // 1%
+          platformFeeWallet,
+          bettingTokenMint: WRAPPED_SOL_MINT,
+          playerTokenAccount,
         });
 
         toast.success("Match created on-chain!");
-        router.push(`/play/${match}`);
-        onClose();
+        // Sync to backend (fire-and-forget)
+        api.syncMatchCreated({
+          matchId,
+          creator: wallet.address,
+          bettingTokenMint: WRAPPED_SOL_MINT.toBase58(),
+          betAmount: wagerAmount * 1e9,
+          moveTimeoutDuration: timeControl.minutes * 60,
+          platformFeeBasisPoints: 100,
+          signature,
+          slot: 0,
+        }).catch(err => console.warn("Backend sync failed:", err));
+
+        router.push(`/play/${matchId}`);
       } catch (err) {
         console.error(err);
         toast.error("Failed to create match");
