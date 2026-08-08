@@ -225,6 +225,7 @@ export class MagicChessClient {
         playerOneAta,
         playerTwoAta,
         platformFeeAta,
+        payer: this.wallet?.publicKey,
         tokenProgram: TOKEN_PROGRAM,
       })
       .rpc();

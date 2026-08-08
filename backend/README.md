@@ -1,67 +1,79 @@
 # Magic Chess Backend
 
-Fastify + TypeScript backend for Magic Chess — event indexing, match history, player stats, and ELO ratings.
+Fastify + TypeScript + Supabase PostgreSQL. Indexes on-chain chess matches, serves match history, leaderboards, and player profiles.
 
-## Tech Stack
+## Quick Start
 
-- **Fastify 5** — high-performance Node.js HTTP framework
-- **TypeScript**
-- **PostgreSQL** — primary database (match history, player profiles, ELO ratings)
-- **Redis** — caching and real-time match state
-- **Helius Webhooks** — on-chain event ingestion and indexing
-- **Railway** — hosting (PostgreSQL + Redis included)
+```bash
+cp .env.example .env
+# Fill in DATABASE_URL from Supabase dashboard
+npm install
+npm run migrate   # Create tables
+npm run dev       # Start on :3001
+```
+
+## Stack
+
+| Layer | Choice | Reason |
+|-------|--------|--------|
+| Server | Fastify 5 + TypeScript | Fast, typed |
+| DB | Supabase PostgreSQL | Free tier, built-in Realtime |
+| DB driver | `postgres` npm | Direct connection, lightweight |
+| Indexing | Client-driven sync | Frontend calls `/api/sync/*` after on-chain tx confirms |
+| Realtime | Supabase Realtime | Frontend subscribes to DB changes via WebSocket |
+
+## API
+
+### Matches
+- `GET /api/matches` — list matches (filterable by status, player)
+- `GET /api/matches/:id` — single match + FEN
+- `GET /api/matches/:id/history` — move history with FEN per move
+
+### Players
+- `GET /api/players/:pubkey/stats` — win/loss/draw, streaks, amounts
+- `GET /api/players/:pubkey/matches` — paginated match history
+
+### Leaderboard
+- `GET /api/leaderboard?sortBy=wins|winRate|totalGames`
+
+### Sync (frontend → backend)
+- `POST /api/sync/match-created`
+- `POST /api/sync/player-joined`
+- `POST /api/sync/move-made`
+- `POST /api/sync/game-ended`
+- `POST /api/sync/payout`
+
+### Health
+- `GET /api/health`
 
 ## Architecture
 
-The backend ingests on-chain events via **Helius webhooks** and indexes them into PostgreSQL. Match history, player statistics, and ELO ratings are derived from indexed events. Redis is used for caching hot data (active matches, leaderboard) and rate limiting.
-
-## API Routes
-
-| Route               | Method | Description                                  |
-|---------------------|--------|----------------------------------------------|
-| `/health`           | GET    | Health check — DB and Redis connectivity      |
-| `/matches`          | GET    | List matches (paginated, filterable)          |
-| `/matches/:id`      | GET    | Single match detail with move history         |
-| `/players/:address` | GET    | Player profile — stats, ELO, match history    |
-| `/leaderboard`      | GET    | Top players by ELO rating                     |
-| `/stats`            | GET    | Global stats — total matches, volume, etc.    |
-
-## Getting Started
-
-```bash
-# Install dependencies
-npm install
-
-# Set up environment
-cp .env.example .env
-
-# Run locally (requires PostgreSQL and Redis)
-npm run dev
+```
+Frontend ──SDK──> Solana Chain (devnet)
+    │                    │
+    │ POST /api/sync/*   │ events
+    ▼                    │
+Backend ──verify──> Solana RPC
+    │
+    │ write
+    ▼
+Supabase PostgreSQL ──Realtime──> Frontend (subscribe)
 ```
 
-## Environment Variables
+## Env
 
 ```
-DATABASE_URL=postgresql://user:pass@localhost:5432/magicchess
-REDIS_URL=redis://localhost:6379
-HELIUS_WEBHOOK_SECRET=<webhook-signing-secret>
+DATABASE_URL=postgresql://postgres:...@db.xxx.supabase.co:5432/postgres
 RPC_ENDPOINT=https://api.devnet.solana.com
-PROGRAM_ID=<deployed-program-id>
+PROGRAM_ID=FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h
 PORT=3001
+CORS_ORIGIN=http://localhost:3000
 ```
 
-## Webhook Events Indexed
+## What was skipped
 
-- `initialize_match` — new match created
-- `join_match` — player joined, match started
-- `make_move` — each move recorded with FEN snapshot
-- `resign_game` — player forfeited
-- `claim_timeout_win` — timeout victory
-- `process_match_settlement` — payout distributed
-
-## References
-
-- [Helius Webhooks Docs](https://docs.helius.dev)
-- [Fastify Documentation](https://fastify.dev)
-- [Project Architecture](../docs/architecture.md)
-- [Project Specification](../SPEC.md)
+- **Redis** — Supabase Realtime covers pub/sub. Add if WebSocket fan-out becomes a bottleneck.
+- **Helius webhooks** — Client-driven sync simpler for MVP. Add webhooks for production reliability.
+- **Crank worker** — Manual timeout claiming works. Add when automated timeout enforcement needed.
+- **ELO table** — Schema ready but not populated. Add when rating system launches.
+- **PGN export** — Move history endpoint has all data needed. Add PGN formatting endpoint on demand.
