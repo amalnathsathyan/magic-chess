@@ -21,7 +21,7 @@ export async function prepareWagerAccount(
   mint: PublicKey,
   amount: bigint
 ): Promise<PublicKey> {
-  if (amount < 0n) throw new Error("Wager cannot be negative.");
+  if (amount < 1n) throw new Error("Wager must be greater than zero.");
   if (amount > BigInt(Number.MAX_SAFE_INTEGER)) {
     throw new Error("Wager amount is too large for this browser client.");
   }
@@ -36,7 +36,7 @@ export async function prepareWagerAccount(
     )
   );
 
-  if (mint.equals(WRAPPED_SOL_MINT) && amount > 0n) {
+  if (mint.equals(WRAPPED_SOL_MINT)) {
     transaction.add(
       SystemProgram.transfer({
         fromPubkey: owner,

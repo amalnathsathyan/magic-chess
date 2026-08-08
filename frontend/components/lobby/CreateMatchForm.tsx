@@ -35,7 +35,7 @@ export function CreateMatchForm({
   onClose,
   className,
 }: CreateMatchFormProps) {
-  const [wagerAmount, setWagerAmount] = useState("0");
+  const [wagerAmount, setWagerAmount] = useState("0.01");
   const [timeControl, setTimeControl] = useState<
     (typeof TIME_CONTROLS)[number]
   >(TIME_CONTROLS[1]);
@@ -147,7 +147,7 @@ export function CreateMatchForm({
               />
               {solanaConfig.wagerMint === WRAPPED_SOL_MINT.toBase58() && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Enter 0 for a free match. Paid matches wrap native SOL to WSOL before creation.
+                  Native SOL is wrapped to WSOL before the match transaction.
                 </p>
               )}
             </div>

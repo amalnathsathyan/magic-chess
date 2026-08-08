@@ -8,10 +8,9 @@ export interface MatchCardData {
   matchId: string;
   whitePlayer: string;
   blackPlayer?: string;
-  wagerDisplay: string;
-  wagerMint: string;
-  wagerKind: "entry" | "pot";
-  timeControl: string;
+  wagerAmount: string;
+  wagerToken: string; // "SOL" or SPL mint
+  timeControl: string; // e.g. "5+3", "10+0"
   status: "open" | "in_progress" | "completed";
   createdAt: number;
 }
@@ -39,29 +38,33 @@ export function MatchCard({ match, className }: MatchCardProps) {
         className
       )}
     >
-      <div className="flex items-center justify-between gap-3">
-        <span className="truncate font-mono text-xs text-muted-foreground">
-          #{match.matchId}
-        </span>
-        <span
-          className={cn(
-            "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium",
-            isOpen && "bg-primary/10 text-primary",
-            isInProgress && "bg-accent/10 text-accent",
-            match.status === "completed" && "bg-card text-muted-foreground"
-          )}
-        >
-          {isOpen ? "Open" : isInProgress ? "Live" : "Completed"}
-        </span>
-      </div>
-
-      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-            <User className="h-4 w-4 text-primary" aria-hidden="true" />
-          </span>
-          <span className="font-mono text-sm" title={match.whitePlayer}>
-            {shortenAddress(match.whitePlayer)}
+      <Link
+        href={
+          isInProgress
+            ? `/play/${match.matchId}/spectate`
+            : `/play/${match.matchId}`
+        }
+        className={cn(
+          "group glass-card block p-5 transition-all hover:border-border-hover hover:shadow-glow",
+          className
+        )}
+      >
+        {/* Header row */}
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-xs text-muted">#{match.matchId.slice(0, 8)}</span>
+          <span
+            className={cn(
+              "rounded-full px-2.5 py-0.5 text-xs font-medium",
+              isOpen && "bg-primary/10 text-primary",
+              isInProgress && "bg-accent/10 text-accent",
+              match.status === "completed" && "bg-muted/10 text-muted-foreground"
+            )}
+          >
+            {match.status === "open"
+              ? "Open"
+              : match.status === "in_progress"
+                ? "Live"
+                : "Completed"}
           </span>
         </div>
         <span className="text-sm text-muted-foreground">vs</span>
@@ -83,17 +86,19 @@ export function MatchCard({ match, className }: MatchCardProps) {
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div>
             <div className="flex items-center gap-1.5">
-              <Coins className="h-4 w-4 text-accent" aria-hidden="true" />
-              <span className="font-mono text-sm font-semibold tabular-nums">
-                {match.wagerDisplay}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {match.wagerKind === "entry" ? "entry" : "pot"}
+              <Coins className="h-4 w-4 text-accent" />
+              <span className="font-mono text-sm font-semibold">
+                {match.wagerAmount} {match.wagerToken}
               </span>
             </div>
-            <p className="mt-1 max-w-52 truncate pl-5 font-mono text-xs text-muted-foreground" title={match.wagerMint}>
-              Mint {shortenAddress(match.wagerMint)}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-4 w-4 text-muted" />
+              <span className="font-mono text-sm">{match.timeControl}</span>
+            </div>
+            <div className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5">
+              <Zap className="h-3 w-3 text-primary" aria-hidden="true" />
+              <span className="font-mono text-xs text-primary/90">On-chain</span>
+            </div>
           </div>
           <div className="flex items-center gap-1.5">
             <Clock className="h-4 w-4 text-muted-foreground" aria-hidden="true" />

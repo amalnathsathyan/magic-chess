@@ -17,15 +17,10 @@ import type {
 } from "../services/matchRealtime.js";
 
 // ── Auth helper ──
-function requireApiKey(request: FastifyRequest): void {
-  const header = request.headers["x-api-key"];
-  const key = Array.isArray(header) ? header[0] : header;
-  const supplied = Buffer.from(key ?? "");
-  const expected = Buffer.from(config.apiKey);
-  if (
-    supplied.length !== expected.length ||
-    !timingSafeEqual(supplied, expected)
-  ) {
+function requireApiKey(request: { headers: Record<string, string | string[] | undefined> }): void {
+  const raw = request.headers["x-api-key"];
+  const key = Array.isArray(raw) ? raw[0] : raw;
+  if (!key || key !== config.apiKey) {
     throw { statusCode: 401, message: "Unauthorized — invalid or missing X-API-Key" };
   }
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { FlipVertical, Flag, Volume2, VolumeX, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FlipVertical, Flag, Volume2, VolumeX } from "lucide-react";
 import { sounds } from "@/lib/sounds";
 
 interface BoardControlsProps {
@@ -22,18 +23,11 @@ export function BoardControls({
   className,
 }: BoardControlsProps) {
   const [isMuted, setIsMuted] = useState(() => !sounds.isEnabled());
-  const [confirmingResign, setConfirmingResign] = useState(false);
-
-  useEffect(() => sounds.bindUnlock(), []);
-  useEffect(() => {
-    if (!canResign) setConfirmingResign(false);
-  }, [canResign]);
 
   const toggleMute = () => {
     const newMuted = !isMuted;
     setIsMuted(newMuted);
     sounds.setEnabled(!newMuted);
-    if (!newMuted) sounds.play("move");
   };
 
   return (
@@ -78,18 +72,15 @@ export function BoardControls({
             <span className="hidden sm:inline">Flip</span>
           </button>
 
-          <span className="h-5 w-px bg-border" aria-hidden="true" />
-
-          <button
-            type="button"
-            onClick={() => setConfirmingResign(true)}
-            disabled={!canResign}
-            className={cn(controlClass, "text-destructive hover:bg-destructive/10")}
-            aria-label="Resign game"
-          >
-            <Flag className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">Resign</span>
-          </button>
+      <button
+        onClick={onResign}
+        disabled={!canResign}
+        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
+        title="Resign"
+      >
+        <Flag className="h-4 w-4" />
+        <span className="hidden sm:inline">Resign</span>
+      </button>
 
           <span className="h-5 w-px bg-border" aria-hidden="true" />
 

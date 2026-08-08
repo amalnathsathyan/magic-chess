@@ -1,26 +1,19 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
   ArrowLeft,
-  Bell,
-  BellOff,
-  Check,
   Clock3,
-  Eye,
+  ExternalLink,
   LoaderCircle,
   RefreshCw,
-  Share2,
   ShieldCheck,
   User,
-  Wifi,
-  WifiOff,
 } from "lucide-react";
 import { Chess, type Move as ChessMove, type Square } from "chess.js";
 import { PublicKey } from "@solana/web3.js";
-import { usePrivy } from "@privy-io/react-auth";
 import { useSolanaWallets } from "@privy-io/react-auth/solana";
 import {
   boardToFen,
@@ -30,7 +23,7 @@ import {
 } from "@magic-chess/sdk";
 import { useMagicChessClient, useMatch } from "@magic-chess/sdk/react";
 import { toast } from "sonner";
-import { WalletButton } from "@/components/shared/WalletButton";
+import { AuthGate } from "@/components/shared/AuthGate";
 import { TransactionStatus } from "@/components/shared/TransactionStatus";
 import { ChessBoard } from "@/components/chess/ChessBoard";
 import { MoveList } from "@/components/chess/MoveList";
@@ -39,17 +32,12 @@ import { BoardControls } from "@/components/chess/BoardControls";
 import { api, type ApiMatchHistory } from "@/lib/api";
 import { shortenAddress } from "@/lib/chess";
 import { sounds } from "@/lib/sounds";
-import { getPlatformFeeWallet, solanaConfig } from "@/lib/solana-config";
+import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
 import {
   prepareSettlementAccounts,
   prepareWagerAccount,
 } from "@/lib/wager";
 import { useMagicBlock } from "@/hooks/useMagicBlock";
-import {
-  formatOnChainTokenAmount,
-  useMintDetails,
-} from "@/hooks/useMintDetails";
-import { useMatchRealtime } from "@/hooks/useMatchRealtime";
 import { cn } from "@/lib/utils";
 
 interface PlayPageProps {
@@ -117,17 +105,11 @@ function PlayerRow({
   color,
   active,
   connectedAddress,
-  clock,
-  urgent = false,
-  online,
 }: {
   address: string | null;
   color: "White" | "Black";
   active: boolean;
   connectedAddress?: string;
-  clock?: string | null;
-  urgent?: boolean;
-  online?: boolean | null;
 }) {
   const isYou = Boolean(address && connectedAddress === address);
   return (
@@ -144,35 +126,17 @@ function PlayerRow({
         <div className="min-w-0">
           <p className="text-xs text-muted-foreground">
             {color}{isYou ? " · You" : ""}
-            {online !== undefined && online !== null ? (
-              <span className={online ? "text-primary" : "text-muted-foreground"}>
-                {online ? " · Online" : " · Offline"}
-              </span>
-            ) : null}
           </p>
           <p className="truncate font-mono text-sm font-semibold" title={address ?? undefined}>
             {address ? shortenAddress(address, 6) : "Waiting for opponent"}
           </p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {active ? (
-          <span className="hidden rounded-full bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary sm:inline">
-            To move
-          </span>
-        ) : null}
-        {clock ? (
-          <span
-            className={cn(
-              "min-w-20 rounded-md bg-background px-3 py-1.5 text-right font-mono text-lg font-semibold tabular-nums",
-              urgent && "bg-destructive/15 text-destructive"
-            )}
-            aria-label={`${color} move clock ${clock}`}
-          >
-            {clock}
-          </span>
-        ) : null}
-      </div>
+      {active ? (
+        <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary">
+          To move
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -181,17 +145,9 @@ export default function PlayPage({ params }: PlayPageProps) {
   const { matchId } = use(params);
   const client = useMagicChessClient();
   const { match, loading, error, refetch } = useMatch(matchId);
-  const { authenticated, login } = usePrivy();
-  const { wallets, createWallet } = useSolanaWallets();
+  const { wallets } = useSolanaWallets();
   const wallet = wallets[0];
   const { submitMove } = useMagicBlock();
-  const realtime = useMatchRealtime({
-    matchId,
-    walletAddress: wallet?.address,
-    signMessage: wallet
-      ? (message) => wallet.signMessage(message)
-      : undefined,
-  });
 
   const [history, setHistory] = useState<ApiMatchHistory | null>(null);
   const [historyUnavailable, setHistoryUnavailable] = useState(false);
@@ -207,13 +163,6 @@ export default function PlayPage({ params }: PlayPageProps) {
   const [txStatus, setTxStatus] = useState<TxStatus>("idle");
   const [txSignature, setTxSignature] = useState<string>();
   const [txError, setTxError] = useState<string>();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [shareCopied, setShareCopied] = useState(false);
-  const [announcement, setAnnouncement] = useState("");
-  const [isOnline, setIsOnline] = useState(true);
-  const previousStatusRef = useRef<GameStatus | null>(null);
-  const previousTurnRef = useRef<"white" | "black" | null>(null);
-  const previousMoveCountRef = useRef<number | null>(null);
 
   const loadHistory = useCallback(async () => {
     try {
@@ -227,21 +176,15 @@ export default function PlayPage({ params }: PlayPageProps) {
   useEffect(() => {
     void loadHistory();
     let polling = false;
-    const intervalMs = realtime.status === "live" ? 30_000 : 3_000;
     const intervalId = window.setInterval(() => {
       if (polling) return;
       polling = true;
       void Promise.allSettled([refetch(), loadHistory()]).finally(() => {
         polling = false;
       });
-    }, intervalMs);
+    }, 3_000);
     return () => window.clearInterval(intervalId);
-  }, [loadHistory, realtime.status, refetch]);
-
-  useEffect(() => {
-    if (realtime.refreshSequence === 0) return;
-    void Promise.allSettled([refetch(), loadHistory()]);
-  }, [loadHistory, realtime.refreshSequence, refetch]);
+  }, [loadHistory, refetch]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -256,106 +199,6 @@ export default function PlayPage({ params }: PlayPageProps) {
     return () => window.removeEventListener("resize", resize);
   }, []);
 
-  useEffect(() => sounds.bindUnlock(), []);
-
-  useEffect(() => {
-    const update = () => setIsOnline(navigator.onLine);
-    update();
-    window.addEventListener("online", update);
-    window.addEventListener("offline", update);
-    return () => {
-      window.removeEventListener("online", update);
-      window.removeEventListener("offline", update);
-    };
-  }, []);
-
-  useEffect(() => {
-    setNotificationsEnabled(
-      window.localStorage.getItem("magic-chess:match-notifications") === "true" &&
-        "Notification" in window &&
-        Notification.permission === "granted"
-    );
-  }, []);
-
-  const notify = useCallback(
-    (title: string, body: string) => {
-      setAnnouncement(`${title}. ${body}`);
-      if (
-        !notificationsEnabled ||
-        !("Notification" in window) ||
-        Notification.permission !== "granted" ||
-        document.visibilityState === "visible"
-      ) {
-        return;
-      }
-      new Notification(title, { body, tag: `magic-chess:${matchId}` });
-    },
-    [matchId, notificationsEnabled]
-  );
-
-  const toggleNotifications = async () => {
-    if (notificationsEnabled) {
-      setNotificationsEnabled(false);
-      window.localStorage.setItem("magic-chess:match-notifications", "false");
-      toast.success("Match notifications off");
-      return;
-    }
-    if (!("Notification" in window)) {
-      toast.error("This browser does not support notifications.");
-      return;
-    }
-    const permission =
-      Notification.permission === "default"
-        ? await Notification.requestPermission()
-        : Notification.permission;
-    if (permission !== "granted") {
-      toast.error("Notifications are blocked", {
-        description: "Allow notifications in your browser settings to receive turn alerts.",
-      });
-      return;
-    }
-    setNotificationsEnabled(true);
-    window.localStorage.setItem("magic-chess:match-notifications", "true");
-    toast.success("Turn notifications on");
-  };
-
-  const handleShare = async () => {
-    const url = `${window.location.origin}/play/${encodeURIComponent(matchId)}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: "Magic Chess match",
-          text: "Join or watch this on-chain chess match.",
-          url,
-        });
-      } else {
-        await navigator.clipboard.writeText(url);
-        setShareCopied(true);
-        window.setTimeout(() => setShareCopied(false), 1_500);
-        toast.success("Match link copied");
-      }
-    } catch (shareError) {
-      if (shareError instanceof DOMException && shareError.name === "AbortError") return;
-      toast.error("Could not share the match link");
-    }
-  };
-
-  const handleVerifyPresence = async () => {
-    try {
-      await realtime.verifyPlayerPresence();
-      toast.success("Player presence verified", {
-        description: "Your side now appears online to the opponent and spectators.",
-      });
-    } catch (verificationError) {
-      const message =
-        verificationError instanceof Error
-          ? verificationError.message
-          : "Could not verify player presence.";
-      if (/reject|declin|cancel/i.test(message)) return;
-      toast.error("Presence verification failed", { description: message });
-    }
-  };
-
   const authoritativeFen = useMemo(() => {
     if (!match) return null;
     try {
@@ -364,10 +207,6 @@ export default function PlayPage({ params }: PlayPageProps) {
       return null;
     }
   }, [match]);
-
-  const mintAddress = match?.bettingTokenMint.toBase58() ?? "";
-  const mintDetails = useMintDetails(mintAddress ? [mintAddress] : []);
-  const wagerMint = mintDetails.get(mintAddress);
 
   useEffect(() => {
     setOptimisticFen(null);
@@ -394,7 +233,7 @@ export default function PlayPage({ params }: PlayPageProps) {
   );
   const isBusy = txStatus === "submitting" || txStatus === "confirming";
   const canMove = Boolean(
-    isOnline && isActive && match?.isDelegated && isMyTurn && !isBusy && displayFen
+    isActive && match?.isDelegated && isMyTurn && !isBusy && displayFen
   );
 
   useEffect(() => {
@@ -404,7 +243,7 @@ export default function PlayPage({ params }: PlayPageProps) {
   const timeoutMilliseconds = match
     ? Number(match.moveTimeoutDuration) * 1_000
     : 0;
-  const localRemainingMilliseconds =
+  const remainingMilliseconds =
     match && isActive && timeoutMilliseconds > 0
       ? Math.max(
           0,
@@ -412,76 +251,13 @@ export default function PlayPage({ params }: PlayPageProps) {
             (now - Number(match.lastMoveTimestamp) * 1_000)
         )
       : null;
-  const realtimeClock = realtime.clock;
-  const remainingMilliseconds =
-    realtime.status === "live" &&
-    realtimeClock !== null &&
-    realtimeClock.activeColor === match?.currentTurn &&
-    realtimeClock.remainingMs !== null
-      ? realtimeClock.remainingMs
-      : localRemainingMilliseconds;
   const canClaimTimeout = Boolean(
-      isParticipant &&
-      isOnline &&
+    isParticipant &&
       isActive &&
       !isMyTurn &&
       remainingMilliseconds === 0 &&
       !isBusy
   );
-
-  useEffect(() => {
-    if (!match) return;
-    const previousStatus = previousStatusRef.current;
-    const previousTurn = previousTurnRef.current;
-
-    if (
-      previousStatus === GameStatus.WaitingForOpponent &&
-      match.gameStatus === GameStatus.Active
-    ) {
-      sounds.play("game_start");
-      toast.success("Opponent joined. The game is live.");
-      notify("Opponent joined", "Your Magic Chess match is ready.");
-    } else if (
-      previousStatus === GameStatus.Active &&
-      match.gameStatus !== GameStatus.Active
-    ) {
-      sounds.play("game_end");
-      notify("Game finished", statusLabel(match.gameStatus));
-    } else if (
-      match.gameStatus === GameStatus.Active &&
-      previousTurn !== null &&
-      previousTurn !== match.currentTurn &&
-      isMyTurn
-    ) {
-      notify("Your turn", `Move in match ${matchId}.`);
-    }
-
-    previousStatusRef.current = match.gameStatus;
-    previousTurnRef.current = match.currentTurn;
-  }, [isMyTurn, match, matchId, notify]);
-
-  useEffect(() => {
-    if (!history) return;
-    const moveCount = history.totalMoves;
-    const previousMoveCount = previousMoveCountRef.current;
-    if (previousMoveCount !== null && moveCount > previousMoveCount) {
-      const latestMove = history.moves.at(-1);
-      if (latestMove && latestMove.playerPubkey !== walletAddress) {
-        sounds.playMoveSound(latestMove.algebraicMove);
-      }
-    }
-    previousMoveCountRef.current = moveCount;
-  }, [history, walletAddress]);
-
-  useEffect(() => {
-    const originalTitle = document.title;
-    if (isMyTurn) document.title = `Your turn · ${matchId} · Magic Chess`;
-    else if (isActive) document.title = `Live · ${matchId} · Magic Chess`;
-    else document.title = `${matchId} · Magic Chess`;
-    return () => {
-      document.title = originalTitle;
-    };
-  }, [isActive, isMyTurn, matchId]);
 
   const historyMoves = history?.moves.map((move) => move.algebraicMove) ?? [];
   const moves = optimisticMove
@@ -529,36 +305,9 @@ export default function PlayPage({ params }: PlayPageProps) {
   };
 
   const handleJoin = async () => {
-    if (!match || !isWaiting) return;
-    if (!authenticated) {
-      login();
-      return;
-    }
-    if (!wallet) {
-      try {
-        await createWallet();
-        toast.success("Wallet ready", {
-          description: "Review the match and join when your wallet appears.",
-        });
-      } catch {
-        toast.error("Could not create your Solana wallet. Try again.");
-      }
-      return;
-    }
+    if (!match || !wallet || !isWaiting) return;
     let joined = false;
     try {
-      const expectedMint = new PublicKey(solanaConfig.wagerMint);
-      const expectedFeeWallet = getPlatformFeeWallet();
-      if (
-        !match.bettingTokenMint.equals(expectedMint) ||
-        !match.platformFeeWallet.equals(expectedFeeWallet) ||
-        match.platformFeeBasisPoints !== solanaConfig.platformFeeBps
-      ) {
-        throw new Error(
-          "This match does not use the deployment's approved wager and fee policy."
-        );
-      }
-
       const owner = new PublicKey(wallet.address);
       const amount = match.betAmountPlayerOne;
       const playerTokenAccount = await prepareWagerAccount(
@@ -663,6 +412,9 @@ export default function PlayPage({ params }: PlayPageProps) {
 
   const handleResign = async () => {
     if (!isParticipant || !isActive) return;
+    if (!window.confirm("Resign this on-chain match? This cannot be undone.")) {
+      return;
+    }
     try {
       await runTransaction(() => client.resign(matchId), "Resignation confirmed");
     } catch {
@@ -735,10 +487,8 @@ export default function PlayPage({ params }: PlayPageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <p className="sr-only" aria-live="polite" aria-atomic="true">
-        {announcement}
-      </p>
+    <AuthGate>
+      <div className="min-h-screen bg-background">
         <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
             <Link
@@ -748,73 +498,29 @@ export default function PlayPage({ params }: PlayPageProps) {
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               Arena
             </Link>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void handleShare()}
-                className="inline-flex min-h-10 min-w-10 items-center justify-center gap-2 rounded-lg border border-border px-2 text-xs font-medium text-muted-foreground transition-colors duration-100 hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary sm:px-3"
-                aria-label="Share match link"
-              >
-                {shareCopied ? (
-                  <Check className="h-4 w-4 text-primary" aria-hidden="true" />
-                ) : (
-                  <Share2 className="h-4 w-4" aria-hidden="true" />
-                )}
-                <span className="hidden sm:inline">Share</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => void toggleNotifications()}
-                className="inline-flex min-h-10 min-w-10 items-center justify-center gap-2 rounded-lg border border-border px-2 text-xs font-medium text-muted-foreground transition-colors duration-100 hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary sm:px-3"
-                aria-label={notificationsEnabled ? "Turn match notifications off" : "Turn match notifications on"}
-                aria-pressed={notificationsEnabled}
-              >
-                {notificationsEnabled ? (
-                  <Bell className="h-4 w-4 text-primary" aria-hidden="true" />
-                ) : (
-                  <BellOff className="h-4 w-4" aria-hidden="true" />
-                )}
-                <span className="hidden md:inline">Notify</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => void Promise.allSettled([refetch(), loadHistory()])}
-                disabled={loading}
-                className="inline-flex min-h-10 min-w-10 items-center justify-center gap-2 rounded-lg border border-border px-2 text-xs font-medium text-muted-foreground transition-colors duration-100 hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60 sm:px-3"
-                aria-label="Refresh match"
-              >
-                <RefreshCw
-                  className={cn("h-4 w-4", loading && "animate-spin motion-reduce:animate-none")}
-                  aria-hidden="true"
-                />
-                <span className="hidden lg:inline">Refresh</span>
-              </button>
-              <WalletButton />
-            </div>
+            <button
+              type="button"
+              onClick={() => void Promise.allSettled([refetch(), loadHistory()])}
+              disabled={loading}
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+            >
+              <RefreshCw
+                className={cn("h-3.5 w-3.5", loading && "animate-spin")}
+                aria-hidden="true"
+              />
+              Refresh
+            </button>
           </div>
         </header>
 
         <main className="mx-auto max-w-6xl px-4 py-6">
-          {!isOnline ? (
-            <div role="alert" className="mb-4 flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-muted-foreground">
-              <AlertCircle className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
-              You&apos;re offline. The board is read-only until the connection returns.
-            </div>
-          ) : error && match ? (
-            <div role="status" className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-muted-foreground">
-              <span>Live sync paused. The last confirmed board is still shown.</span>
-              <button type="button" onClick={() => void refetch()} className="min-h-10 shrink-0 rounded-md px-3 font-medium text-primary focus-visible:ring-2 focus-visible:ring-primary">
-                Retry
-              </button>
-            </div>
-          ) : null}
           {loading && !match ? (
-            <div className="grid gap-6 lg:grid-cols-[1fr_320px]" aria-label="Loading match" aria-busy="true">
-              <div className="mx-auto h-[min(560px,calc(100vw-2rem))] w-full max-w-[560px] animate-pulse rounded-xl bg-card motion-reduce:animate-none" />
-              <div className="h-64 animate-pulse rounded-xl bg-card motion-reduce:animate-none" />
+            <div className="grid gap-6 lg:grid-cols-[1fr_320px]" aria-label="Loading match">
+              <div className="mx-auto h-[min(560px,calc(100vw-2rem))] w-full max-w-[560px] animate-pulse rounded-xl bg-card" />
+              <div className="h-64 animate-pulse rounded-xl bg-card" />
             </div>
           ) : !match ? (
-            <div className="glass-card mx-auto max-w-xl p-6" role="alert">
+            <div className="glass-card mx-auto max-w-xl p-6">
               <div className="flex items-center gap-2 text-destructive">
                 <AlertCircle className="h-5 w-5" aria-hidden="true" />
                 <h1 className="font-heading text-lg font-semibold">Match unavailable</h1>
@@ -822,15 +528,6 @@ export default function PlayPage({ params }: PlayPageProps) {
               <p className="mt-3 text-sm text-muted-foreground">
                 {error?.message || "No on-chain match was found for this identifier."}
               </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button type="button" onClick={() => void refetch()} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary">
-                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
-                  Try again
-                </button>
-                <Link href="/arena" className="inline-flex min-h-10 items-center rounded-lg border border-border px-4 text-sm font-medium focus-visible:ring-2 focus-visible:ring-primary">
-                  Return to lobby
-                </Link>
-              </div>
             </div>
           ) : (
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -844,24 +541,6 @@ export default function PlayPage({ params }: PlayPageProps) {
                       (orientation === "white" ? "black" : "white")
                   }
                   connectedAddress={walletAddress}
-                  clock={
-                    isActive &&
-                    match.currentTurn ===
-                      (orientation === "white" ? "black" : "white") &&
-                    remainingMilliseconds !== null
-                      ? formatRemaining(remainingMilliseconds)
-                      : null
-                  }
-                  urgent={Boolean(
-                    remainingMilliseconds !== null && remainingMilliseconds <= 10_000
-                  )}
-                  online={
-                    realtime.presence
-                      ? orientation === "white"
-                        ? realtime.presence.black.online
-                        : realtime.presence.white.online
-                      : null
-                  }
                 />
 
                 <div className="relative">
@@ -882,7 +561,6 @@ export default function PlayPage({ params }: PlayPageProps) {
                   <PromotionDialog
                     isOpen={pendingPromotion !== null}
                     color={playerColor ?? "white"}
-                    onCancel={() => setPendingPromotion(null)}
                     onSelect={(piece) => {
                       if (pendingPromotion) {
                         void submitLegalMove(
@@ -906,24 +584,6 @@ export default function PlayPage({ params }: PlayPageProps) {
                       (orientation === "white" ? "white" : "black")
                   }
                   connectedAddress={walletAddress}
-                  clock={
-                    isActive &&
-                    match.currentTurn ===
-                      (orientation === "white" ? "white" : "black") &&
-                    remainingMilliseconds !== null
-                      ? formatRemaining(remainingMilliseconds)
-                      : null
-                  }
-                  urgent={Boolean(
-                    remainingMilliseconds !== null && remainingMilliseconds <= 10_000
-                  )}
-                  online={
-                    realtime.presence
-                      ? orientation === "white"
-                        ? realtime.presence.white.online
-                        : realtime.presence.black.online
-                      : null
-                  }
                 />
 
                 <BoardControls
@@ -947,44 +607,23 @@ export default function PlayPage({ params }: PlayPageProps) {
                       {statusLabel(match.gameStatus)}
                     </span>
                   </div>
-                  {!isParticipant ? (
-                    <p className="mt-3 inline-flex items-center gap-2 text-xs text-muted-foreground">
-                      <Eye className="h-4 w-4" aria-hidden="true" />
-                      You&apos;re watching on the same live match link.
-                    </p>
-                  ) : null}
                   <dl className="mt-4 space-y-3 text-sm">
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-muted-foreground">Wager</dt>
-                      <dd className="font-mono font-medium tabular-nums">
-                        {formatOnChainTokenAmount(match.betAmountPlayerOne, wagerMint)}
+                      <dd className="font-mono font-medium">
+                        {formatTokenAmount(match.betAmountPlayerOne)} {solanaConfig.wagerSymbol}
                       </dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-muted-foreground">Total pot</dt>
-                      <dd className="font-mono font-medium tabular-nums">
-                        {formatOnChainTokenAmount(match.totalPot, wagerMint)}
-                      </dd>
-                    </div>
-                    <div className="flex items-start justify-between gap-3">
-                      <dt className="text-muted-foreground">Wager mint</dt>
-                      <dd className="max-w-44 text-right">
-                        <span className="block truncate font-mono text-xs" title={mintAddress}>
-                          {mintAddress.slice(0, 6)}...{mintAddress.slice(-6)}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {wagerMint?.loading
-                            ? "Checking decimals…"
-                            : wagerMint?.verifiedOnChain
-                              ? `${wagerMint.decimals} decimals · RPC verified`
-                              : "Configured display fallback"}
-                        </span>
+                      <dd className="font-mono font-medium">
+                        {formatTokenAmount(match.totalPot)} {solanaConfig.wagerSymbol}
                       </dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <dt className="inline-flex items-center gap-1.5 text-muted-foreground">
                         <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-                        Current move
+                        Move timer
                       </dt>
                       <dd className="font-mono font-medium tabular-nums">
                         {remainingMilliseconds !== null
@@ -994,14 +633,6 @@ export default function PlayPage({ params }: PlayPageProps) {
                             : "No timer"}
                       </dd>
                     </div>
-                    {timeoutMilliseconds > 0 ? (
-                      <div className="flex items-center justify-between gap-3">
-                        <dt className="text-muted-foreground">Clock rule</dt>
-                        <dd className="font-mono text-xs tabular-nums">
-                          {formatRemaining(timeoutMilliseconds)} resets each move
-                        </dd>
-                      </div>
-                    ) : null}
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-muted-foreground">Runtime</dt>
                       <dd className="inline-flex items-center gap-1.5 font-medium">
@@ -1009,72 +640,23 @@ export default function PlayPage({ params }: PlayPageProps) {
                         {match.isDelegated ? "MagicBlock ER" : "Solana base"}
                       </dd>
                     </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-muted-foreground">Live sync</dt>
-                      <dd className="inline-flex items-center gap-1.5 font-medium">
-                        {realtime.status === "live" ? (
-                          <Wifi className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                        ) : (
-                          <WifiOff className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
-                        )}
-                        {realtime.status === "live"
-                          ? "Connected"
-                          : realtime.status === "reconnecting"
-                            ? "Reconnecting"
-                            : realtime.status === "connecting"
-                              ? "Connecting"
-                              : "Polling fallback"}
-                      </dd>
-                    </div>
-                    {realtime.presence ? (
-                      <div className="flex items-center justify-between gap-3">
-                        <dt className="text-muted-foreground">Watching</dt>
-                        <dd className="font-mono text-xs tabular-nums">
-                          {realtime.presence.spectators} spectator{realtime.presence.spectators === 1 ? "" : "s"}
-                        </dd>
-                      </div>
-                    ) : null}
                   </dl>
-
-                  {isParticipant && realtime.role === "spectator" && wallet ? (
-                    <div className="mt-4 rounded-lg border border-border bg-card/50 p-3">
-                      <p className="text-xs leading-relaxed text-muted-foreground">
-                        Live updates already work. Verify once with your wallet to show your side as online; this signature does not send a transaction.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => void handleVerifyPresence()}
-                        disabled={realtime.verifying}
-                        aria-busy={realtime.verifying}
-                        className="mt-2 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-primary/30 px-3 text-xs font-semibold text-primary transition-colors duration-100 hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
-                      >
-                        {realtime.verifying ? (
-                          <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                        ) : null}
-                        {realtime.verifying ? "Waiting for signature…" : "Verify player presence"}
-                      </button>
-                    </div>
-                  ) : null}
 
                   {isWaiting && walletAddress !== whiteAddress ? (
                     <button
                       type="button"
                       onClick={() => void handleJoin()}
-                      disabled={isBusy || !isOnline}
+                      disabled={isBusy}
                       className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                     >
-                      {isBusy ? <LoaderCircle className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : null}
-                      {!authenticated
-                        ? "Sign in to join"
-                        : !wallet
-                          ? "Create wallet to join"
-                          : `Join for ${formatOnChainTokenAmount(match.betAmountPlayerOne, wagerMint)}`}
+                      {isBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                      Join for {formatTokenAmount(match.betAmountPlayerOne)} {solanaConfig.wagerSymbol}
                     </button>
                   ) : null}
 
                   {isWaiting && walletAddress === whiteAddress ? (
                     <p className="mt-5 rounded-lg border border-border bg-card/50 p-3 text-sm text-muted-foreground">
-                      Your match is confirmed on Solana. Share this page&apos;s link—your opponent joins here and everyone else can watch here.
+                      Your match is live on Solana. Share this match ID with an opponent.
                     </p>
                   ) : null}
 
@@ -1082,7 +664,7 @@ export default function PlayPage({ params }: PlayPageProps) {
                     <button
                       type="button"
                       onClick={() => void handleDelegate()}
-                      disabled={isBusy || !isOnline}
+                      disabled={isBusy}
                       className="mt-5 min-h-11 w-full rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                     >
                       Enable fast play
@@ -1103,7 +685,7 @@ export default function PlayPage({ params }: PlayPageProps) {
                     <button
                       type="button"
                       onClick={() => void handleFinalize()}
-                      disabled={isBusy || !isOnline}
+                      disabled={isBusy}
                       className="mt-5 min-h-11 w-full rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                     >
                       {match.isDelegated ? "Finalize and settle payout" : "Settle payout"}
@@ -1123,9 +705,13 @@ export default function PlayPage({ params }: PlayPageProps) {
                   ) : null}
 
                   {!isParticipant && !isWaiting ? (
-                    <p className="mt-5 rounded-lg border border-border bg-card/50 p-3 text-sm text-muted-foreground">
-                      Spectator mode is read-only and refreshes from the same authoritative match account.
-                    </p>
+                    <Link
+                      href={`/play/${matchId}/spectate`}
+                      className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      Open spectator mode
+                      <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                    </Link>
                   ) : null}
                 </section>
 
@@ -1150,7 +736,8 @@ export default function PlayPage({ params }: PlayPageProps) {
               </aside>
             </div>
           )}
-      </main>
-    </div>
+        </main>
+      </div>
+    </AuthGate>
   );
 }

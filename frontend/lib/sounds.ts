@@ -22,7 +22,6 @@ class SoundManager {
   private enabled = true;
   private preferenceLoaded = false;
   private cache = new Map<string, HTMLAudioElement>();
-  private unlockCleanup: (() => void) | null = null;
 
   setEnabled(on: boolean) {
     this.enabled = on;
@@ -52,54 +51,6 @@ class SoundManager {
       this.enabled = storedPreference === "true";
     }
     this.preferenceLoaded = true;
-  }
-
-  private getAudio(path: string): HTMLAudioElement {
-    let audio = this.cache.get(path);
-    if (!audio) {
-      audio = new Audio(path);
-      audio.preload = "auto";
-      audio.volume = 0.3;
-      this.cache.set(path, audio);
-    }
-    return audio;
-  }
-
-  /**
-   * Prime the audio elements during the first real user gesture. This keeps
-   * move feedback working after an asynchronous wallet/RPC round trip on
-   * browsers with strict autoplay policies.
-   */
-  bindUnlock(): () => void {
-    if (typeof window === "undefined") return () => undefined;
-    if (this.unlockCleanup) return this.unlockCleanup;
-
-    const unlock = () => {
-      this.loadPreference();
-      if (this.enabled) {
-        const audio = this.getAudio(SOUND_PATHS.move);
-        const volume = audio.volume;
-        audio.volume = 0;
-        void audio.play().then(() => {
-          audio.pause();
-          audio.currentTime = 0;
-          audio.volume = volume;
-        }).catch(() => {
-          audio.volume = volume;
-        });
-      }
-      cleanup();
-    };
-    const cleanup = () => {
-      window.removeEventListener("pointerdown", unlock, true);
-      window.removeEventListener("keydown", unlock, true);
-      this.unlockCleanup = null;
-    };
-
-    window.addEventListener("pointerdown", unlock, true);
-    window.addEventListener("keydown", unlock, true);
-    this.unlockCleanup = cleanup;
-    return cleanup;
   }
 
   play(sound: SoundName) {

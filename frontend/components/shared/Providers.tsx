@@ -1,12 +1,7 @@
 "use client";
 
 import { PrivyProvider } from "@privy-io/react-auth";
-import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import { SolanaProgramProvider } from "./SolanaProgramProvider";
-
-const solanaConnectors = toSolanaWalletConnectors({
-  shouldAutoConnect: true,
-});
 
 function AuthConfigurationError() {
   return (
