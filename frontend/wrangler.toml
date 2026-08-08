@@ -1,13 +1,15 @@
 # Cloudflare Pages configuration for Magic Chess frontend
-# Deploy: npx wrangler pages deploy .vercel/output/static
+# Cloudflare auto-detects Next.js — no custom deploy command needed.
+# If using Wrangler CLI directly: npx wrangler pages deploy .next
 
 name = "magic-chess"
 compatibility_date = "2025-08-07"
 
-# Build output — Next.js static export via @cloudflare/next-on-pages
-pages_build_output_dir = ".vercel/output/static"
+# Next.js outputs to .next/. Cloudflare Pages auto-detects this.
+# No pages_build_output_dir needed — Cloudflare natively supports Next.js.
 
 # Environment variables (set in Cloudflare Dashboard for secrets)
 [vars]
 NEXT_PUBLIC_RPC_ENDPOINT = "https://api.devnet.solana.com"
 NEXT_PUBLIC_PROGRAM_ID = "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h"
+NEXT_PUBLIC_API_URL = "https://magic-chess-backend.example.com"
