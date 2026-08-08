@@ -18,6 +18,18 @@
       "sourceType": "github",
       "skillPath": "skills/solana-incident-response/SKILL.md",
       "computedHash": "bf9c8e1878c98609082f8728181f47276958e601367ccc3556e2349bcde25d0d"
+    },
+    "supabase": {
+      "source": "supabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/supabase/SKILL.md",
+      "computedHash": "886743d08edece523e48b5c6c737afa29029503bdd3b28a722795712cedfcd91"
+    },
+    "supabase-postgres-best-practices": {
+      "source": "supabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/supabase-postgres-best-practices/SKILL.md",
+      "computedHash": "e14e276241805c97dbcfe40dcbea1a3035269cc7293cac4b1832dda41a835e60"
     }
   }
 }

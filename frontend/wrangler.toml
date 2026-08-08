@@ -7,11 +7,14 @@
 #   Root directory:  ./frontend/
 
 name = "arena"
-compatibility_date = "2025-08-07"
+main = ".open-next/worker.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
 
 # Serve Next.js static output as assets
 [assets]
-directory = ".next"
+directory = ".open-next/assets"
+binding = "ASSETS"
 
 # Environment variables (set in Cloudflare Dashboard for secrets)
 [vars]
