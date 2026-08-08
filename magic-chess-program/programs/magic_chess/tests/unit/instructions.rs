@@ -80,18 +80,12 @@ fn is_session_valid(chess_match: &ChessMatch, signer: Pubkey, now: i64) -> bool 
 /// Derive the match escrow PDA for a given match_id and program_id.
 /// Mirrors the logic in payout_logic.rs and abort_match.rs.
 fn derive_escrow_pda(match_id: &str, program_id: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(
-        &[MATCH_ESCROW_SEED, match_id.as_bytes()],
-        program_id,
-    )
+    Pubkey::find_program_address(&[MATCH_ESCROW_SEED, match_id.as_bytes()], program_id)
 }
 
 /// Derive the chess_match PDA for a given match_id and program_id.
 fn derive_match_pda(match_id: &str, program_id: &Pubkey) -> (Pubkey, u8) {
-    Pubkey::find_program_address(
-        &[CHESS_MATCH_SEED, match_id.as_bytes()],
-        program_id,
-    )
+    Pubkey::find_program_address(&[CHESS_MATCH_SEED, match_id.as_bytes()], program_id)
 }
 
 /// Calculate platform fee from total_pot and basis points.
@@ -105,7 +99,9 @@ fn calculate_fee(total_pot: u64, fee_bps: u16) -> u64 {
 
 /// Calculate winner payout: total_pot minus fee.
 fn calculate_winner_amount(total_pot: u64, fee_bps: u16) -> u64 {
-    total_pot.checked_sub(calculate_fee(total_pot, fee_bps)).unwrap()
+    total_pot
+        .checked_sub(calculate_fee(total_pot, fee_bps))
+        .unwrap()
 }
 
 /// Calculate per-player draw payout: (total_pot - fee) / 2 for player one,
@@ -223,10 +219,10 @@ fn initialize_validates_match_id_length() {
 
 #[test]
 fn initialize_validates_bet_amount() {
-    // bet_amount must be >= MIN_BET_AMOUNT (1).
+    // Zero is the canonical on-chain representation of a free match.
 
     let zero_bet: u64 = 0;
-    assert!(!(zero_bet >= MIN_BET_AMOUNT));
+    assert!(zero_bet >= MIN_BET_AMOUNT);
 
     let one_bet: u64 = 1;
     assert!(one_bet >= MIN_BET_AMOUNT);
@@ -290,10 +286,7 @@ fn join_match_validation() {
     game.players[1] = joiner;
     game.game_status = GameStatus::Active;
     game.bet_amount_player_two = bet_amount;
-    game.total_pot = game
-        .bet_amount_player_one
-        .checked_add(bet_amount)
-        .unwrap();
+    game.total_pot = game.bet_amount_player_one.checked_add(bet_amount).unwrap();
 
     assert_eq!(game.players[1], joiner);
     assert_eq!(game.game_status, GameStatus::Active);
@@ -924,9 +917,7 @@ fn settlement_duplicate_accounts_detection() {
     let platform_ata = Pubkey::new_unique();
 
     // Distinct — valid.
-    let all_distinct = p1_ata != p2_ata
-        && p1_ata != platform_ata
-        && p2_ata != platform_ata;
+    let all_distinct = p1_ata != p2_ata && p1_ata != platform_ata && p2_ata != platform_ata;
     assert!(all_distinct);
 
     // p1 == p2 — invalid.

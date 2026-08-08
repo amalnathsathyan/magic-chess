@@ -61,12 +61,7 @@ class SoundManager {
 
     const path = SOUND_PATHS[sound];
 
-    let audio = this.cache.get(path);
-    if (!audio) {
-      audio = new Audio(path);
-      audio.volume = 0.3;
-      this.cache.set(path, audio);
-    }
+    const audio = this.getAudio(path);
 
     audio.currentTime = 0;
     audio.play().catch(() => {
@@ -89,6 +84,7 @@ class SoundManager {
 
   /** Clean up cached audio elements */
   destroy() {
+    this.unlockCleanup?.();
     this.cache.forEach((audio) => {
       audio.pause();
       audio.src = "";

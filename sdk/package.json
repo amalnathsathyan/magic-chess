@@ -19,6 +19,9 @@
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0"
   },
+  "dependencies": {
+    "@magicblock-labs/ephemeral-rollups-kit": "^0.16.2"
+  },
   "devDependencies": {
     "@anchor-lang/core": "^1.1.2",
     "@solana/web3.js": "^1.95.4",

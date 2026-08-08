@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Magic Chess — Solana Blitz V7 Submission</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #09090b;
+      --panel: #141417;
+      --line: #2a2a30;
+      --ink: #f4f4f5;
+      --muted: #a1a1aa;
+      --accent: #7c5cff;
+      --accent-soft: rgba(124, 92, 255, 0.14);
+      --ok: #48d597;
+      --warn: #ffbf69;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 85% 0%, var(--accent-soft), transparent 34rem), var(--bg);
+      color: var(--ink);
+      font: 16px/1.65 Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+    main { width: min(920px, calc(100% - 32px)); margin: 0 auto; padding: 64px 0 96px; }
+    h1 { margin: 0; font-size: clamp(2.4rem, 7vw, 4.8rem); line-height: 0.98; letter-spacing: -0.055em; }
+    h2 { margin: 64px 0 20px; font-size: 1.7rem; letter-spacing: -0.025em; }
+    h3 { margin: 28px 0 10px; color: var(--ink); }
+    p { margin: 0 0 16px; }
+    a { color: #b8a8ff; }
+    code { font: 0.92em ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .eyebrow { color: #b8a8ff; font: 700 0.78rem/1 ui-monospace, monospace; letter-spacing: 0.16em; text-transform: uppercase; }
+    .lede { max-width: 720px; margin-top: 24px; color: var(--muted); font-size: 1.15rem; }
+    .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+    .badge { border: 1px solid var(--line); border-radius: 999px; padding: 7px 11px; background: var(--panel); color: var(--muted); font-size: 0.86rem; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .card, .field { border: 1px solid var(--line); border-radius: 16px; background: rgba(20, 20, 23, 0.88); padding: 20px; }
+    .field.wide { grid-column: 1 / -1; }
+    .label { margin-bottom: 8px; color: var(--muted); font: 700 0.75rem/1.2 ui-monospace, monospace; letter-spacing: 0.09em; text-transform: uppercase; }
+    .value { overflow-wrap: anywhere; }
+    .description p:last-child { margin-bottom: 0; }
+    .timeline { display: grid; gap: 12px; }
+    .beat { display: grid; grid-template-columns: 100px 1fr; gap: 16px; border-top: 1px solid var(--line); padding-top: 16px; }
+    .time { color: #b8a8ff; font: 700 0.82rem ui-monospace, monospace; }
+    ul, ol { margin: 10px 0 0; padding-left: 22px; }
+    li + li { margin-top: 7px; }
+    .check { list-style: none; padding: 0; }
+    .check li::before { display: inline-block; width: 1.5em; color: var(--ok); content: "✓"; }
+    .check li.todo::before { color: var(--warn); content: "○"; }
+    pre { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; background: #0d0d10; padding: 18px; color: #d7d4e9; }
+    .notice { margin-top: 28px; border-left: 3px solid var(--warn); padding: 14px 18px; background: rgba(255, 191, 105, 0.08); color: #f4d8b4; }
+    @media (max-width: 680px) {
+      main { padding-top: 42px; }
+      .grid { grid-template-columns: 1fr; }
+      .field.wide { grid-column: auto; }
+      .beat { grid-template-columns: 1fr; gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Solana Blitz V7 · Collaboration</p>
+    <h1>Magic Chess</h1>
+    <p class="lede">A real-time, on-chain chess arena where players wager, spectators predict, and MagicBlock makes every move feel immediate.</p>
+    <div class="meta">
+      <span class="badge">Games</span>
+      <span class="badge">Consumer</span>
+      <span class="badge">DeFi</span>
+      <a class="badge" href="https://build.magicblock.app/?event=10&amp;stage=blitz">Official submission</a>
+    </div>
+
+    <h2>About the builder</h2>
+    <div class="grid">
+      <div class="field"><div class="label">Name</div><div class="value">Amalnath Sathyan</div></div>
+      <div class="field"><div class="label">Email</div><div class="value">amalnathsathyan@gmail.com</div></div>
+      <div class="field"><div class="label">Country</div><div class="value">&lt;ADD COUNTRY OF RESIDENCE&gt;</div></div>
+      <div class="field"><div class="label">Roles</div><div class="value">Founder · Blockchain Engineer · Full-stack Developer</div></div>
+      <div class="field wide"><div class="label">Wallet</div><div class="value"><code>8NUByb8eh3W4okxPXhSnaRdc75YZguJJu9LdZMsP8S6D</code></div></div>
+    </div>
+
+    <h2>Submission fields</h2>
+    <div class="grid">
+      <div class="field"><div class="label">Project name</div><div class="value">Magic Chess</div></div>
+      <div class="field"><div class="label">Categories</div><div class="value">Games · Consumer · DeFi</div></div>
+      <div class="field"><div class="label">Website</div><div class="value"><a href="https://arena.chessmagic.workers.dev/">arena.chessmagic.workers.dev</a></div></div>
+      <div class="field"><div class="label">Public repository</div><div class="value"><a href="https://github.com/amalnathsathyan/magic-chess">github.com/amalnathsathyan/magic-chess</a></div></div>
+      <div class="field"><div class="label">Pitch &amp; demo</div><div class="value">&lt;ADD PUBLIC VIDEO URL&gt;</div></div>
+      <div class="field"><div class="label">Team</div><div class="value">Solo builder · t.me/amalnathsathyan</div></div>
+      <div class="field wide"><div class="label">Explorer proof</div><div class="value"><a href="https://explorer.solana.com/address/FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h?cluster=devnet">View deployed devnet program</a></div></div>
+      <div class="field wide"><div class="label">Program ID</div><div class="value"><code>FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h</code></div></div>
+    </div>
+
+    <h2>Description</h2>
+    <section class="card description">
+      <p>Chess already has a global culture of players, spectators, rankings, and tournaments, yet its on-chain market is still largely untapped. Existing blockchain chess experiments often solve only one part of the experience: move validation, escrow, or a chess mode inside a larger platform. I wanted the complete loop—create a serious match, play without repeated wallet friction, let spectators participate in the outcome, and settle everything transparently.</p>
+      <p>Magic Chess is a real-time, on-chain chess arena on Solana. Players create and join matches with an optional SPL-token wager, while spectators predict White, Black, or Draw through parimutuel pools. The original Rust rules engine validates piece movement, castling, en passant, promotion, check and checkmate, stalemate, threefold repetition, insufficient material, and the fifty-move rule. PDA escrows hold wagers, and the program settles match and prediction payouts without a trusted operator.</p>
+      <p>MagicBlock is what makes this usable as a game rather than a sequence of wallet popups. A match account is created on Solana and delegated to an Ephemeral Rollup. Moves execute against the delegated state with low latency and no per-move gas cost; scoped session keys remove repeated approvals. The final state commits back to Solana, while token custody and settlement stay on L1.</p>
+      <p>The live devnet PWA, public Anchor program, TypeScript SDK, prediction flow, and backend are already implemented. A fresh core test run verified 252 passing Rust tests with zero failures and three environment-dependent cases ignored. For Blitz V7's collaboration theme, Magic Chess brings players, spectators, and eventually headless agents into the same verifiable match: different participants, one shared on-chain state.</p>
+    </section>
+
+    <h2>Additional information</h2>
+    <section class="card description">
+      <p>MagicBlock is part of the core execution path, not a badge added for the hackathon. The program implements delegation, ER move execution, scoped per-player session keys, state commits, and undelegation. Solana L1 remains responsible for SPL-token custody and deterministic settlement.</p>
+      <p>The repository includes the Anchor program, Next.js PWA, TypeScript SDK, Fastify/PostgreSQL backend, CI, LiteSVM integration coverage, payout-flow tests, and Mollusk compute-unit benchmarks. The demo and repository are public, and the devnet program deployment has been independently rechecked for this submission.</p>
+      <p>I am a solo builder and have worked as a blockchain engineer in the Solana ecosystem since 2024. The idea has stayed with me since the Turbin3 MagicBlock Special Cohort. My immediate goal is simple: make the complete create → join → play → predict → settle flow feel like chess first and blockchain second.</p>
+    </section>
+
+    <h2>Judge quick start</h2>
+    <section class="card">
+      <ol>
+        <li>Open the <a href="https://arena.chessmagic.workers.dev/">live devnet application</a>.</li>
+        <li>Sign in with Privy or connect a Solana wallet.</li>
+        <li>Open the Arena to create, join, or spectate a match.</li>
+        <li>Verify the <a href="https://explorer.solana.com/address/FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h?cluster=devnet">deployed program</a>.</li>
+        <li>Review the public repository and architecture.</li>
+      </ol>
+      <pre><code>git clone https://github.com/amalnathsathyan/magic-chess.git
+cd magic-chess/frontend
+npm install
+cp .env.example .env.local
+npm run dev</code></pre>
+      <p>The local environment requires a Privy app ID and platform fee wallet. Use the live devnet deployment for the fastest evaluation path.</p>
+    </section>
+
+    <h2>Demo script · 2:40</h2>
+    <div class="timeline">
+      <div class="beat"><div class="time">0:00–0:15</div><div><strong>Hook.</strong> Show an active board, second player, and spectator view. Explain that chess has spectators but lacks a complete on-chain arena without per-move wallet friction.</div></div>
+      <div class="beat"><div class="time">0:15–0:30</div><div><strong>Product.</strong> Show the landing page and Arena. Explain optional SPL wagers and parimutuel spectator predictions.</div></div>
+      <div class="beat"><div class="time">0:30–1:15</div><div><strong>Create and join.</strong> Sign in, create a prediction-enabled match, copy its link, and join from a second clean browser profile.</div></div>
+      <div class="beat"><div class="time">1:15–1:55</div><div><strong>Play and predict.</strong> Make moves from both windows, show the absence of repeated wallet approvals, and place a prediction from the spectator view.</div></div>
+      <div class="beat"><div class="time">1:55–2:20</div><div><strong>Proof.</strong> Open Solana Explorer, then show the delegation or session-key code for no more than ten seconds.</div></div>
+      <div class="beat"><div class="time">2:20–2:40</div><div><strong>Close.</strong> Return to the arena and repository. Invite judges to try the devnet build and inspect every layer publicly.</div></div>
+    </div>
+
+    <h2>Before submitting</h2>
+    <section class="card">
+      <ul class="check">
+        <li>Live project website responds successfully.</li>
+        <li>GitHub repository is public.</li>
+        <li>Devnet program deployment is verified.</li>
+        <li>Description explains why MagicBlock is essential.</li>
+        <li class="todo">Add country of residence.</li>
+        <li class="todo">Record and upload the sub-three-minute pitch/demo.</li>
+        <li class="todo">Replace the video placeholder.</li>
+        <li class="todo">Submit when the Blitz V7 window opens.</li>
+      </ul>
+      <div class="notice">Record only flows that work on the deployed build. Do not present roadmap features as shipped.</div>
+    </section>
+  </main>
+</body>
+</html>

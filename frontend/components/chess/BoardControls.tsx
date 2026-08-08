@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { FlipVertical, Flag, Volume2, VolumeX, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FlipVertical, Flag, Volume2, VolumeX } from "lucide-react";
 import { sounds } from "@/lib/sounds";
@@ -11,6 +12,9 @@ interface BoardControlsProps {
   canResign?: boolean;
   className?: string;
 }
+
+const controlClass =
+  "inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors duration-100 active:translate-y-px focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none disabled:cursor-not-allowed disabled:opacity-40";
 
 export function BoardControls({
   onFlipBoard,
@@ -27,17 +31,46 @@ export function BoardControls({
   };
 
   return (
-    <div className={cn("glass-card flex items-center justify-center gap-2 p-2", className)}>
-      <button
-        onClick={onFlipBoard}
-        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
-        title="Flip Board"
-      >
-        <FlipVertical className="h-4 w-4" />
-        <span className="hidden sm:inline">Flip</span>
-      </button>
-
-      <div className="h-4 w-px bg-border/50" />
+    <div
+      className={cn("glass-card flex min-h-12 items-center justify-center gap-1 p-1.5", className)}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") setConfirmingResign(false);
+      }}
+    >
+      {confirmingResign ? (
+        <>
+          <span className="px-2 text-xs text-muted-foreground">Resign this game?</span>
+          <button
+            type="button"
+            onClick={() => setConfirmingResign(false)}
+            className={cn(controlClass, "text-muted-foreground hover:bg-card hover:text-foreground")}
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setConfirmingResign(false);
+              onResign();
+            }}
+            className={cn(controlClass, "bg-destructive/10 text-destructive hover:bg-destructive/20")}
+          >
+            <Flag className="h-4 w-4" aria-hidden="true" />
+            Confirm resign
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={onFlipBoard}
+            className={cn(controlClass, "text-muted-foreground hover:bg-card hover:text-foreground")}
+            aria-label="Flip board"
+          >
+            <FlipVertical className="h-4 w-4" aria-hidden="true" />
+            <span className="hidden sm:inline">Flip</span>
+          </button>
 
       <button
         onClick={onResign}
@@ -49,15 +82,23 @@ export function BoardControls({
         <span className="hidden sm:inline">Resign</span>
       </button>
 
-      <div className="h-4 w-px bg-border/50" />
+          <span className="h-5 w-px bg-border" aria-hidden="true" />
 
-      <button
-        onClick={toggleMute}
-        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
-        title={isMuted ? "Unmute" : "Mute"}
-      >
-        {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-      </button>
+          <button
+            type="button"
+            onClick={toggleMute}
+            className={cn(controlClass, "min-w-10 text-muted-foreground hover:bg-card hover:text-foreground")}
+            aria-label={isMuted ? "Turn move sounds on" : "Mute move sounds"}
+            aria-pressed={isMuted}
+          >
+            {isMuted ? (
+              <VolumeX className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <Volume2 className="h-4 w-4" aria-hidden="true" />
+            )}
+          </button>
+        </>
+      )}
     </div>
   );
 }

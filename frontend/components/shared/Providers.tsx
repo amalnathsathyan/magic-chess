@@ -45,6 +45,20 @@ function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
           theme: "dark",
           accentColor: "#00e676",
           logo: "/logo.svg",
+          walletChainType: "solana-only",
+          walletList: [
+            "phantom",
+            "solflare",
+            "backpack",
+            "detected_solana_wallets",
+            "wallet_connect_qr",
+          ],
+        },
+
+        externalWallets: {
+          solana: {
+            connectors: solanaConnectors,
+          },
         },
 
         embeddedWallets: {

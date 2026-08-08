@@ -145,6 +145,18 @@ export class MagicChessClient {
   async joinMatch(
     params: JoinMatchParams
   ): Promise<{ signature: TransactionSignature }> {
+    await this.requireBaseMatch(params.matchId);
+    const match = await this.getMatch(params.matchId);
+    if (!match) throw new Error(`Match ${params.matchId} not found`);
+    if (params.betAmount !== undefined) {
+      const expected = integerToBigInt(params.betAmount, "betAmount");
+      if (expected !== match.betAmountPlayerOne) {
+        throw new Error(
+          `Stale wager: chain requires ${match.betAmountPlayerOne} raw units, received ${expected}`
+        );
+      }
+    }
+
     const [chessMatchPda] = findChessMatchPda(params.matchId, this.programId);
     const [matchEscrowPda] = findMatchEscrowPda(params.matchId, this.programId);
 
@@ -175,6 +187,7 @@ export class MagicChessClient {
     matchId: string,
     playerTokenAccount: PublicKey
   ): Promise<{ signature: TransactionSignature }> {
+    await this.requireBaseMatch(matchId);
     const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
     const [matchEscrowPda] = findMatchEscrowPda(matchId, this.programId);
 
@@ -315,7 +328,8 @@ export class MagicChessClient {
    */
   async delegateMatch(
     matchId: string
-  ): Promise<{ signature: TransactionSignature }> {
+  ): Promise<{ signature: TransactionSignature; ephemeralRpcEndpoint: string }> {
+    await this.requireBaseMatch(matchId);
     const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
 
     const [bufferChessMatch] = PublicKey.findProgramAddressSync(
@@ -345,7 +359,15 @@ export class MagicChessClient {
       })
       .rpc();
 
-    return { signature: sig };
+    const runtime = await waitForDelegation(
+      this.baseConnection,
+      chessMatchPda,
+      this.programId,
+      this.routerEndpoint
+    );
+    const ephemeralRpcEndpoint = runtime.connection.rpcEndpoint;
+
+    return { signature: sig, ephemeralRpcEndpoint };
   }
 
   /**
@@ -382,7 +404,7 @@ export class MagicChessClient {
     }
     const sig = await this.sendInstruction(runtime.connection, ix);
 
-    return { signature: sig };
+    return { signature: sig, baseCommitmentSignature };
   }
 
   /**
@@ -419,7 +441,26 @@ export class MagicChessClient {
     }
     const sig = await this.sendInstruction(runtime.connection, ix);
 
-    return { signature: sig };
+    return { signature: sig, baseCommitmentSignature };
+  }
+
+  /** Register a real session signer on the authoritative runtime. */
+  async setSessionKey(
+    matchId: string,
+    sessionSigner: PublicKey,
+    expiresAt: IntegerInput
+  ): Promise<{ signature: TransactionSignature }> {
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+    const ix = await this.program.methods
+      .setSessionKey(sessionSigner, toBN(expiresAt, "expiresAt", true))
+      .accountsPartial({
+        chessMatch: chessMatchPda,
+        player: this.requireWallet("setSessionKey").publicKey,
+      })
+      .instruction();
+    const runtime = await this.runtimeForMatch(matchId);
+    const signature = await this.sendInstruction(runtime.connection, ix);
+    return { signature };
   }
 
   /** Register a real session signer on the authoritative runtime. */
@@ -781,6 +822,9 @@ function determineMoveResult(match: ChessMatch | null): MoveResult {
     if (reason === "stalemate") return "stalemate" as MoveResult;
     if (reason === "threefoldRepetition")
       return "threefoldRepetition" as MoveResult;
+    if (reason === "insufficientMaterial")
+      return "insufficientMaterial" as MoveResult;
+    if (reason === "fiftyMoveRule") return "fiftyMoveRule" as MoveResult;
     return "stalemate" as MoveResult;
   }
 

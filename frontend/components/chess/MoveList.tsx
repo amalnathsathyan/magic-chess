@@ -27,19 +27,28 @@ export function MoveList({
     }
   }, [moves]);
 
+  const copyText = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.error(`Could not copy ${label}`, {
+        description: "Your browser blocked clipboard access.",
+      });
+    }
+  };
+
   const copyPGN = () => {
     const pgn = moves.reduce((acc, move, i) => {
       if (i % 2 === 0) return `${acc} ${Math.floor(i / 2) + 1}. ${move}`;
       return `${acc} ${move}`;
     }, "").trim();
-    navigator.clipboard.writeText(pgn);
-    toast.success("PGN copied to clipboard");
+    void copyText(pgn, "PGN");
   };
 
   const copyFEN = () => {
     if (fen) {
-      navigator.clipboard.writeText(fen);
-      toast.success("FEN copied to clipboard");
+      void copyText(fen, "FEN");
     }
   };
 
@@ -57,16 +66,18 @@ export function MoveList({
     return (
       <div
         className={cn(
-          "glass-card flex h-full flex-col p-4 backdrop-blur-md bg-background/40",
+          "glass-card flex h-full flex-col bg-background/40 p-4 backdrop-blur-md",
           className
         )}
       >
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="font-heading text-sm font-semibold text-muted">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="font-heading text-sm font-semibold text-foreground">
             Moves
           </h3>
         </div>
-        <p className="text-sm text-muted-foreground">No moves yet</p>
+        <p className="text-sm text-muted-foreground">
+          No moves yet. White has the first move.
+        </p>
       </div>
     );
   }
@@ -74,29 +85,31 @@ export function MoveList({
   return (
     <div
       className={cn(
-        "glass-card flex h-full flex-col p-4 backdrop-blur-md bg-background/40",
+        "glass-card flex h-full flex-col bg-background/40 p-4 backdrop-blur-md",
         className
       )}
     >
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="font-heading text-sm font-semibold text-muted">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="font-heading text-sm font-semibold text-foreground">
           Moves
         </h3>
         <div className="flex gap-2">
           <button
+            type="button"
             onClick={copyPGN}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            className="flex min-h-10 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors duration-100 hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
             title="Copy PGN"
           >
-            <Copy className="h-3 w-3" /> PGN
+            <Copy className="h-3.5 w-3.5" aria-hidden="true" /> PGN
           </button>
           {fen && (
             <button
+              type="button"
               onClick={copyFEN}
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="flex min-h-10 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors duration-100 hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
               title="Copy FEN"
             >
-              <Copy className="h-3 w-3" /> FEN
+              <Copy className="h-3.5 w-3.5" aria-hidden="true" /> FEN
             </button>
           )}
         </div>
@@ -115,7 +128,7 @@ export function MoveList({
                   key={pair.number}
                   className="border-b border-border/30 last:border-0"
                 >
-                  <td className="py-1 pr-2 text-right text-xs text-muted">
+                  <td className="py-1 pr-2 text-right text-xs text-muted-foreground">
                     {pair.number}.
                   </td>
                   <td

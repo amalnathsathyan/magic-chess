@@ -1,0 +1,26 @@
+# Fly.io config for Arena backend
+# Generated 2026-08-09
+
+app = "arena-backend"
+primary_region = "lax"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/api/health"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

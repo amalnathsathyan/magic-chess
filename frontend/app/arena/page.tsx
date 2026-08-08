@@ -7,6 +7,7 @@ import { PublicKey } from "@solana/web3.js";
 import { useMatches } from "@magic-chess/sdk/react";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
 import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
+import { api, type ApiMatch } from "@/lib/api";
 import {
   formatTokenAmount,
   solanaConfig,
@@ -52,7 +53,15 @@ export default function ArenaPage() {
         className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"
       >
         <div>
-          <h1 className="font-heading text-3xl font-bold">Lobby Arena</h1>
+          <div className="flex items-baseline gap-3">
+            <h1 className="font-heading text-3xl font-bold">Live lobby</h1>
+            {counts.live > 0 ? (
+              <span className="inline-flex items-center gap-1.5 text-sm text-accent">
+                <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
+                {counts.live} live
+              </span>
+            ) : null}
+          </div>
           <p className="mt-1 text-muted-foreground">
             Join an open on-chain match or create your own.
           </p>

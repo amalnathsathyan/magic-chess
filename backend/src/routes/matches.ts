@@ -58,7 +58,7 @@ export function matchRoutes(app: FastifyInstance): void {
         `SELECT
           match_id, white_player, black_player, game_status,
           total_pot, betting_token_mint, created_at, last_move_at,
-          game_end_reason, move_timeout_seconds,
+          game_end_reason, move_timeout_seconds, current_fen,
           (SELECT COUNT(*) FROM moves WHERE moves.match_id = matches.match_id) AS move_count
         FROM matches
         ${where}
@@ -75,10 +75,10 @@ export function matchRoutes(app: FastifyInstance): void {
         gameEndReason: row.gameEndReason,
         totalPot: String(row.totalPot ?? "0"),
         bettingTokenMint: row.bettingTokenMint,
-        moveTimeoutSeconds: row.moveTimeoutSeconds,
+        moveTimeoutSeconds: String(row.moveTimeoutSeconds),
         createdAt: row.createdAt,
         lastMoveAt: row.lastMoveAt,
-        boardFen: getFen(row.matchId as string),
+        boardFen: row.currentFen ?? getFen(row.matchId as string),
         moveCount: Number(row.moveCount ?? 0),
       }));
 
@@ -101,7 +101,7 @@ export function matchRoutes(app: FastifyInstance): void {
           game_end_reason, betting_token_mint, bet_amount_per_player,
           total_pot, platform_fee_bps, move_timeout_seconds,
           created_at, started_at, ended_at, last_move_at,
-          payout_processed, payout_tx_signature,
+          payout_processed, payout_tx_signature, current_fen,
           (SELECT COUNT(*) FROM moves WHERE moves.match_id = m.match_id) AS move_count
         FROM matches m
         WHERE match_id = ${matchId}
@@ -112,7 +112,7 @@ export function matchRoutes(app: FastifyInstance): void {
       }
 
       const m = rows[0] as Record<string, unknown>;
-      const fen = getFen(matchId);
+      const fen = (m.currentFen as string | null) ?? getFen(matchId);
       const turn = fen ? fen.split(" ")[1] : null;
 
       reply.send({
@@ -125,7 +125,7 @@ export function matchRoutes(app: FastifyInstance): void {
         betAmountPerPlayer: String(m.betAmountPerPlayer ?? "0"),
         totalPot: String(m.totalPot ?? "0"),
         platformFeeBps: m.platformFeeBps,
-        moveTimeoutSeconds: m.moveTimeoutSeconds,
+        moveTimeoutSeconds: String(m.moveTimeoutSeconds),
         currentTurn:
           turn === "w" ? "white" : turn === "b" ? "black" : null,
         boardFen: fen,

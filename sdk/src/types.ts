@@ -51,6 +51,7 @@ export enum GameEndReason {
   FiftyMoveRule = "fiftyMoveRule",
   ThreefoldRepetition = "threefoldRepetition",
   InsufficientMaterial = "insufficientMaterial",
+  Aborted = "aborted",
 }
 
 export enum MoveResult {
@@ -58,6 +59,8 @@ export enum MoveResult {
   Checkmate = "checkmate",
   Stalemate = "stalemate",
   ThreefoldRepetition = "threefoldRepetition",
+  InsufficientMaterial = "insufficientMaterial",
+  FiftyMoveRule = "fiftyMoveRule",
 }
 
 // ── Piece ──
@@ -202,8 +205,8 @@ export interface MatchCreatedEvent {
   matchId: string;
   creator: PublicKey;
   bettingTokenMint: PublicKey;
-  betAmount: number;
-  moveTimeoutDuration: number;
+  betAmount: bigint;
+  moveTimeoutDuration: bigint;
   platformFeeBasisPoints: number;
 }
 
@@ -212,7 +215,7 @@ export interface PlayerJoinedEvent {
   playerOne: PublicKey;
   playerTwo: PublicKey;
   bettingTokenMint: PublicKey;
-  betAmountPerPlayer: number;
+  betAmountPerPlayer: bigint;
 }
 
 export interface MoveMadeEvent {
@@ -241,14 +244,14 @@ export interface GameEndedEvent {
 export interface PayoutEvent {
   matchId: string;
   winner: PublicKey;
-  amount: number;
-  fee: number;
+  amount: bigint;
+  fee: bigint;
 }
 
 export interface DrawPayoutEvent {
   matchId: string;
   whitePlayer: PublicKey;
   blackPlayer: PublicKey;
-  amountEach: number;
-  fee: number;
+  amountEach: bigint;
+  fee: bigint;
 }
