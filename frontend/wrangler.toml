@@ -13,8 +13,13 @@ compatibility_date = "2025-08-07"
 [assets]
 directory = ".next"
 
-# Environment variables (set in Cloudflare Dashboard for secrets)
+# Environment variables (Dashboard vars preserved — local deploy overrides remote!)
 [vars]
 NEXT_PUBLIC_RPC_ENDPOINT = "https://api.devnet.solana.com"
 NEXT_PUBLIC_PROGRAM_ID = "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h"
 NEXT_PUBLIC_API_URL = "https://magic-chess-backend.example.com"
+NEXT_PUBLIC_MAGICBLOCK_ER_ENDPOINT = "https://devnet-us.magicblock.app"
+NEXT_PUBLIC_MAGICBLOCK_ROUTER_ENDPOINT = "https://devnet-router.magicblock.app"
+NEXT_PUBLIC_MAGICBLOCK_TEE_ENDPOINT = "https://devnet-tee.magicblock.app"
+NEXT_PUBLIC_PRIVY_APP_ID = "cmsdk4zc7003y0cjlc22j9igy"
+# PRIVY_APP_SECRET — set via Dashboard secrets (not here)
