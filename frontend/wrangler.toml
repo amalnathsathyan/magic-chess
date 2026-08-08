@@ -6,7 +6,7 @@
 #   Deploy command:  npx wrangler deploy --assets .next
 #   Root directory:  ./frontend/
 
-name = "magic-chess"
+name = "arena"
 compatibility_date = "2025-08-07"
 
 # Serve Next.js static output as assets
