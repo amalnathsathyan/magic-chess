@@ -29,6 +29,9 @@ export const config = {
     programId:
       process.env.PROGRAM_ID ||
       "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h",
+    routerEndpoint:
+      process.env.MAGICBLOCK_ROUTER ||
+      "https://devnet-router.magicblock.app/",
   },
 
   // Shared secret for sync endpoint auth

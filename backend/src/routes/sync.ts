@@ -9,8 +9,9 @@ import {
 } from "../services/boardCache.js";
 
 // ── Auth helper ──
-function requireApiKey(request: { headers: Record<string, string | undefined> }): void {
-  const key = request.headers["x-api-key"];
+function requireApiKey(request: { headers: Record<string, string | string[] | undefined> }): void {
+  const raw = request.headers["x-api-key"];
+  const key = Array.isArray(raw) ? raw[0] : raw;
   if (!key || key !== config.apiKey) {
     throw { statusCode: 401, message: "Unauthorized — invalid or missing X-API-Key" };
   }
