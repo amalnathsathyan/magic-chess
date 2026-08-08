@@ -6,6 +6,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const nextConfig: NextConfig = {
+  // OpenNext packages the standalone server output for Cloudflare Workers.
+  output: "standalone",
+  outputFileTracingRoot: __dirname,
+
   // SDK has @solana/web3.js as peer dep — tsc can't resolve types from
   // transpiled SDK files. Skip type errors in build; run `tsc --noEmit`
   // separately for real type checking.
