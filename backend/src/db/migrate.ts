@@ -16,10 +16,10 @@ const migrations: Array<{ name: string; run: (s: Sql) => Promise<void> }> = [
           game_status         VARCHAR(20)     NOT NULL DEFAULT 'WaitingForOpponent',
           game_end_reason     VARCHAR(20),
           betting_token_mint  VARCHAR(44)     NOT NULL,
-          bet_amount_per_player BIGINT        NOT NULL,
-          total_pot           BIGINT          NOT NULL DEFAULT 0,
+          bet_amount_per_player NUMERIC(20,0) NOT NULL,
+          total_pot           NUMERIC(20,0)   NOT NULL DEFAULT 0,
           platform_fee_bps    INTEGER         NOT NULL DEFAULT 200,
-          move_timeout_seconds INTEGER        NOT NULL DEFAULT 900,
+          move_timeout_seconds BIGINT         NOT NULL DEFAULT 900,
           created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
           started_at          TIMESTAMPTZ,
           ended_at            TIMESTAMPTZ,
@@ -48,10 +48,21 @@ const migrations: Array<{ name: string; run: (s: Sql) => Promise<void> }> = [
           WHERE black_player IS NOT NULL
       `);
 
-      // Enable realtime for this table (Supabase)
       await s.unsafe(`
-        ALTER PUBLICATION supabase_realtime ADD TABLE matches
-      `).catch(() => {}); // fails if already in publication — safe to ignore
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+            AND NOT EXISTS (
+              SELECT 1 FROM pg_publication_tables
+              WHERE pubname = 'supabase_realtime'
+                AND schemaname = 'public'
+                AND tablename = 'matches'
+            )
+          THEN
+            ALTER PUBLICATION supabase_realtime ADD TABLE matches;
+          END IF;
+        END $$
+      `);
     },
   },
   {
@@ -75,6 +86,7 @@ const migrations: Array<{ name: string; run: (s: Sql) => Promise<void> }> = [
           is_stalemate        BOOLEAN         NOT NULL DEFAULT FALSE,
           event_slot          BIGINT          NOT NULL,
           event_signature     VARCHAR(88)     NOT NULL,
+          event_index         INTEGER         NOT NULL DEFAULT 0,
           indexed_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
           PRIMARY KEY (match_id, move_number)
         )
@@ -86,13 +98,25 @@ const migrations: Array<{ name: string; run: (s: Sql) => Promise<void> }> = [
       `);
 
       await s.unsafe(`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_moves_event_sig
-          ON moves (event_signature)
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_moves_event_match
+          ON moves (event_signature, match_id, event_index)
       `);
 
       await s.unsafe(`
-        ALTER PUBLICATION supabase_realtime ADD TABLE moves
-      `).catch(() => {});
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+            AND NOT EXISTS (
+              SELECT 1 FROM pg_publication_tables
+              WHERE pubname = 'supabase_realtime'
+                AND schemaname = 'public'
+                AND tablename = 'moves'
+            )
+          THEN
+            ALTER PUBLICATION supabase_realtime ADD TABLE moves;
+          END IF;
+        END $$
+      `);
     },
   },
   {
@@ -110,8 +134,8 @@ const migrations: Array<{ name: string; run: (s: Sql) => Promise<void> }> = [
           wins_by_timeout     INTEGER         NOT NULL DEFAULT 0,
           current_streak      INTEGER         NOT NULL DEFAULT 0,
           longest_win_streak  INTEGER         NOT NULL DEFAULT 0,
-          total_wagered       BIGINT          NOT NULL DEFAULT 0,
-          total_won           BIGINT          NOT NULL DEFAULT 0,
+          total_wagered       NUMERIC         NOT NULL DEFAULT 0,
+          total_won           NUMERIC         NOT NULL DEFAULT 0,
           last_game_at        TIMESTAMPTZ,
           updated_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW()
         )
@@ -123,35 +147,165 @@ const migrations: Array<{ name: string; run: (s: Sql) => Promise<void> }> = [
       `);
 
       await s.unsafe(`
-        ALTER PUBLICATION supabase_realtime ADD TABLE player_stats
-      `).catch(() => {});
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime')
+            AND NOT EXISTS (
+              SELECT 1 FROM pg_publication_tables
+              WHERE pubname = 'supabase_realtime'
+                AND schemaname = 'public'
+                AND tablename = 'player_stats'
+            )
+          THEN
+            ALTER PUBLICATION supabase_realtime ADD TABLE player_stats;
+          END IF;
+        END $$
+      `);
+    },
+  },
+  {
+    name: "004_harden_sync_state",
+    run: async (s) => {
+      await s.unsafe(`
+        ALTER TABLE matches
+          ADD COLUMN IF NOT EXISTS current_fen TEXT NOT NULL
+          DEFAULT 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+      `);
+      await s.unsafe(`
+        ALTER TABLE matches
+          ADD COLUMN IF NOT EXISTS last_move_slot BIGINT
+      `);
+      await s.unsafe(`
+        ALTER TABLE matches
+          ADD COLUMN IF NOT EXISTS last_move_signature VARCHAR(88),
+          ADD COLUMN IF NOT EXISTS last_move_event_index INTEGER
+      `);
+      await s.unsafe(`
+        ALTER TABLE matches
+          ALTER COLUMN bet_amount_per_player TYPE NUMERIC(20,0),
+          ALTER COLUMN total_pot TYPE NUMERIC(20,0),
+          ALTER COLUMN move_timeout_seconds TYPE BIGINT
+      `);
+      await s.unsafe(`
+        ALTER TABLE player_stats
+          ALTER COLUMN total_wagered TYPE NUMERIC(20,0),
+          ALTER COLUMN total_won TYPE NUMERIC(20,0)
+      `);
+      await s.unsafe(`
+        ALTER TABLE moves
+          ADD COLUMN IF NOT EXISTS event_index INTEGER NOT NULL DEFAULT 0
+      `);
+      await s.unsafe(`
+        UPDATE matches AS m
+        SET current_fen = COALESCE(
+              (
+                SELECT move.fen_after_move
+                FROM moves AS move
+                WHERE move.match_id = m.match_id
+                ORDER BY move.move_number DESC
+                LIMIT 1
+              ),
+              m.current_fen
+            ),
+            last_move_slot = (
+              SELECT move.event_slot FROM moves AS move
+              WHERE move.match_id = m.match_id
+              ORDER BY move.move_number DESC LIMIT 1
+            ),
+            last_move_signature = (
+              SELECT move.event_signature FROM moves AS move
+              WHERE move.match_id = m.match_id
+              ORDER BY move.move_number DESC LIMIT 1
+            ),
+            last_move_event_index = (
+              SELECT move.event_index FROM moves AS move
+              WHERE move.match_id = m.match_id
+              ORDER BY move.move_number DESC LIMIT 1
+            )
+      `);
+
+      await s.unsafe(`
+        CREATE TABLE IF NOT EXISTS sync_events (
+          event_signature VARCHAR(88) NOT NULL,
+          event_type      VARCHAR(32) NOT NULL,
+          match_id       VARCHAR(32) NOT NULL,
+          event_slot     BIGINT NOT NULL,
+          event_index    INTEGER NOT NULL DEFAULT 0,
+          processed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (event_signature, event_type, match_id, event_index)
+        )
+      `);
+      await s.unsafe(`
+        ALTER TABLE sync_events
+          ADD COLUMN IF NOT EXISTS event_index INTEGER NOT NULL DEFAULT 0
+      `);
+      await s.unsafe(`
+        ALTER TABLE sync_events DROP CONSTRAINT IF EXISTS sync_events_pkey
+      `);
+      await s.unsafe(`
+        ALTER TABLE sync_events
+          ADD CONSTRAINT sync_events_pkey
+          PRIMARY KEY (event_signature, event_type, match_id, event_index)
+      `);
+
+      await s.unsafe("DROP INDEX IF EXISTS idx_moves_event_sig");
+      await s.unsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_moves_event_match
+          ON moves (event_signature, match_id, event_index)
+      `);
+
+      await s.unsafe(`
+        CREATE INDEX IF NOT EXISTS idx_sync_events_match
+          ON sync_events (match_id, event_slot DESC)
+      `);
+
+      // These tables are written through the backend, not the Supabase Data API.
+      // RLS without public policies keeps accidental Data API grants fail-closed.
+      for (const table of ["matches", "moves", "player_stats", "sync_events"]) {
+        await s.unsafe(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+      }
+    },
+  },
+  {
+    name: "005_unbounded_player_aggregates",
+    run: async (s) => {
+      await s.unsafe(`
+        ALTER TABLE player_stats
+          ALTER COLUMN total_wagered TYPE NUMERIC,
+          ALTER COLUMN total_won TYPE NUMERIC
+      `);
     },
   },
 ];
 
 export async function runMigrations(): Promise<void> {
-  // Create migration tracking table
-  await sql.unsafe(`
-    CREATE TABLE IF NOT EXISTS _migrations (
-      name VARCHAR(100) PRIMARY KEY,
-      run_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+  await sql.begin(async (tx) => {
+    // Serialize startup migrations across concurrently starting replicas.
+    await tx`SELECT pg_advisory_xact_lock(hashtext('magic_chess_migrations'))`;
 
-  for (const migration of migrations) {
-    const exists = await sql`
-      SELECT name FROM _migrations WHERE name = ${migration.name}
-    `;
-    if (exists.length > 0) {
-      console.log(`  ✓ ${migration.name} (already run)`);
-      continue;
+    await tx.unsafe(`
+      CREATE TABLE IF NOT EXISTS _migrations (
+        name VARCHAR(100) PRIMARY KEY,
+        run_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await tx.unsafe("ALTER TABLE _migrations ENABLE ROW LEVEL SECURITY");
+
+    for (const migration of migrations) {
+      const exists = await tx`
+        SELECT name FROM _migrations WHERE name = ${migration.name}
+      `;
+      if (exists.length > 0) {
+        console.log(`  ✓ ${migration.name} (already run)`);
+        continue;
+      }
+
+      console.log(`  → ${migration.name}`);
+      await migration.run(tx as unknown as Sql);
+      await tx`INSERT INTO _migrations (name) VALUES (${migration.name})`;
+      console.log(`  ✓ ${migration.name}`);
     }
-
-    console.log(`  → ${migration.name}`);
-    await migration.run(sql);
-    await sql`INSERT INTO _migrations (name) VALUES (${migration.name})`;
-    console.log(`  ✓ ${migration.name}`);
-  }
+  });
 }
 
 // Run directly

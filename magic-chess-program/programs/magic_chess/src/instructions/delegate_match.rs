@@ -1,10 +1,10 @@
+use crate::constants::*;
+use crate::state::*;
 use anchor_lang::prelude::*;
 use anchor_lang::AccountDeserialize;
 use anchor_lang::AccountSerialize;
 use ephemeral_rollups_sdk::anchor::delegate;
 use ephemeral_rollups_sdk::cpi::DelegateConfig;
-use crate::state::*;
-use crate::constants::*;
 
 #[delegate]
 #[derive(Accounts)]
@@ -20,6 +20,12 @@ pub struct DelegateMatch<'info> {
 }
 
 pub fn handle_delegate_match(ctx: Context<DelegateMatch>) -> Result<()> {
+    require_keys_eq!(
+        *ctx.accounts.chess_match.owner,
+        *ctx.program_id,
+        crate::errors::ChessError::InvalidMatchId
+    );
+
     // Read match_id from the account data for PDA seed derivation,
     // and set delegation_uid + is_delegated before the CPI.
     // We must write these fields BEFORE delegating because after the CPI
@@ -28,12 +34,26 @@ pub fn handle_delegate_match(ctx: Context<DelegateMatch>) -> Result<()> {
         let mut data = ctx.accounts.chess_match.try_borrow_mut_data()?;
 
         // Deserialize the current chess match state
-        let mut chess_match: ChessMatch =
-            ChessMatch::try_deserialize(&mut &data[..])
-                .map_err(|_| error!(crate::errors::ChessError::InvalidMatchId))?;
+        let mut chess_match: ChessMatch = ChessMatch::try_deserialize(&mut &data[..])
+            .map_err(|_| error!(crate::errors::ChessError::InvalidMatchId))?;
 
         let match_id = chess_match.match_id.clone();
 
+        // `UncheckedAccount` is required by the delegation macro because the
+        // CPI changes ownership. Re-establish the normal typed-account
+        // guarantees before authorizing or mutating anything.
+        let (expected_match, canonical_bump) =
+            Pubkey::find_program_address(&[CHESS_MATCH_SEED, match_id.as_bytes()], ctx.program_id);
+        require_keys_eq!(
+            ctx.accounts.chess_match.key(),
+            expected_match,
+            crate::errors::ChessError::InvalidMatchId
+        );
+        require_eq!(
+            chess_match.bump,
+            canonical_bump,
+            crate::errors::ChessError::InvalidMatchId
+        );
         // Authorization: only match players can delegate
         let payer = ctx.accounts.payer.key();
         require!(
@@ -49,7 +69,8 @@ pub fn handle_delegate_match(ctx: Context<DelegateMatch>) -> Result<()> {
         // Serialize the updated state back into the account data buffer.
         // AccountSerialize::try_serialize writes discriminator + data.
         let mut cursor: &mut [u8] = &mut data;
-        chess_match.try_serialize(&mut cursor)
+        chess_match
+            .try_serialize(&mut cursor)
             .map_err(|_| error!(crate::errors::ChessError::InvalidMatchId))?;
 
         match_id

@@ -5,6 +5,13 @@
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+export function getApiUrl(path: string): string {
+  if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured for this deployment.");
+  }
+  return new URL(path, API_URL).toString();
+}
+
 async function fetchApi<T>(
   path: string,
   init?: RequestInit
@@ -36,7 +43,7 @@ export interface ApiMatch {
   gameEndReason: string | null;
   totalPot: string;
   bettingTokenMint: string;
-  moveTimeoutSeconds: number;
+  moveTimeoutSeconds: string;
   createdAt: string;
   lastMoveAt: string;
   boardFen: string | null;
@@ -107,6 +114,44 @@ export interface ApiPaginated<T> {
   pagination: { page: number; limit: number; total: number };
 }
 
+export interface ApiRealtimeSnapshot {
+  matchId: string;
+  whitePlayer: string;
+  blackPlayer: string | null;
+  gameStatus: string;
+  gameEndReason: string | null;
+  bettingTokenMint: string;
+  betAmountPerPlayer: string;
+  totalPot: string;
+  moveTimeoutSeconds: string;
+  currentFen: string;
+  currentTurn: "white" | "black" | null;
+  createdAt: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  lastMoveAt: string;
+  payoutProcessed: boolean;
+  moveCount: number;
+}
+
+export interface ApiMatchClock {
+  serverTime: string;
+  activeColor: "white" | "black" | null;
+  deadlineAt: string | null;
+  remainingMs: number | null;
+  expired: boolean;
+  authority: "confirmed-chain-index";
+}
+
+export interface ApiRealtimeSession {
+  token: string;
+  clientId: string;
+  role: "white" | "black" | "spectator";
+  expiresAt: string;
+  eventUrl: string;
+  snapshot: ApiRealtimeSnapshot;
+}
+
 // ── API ──
 
 export const api = {
@@ -137,6 +182,27 @@ export const api = {
 
   getMatchHistory: (matchId: string) =>
     fetchApi<ApiMatchHistory>(`/api/matches/${matchId}/history`),
+
+  createRealtimeSession: (
+    matchId: string,
+    body: {
+      clientId: string;
+      wallet?: string;
+      issuedAt?: number;
+      signature?: string;
+    }
+  ) =>
+    fetchApi<ApiRealtimeSession>(
+      `/api/realtime/matches/${encodeURIComponent(matchId)}/session`,
+      { method: "POST", body: JSON.stringify(body) }
+    ),
+
+  getRealtimeChallenge: (matchId: string, wallet: string) => {
+    const query = new URLSearchParams({ wallet });
+    return fetchApi<{ issuedAt: number; message: string }>(
+      `/api/realtime/matches/${encodeURIComponent(matchId)}/challenge?${query}`
+    );
+  },
 
   // Players
   getPlayerStats: (pubkey: string) =>

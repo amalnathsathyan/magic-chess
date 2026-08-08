@@ -8,19 +8,38 @@ const required = (key: string): string => {
   return val;
 };
 
+const nodeEnv = process.env.NODE_ENV || "development";
+const port = Number(process.env.PORT || "3001");
+if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+  throw new Error("PORT must be an integer between 1 and 65535");
+}
+
+const apiKey = process.env.API_KEY || "dev-api-key-change-in-production";
+if (
+  nodeEnv === "production" &&
+  (!process.env.API_KEY || apiKey === "dev-api-key-change-in-production")
+) {
+  throw new Error("API_KEY must be set to a non-default value in production");
+}
+
+const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+if (corsOrigins.length === 0) {
+  throw new Error("CORS_ORIGIN must contain at least one origin");
+}
+
 export const config = {
-  port: parseInt(process.env.PORT || "3001", 10),
-  nodeEnv: process.env.NODE_ENV || "development",
-  corsOrigin: process.env.CORS_ORIGIN || "http://localhost:3000",
+  port,
+  nodeEnv,
+  corsOrigins,
+  runMigrationsOnStart:
+    process.env.RUN_MIGRATIONS_ON_START !== "false",
 
   db: {
     url: required("DATABASE_URL"),
-  },
-
-  supabase: {
-    url: process.env.SUPABASE_URL || "",
-    anonKey: process.env.SUPABASE_ANON_KEY || "",
-    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || "",
   },
 
   solana: {
@@ -29,8 +48,11 @@ export const config = {
     programId:
       process.env.PROGRAM_ID ||
       "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h",
+    routerEndpoint:
+      process.env.MAGICBLOCK_ROUTER ||
+      "https://devnet-router.magicblock.app/",
   },
 
   // Shared secret for sync endpoint auth
-  apiKey: process.env.API_KEY || "dev-api-key-change-in-production",
+  apiKey,
 } as const;

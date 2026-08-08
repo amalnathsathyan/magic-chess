@@ -73,11 +73,9 @@ pub fn handle_initialize_match(
         ChessError::InvalidMatchIdLength
     );
 
-    // 2. Validate bet amount — must be at least 1 token unit (prevents zero-bet spam)
-    require!(
-        bet_amount_arg >= MIN_BET_AMOUNT,
-        ChessError::InvalidBetAmount
-    );
+    // 2. Zero is intentionally valid and represents a free match. `u64`
+    // excludes negative wagers, while paid matches remain escrowed below.
+    debug_assert!(bet_amount_arg >= MIN_BET_AMOUNT);
 
     // 3. Validate platform fee basis points
     require!(
@@ -149,13 +147,16 @@ pub fn handle_initialize_match(
     chess_match_account.match_escrow_bump = ctx.bumps.match_escrow_token_account;
 
     // 5. Transfer the bet from the player to the match escrow
-    let cpi_accounts_transfer = Transfer {
-        from: ctx.accounts.player_token_account.to_account_info(),
-        to: ctx.accounts.match_escrow_token_account.to_account_info(),
-        authority: player_signer_account.to_account_info(),
-    };
-    let cpi_ctx_transfer = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts_transfer);
-    token::transfer(cpi_ctx_transfer, bet_amount_arg)?;
+    if bet_amount_arg > 0 {
+        let cpi_accounts_transfer = Transfer {
+            from: ctx.accounts.player_token_account.to_account_info(),
+            to: ctx.accounts.match_escrow_token_account.to_account_info(),
+            authority: player_signer_account.to_account_info(),
+        };
+        let cpi_ctx_transfer =
+            CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts_transfer);
+        token::transfer(cpi_ctx_transfer, bet_amount_arg)?;
+    }
 
     // 6. Emit event
     emit!(MatchCreatedEvent {

@@ -8,6 +8,7 @@ interface PromotionDialogProps {
   isOpen: boolean;
   color: "white" | "black";
   onSelect: (piece: PromotionPiece) => void;
+  onCancel: () => void;
   className?: string;
 }
 
@@ -36,6 +37,7 @@ export function PromotionDialog({
   isOpen,
   color,
   onSelect,
+  onCancel,
   className,
 }: PromotionDialogProps) {
   if (!isOpen) return null;
@@ -44,6 +46,12 @@ export function PromotionDialog({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Choose a promotion piece"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") onCancel();
+      }}
       className={cn(
         "glass-card absolute z-20 flex gap-1 p-2",
         className
@@ -52,12 +60,15 @@ export function PromotionDialog({
       {PIECES.map(({ piece, label }) => (
         <button
           key={piece}
+          type="button"
           onClick={() => onSelect(piece)}
           title={label}
+          aria-label={`Promote to ${label}`}
+          autoFocus={piece === "q"}
           className={cn(
-            "flex h-14 w-14 items-center justify-center rounded-lg text-3xl transition-all",
+            "flex h-14 w-14 items-center justify-center rounded-lg text-3xl transition-colors duration-100",
             "hover:bg-primary/10 hover:text-primary",
-            "focus:outline-none focus:ring-2 focus:ring-primary/50"
+            "active:translate-y-px focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none"
           )}
         >
           {unicodeMap[piece]}

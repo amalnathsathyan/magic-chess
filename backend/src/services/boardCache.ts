@@ -223,7 +223,7 @@ export function applyMoveToBoard(
   ) {
     finalPiece = {
       pieceType: promotionPiece || "Queen",
-      color: playerColor,
+      color: piece.color,
     };
   }
 

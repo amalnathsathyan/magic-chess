@@ -51,6 +51,7 @@ export enum GameEndReason {
   FiftyMoveRule = "fiftyMoveRule",
   ThreefoldRepetition = "threefoldRepetition",
   InsufficientMaterial = "insufficientMaterial",
+  Aborted = "aborted",
 }
 
 export enum MoveResult {
@@ -58,6 +59,8 @@ export enum MoveResult {
   Checkmate = "checkmate",
   Stalemate = "stalemate",
   ThreefoldRepetition = "threefoldRepetition",
+  InsufficientMaterial = "insufficientMaterial",
+  FiftyMoveRule = "fiftyMoveRule",
 }
 
 // ── Piece ──
@@ -134,7 +137,7 @@ export interface Move {
 export interface CreateMatchParams {
   /** Unique match identifier (max 32 bytes) */
   matchId: string;
-  /** Bet amount in raw token units (minimum 1) */
+  /** Bet amount in raw token units (0 = free match) */
   betAmount: IntegerInput;
   /** Seconds allowed per move (0 = no timeout) */
   moveTimeoutDuration: IntegerInput;
@@ -155,8 +158,11 @@ export interface CreateMatchParams {
 export interface JoinMatchParams {
   /** ID of the match to join */
   matchId: string;
-  /** Bet amount (must match creator's bet) */
-  betAmount: IntegerInput;
+  /**
+   * Optional expected amount. The SDK always reads the authoritative wager
+   * from chain and rejects this value if it is stale or mismatched.
+   */
+  betAmount?: IntegerInput;
   /** Player 2's associated token account for the match's betting mint */
   playerTokenAccount: PublicKey;
 }
@@ -172,6 +178,19 @@ export interface MatchInfo {
   totalPot: bigint;
   moveTimeoutDuration: bigint;
   lastMoveTimestamp: bigint;
+  /** Derived exclusively from the on-chain per-player wager. */
+  isFree: boolean;
+}
+
+/** Chain-derived wager information suitable for lobby/game displays. */
+export interface WagerInfo {
+  mint: PublicKey;
+  decimals: number;
+  rawAmountPerPlayer: bigint;
+  rawTotalPot: bigint;
+  amountPerPlayer: string;
+  totalPot: string;
+  isFree: boolean;
 }
 
 // ── Prediction Market ──
@@ -202,8 +221,8 @@ export interface MatchCreatedEvent {
   matchId: string;
   creator: PublicKey;
   bettingTokenMint: PublicKey;
-  betAmount: number;
-  moveTimeoutDuration: number;
+  betAmount: bigint;
+  moveTimeoutDuration: bigint;
   platformFeeBasisPoints: number;
 }
 
@@ -212,7 +231,7 @@ export interface PlayerJoinedEvent {
   playerOne: PublicKey;
   playerTwo: PublicKey;
   bettingTokenMint: PublicKey;
-  betAmountPerPlayer: number;
+  betAmountPerPlayer: bigint;
 }
 
 export interface MoveMadeEvent {
@@ -241,14 +260,14 @@ export interface GameEndedEvent {
 export interface PayoutEvent {
   matchId: string;
   winner: PublicKey;
-  amount: number;
-  fee: number;
+  amount: bigint;
+  fee: bigint;
 }
 
 export interface DrawPayoutEvent {
   matchId: string;
   whitePlayer: PublicKey;
   blackPlayer: PublicKey;
-  amountEach: number;
-  fee: number;
+  amountEach: bigint;
+  fee: bigint;
 }

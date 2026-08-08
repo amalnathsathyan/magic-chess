@@ -1,7 +1,7 @@
+use crate::state::*;
 use anchor_lang::prelude::*;
 use ephemeral_rollups_sdk::anchor::commit;
 use ephemeral_rollups_sdk::ephem::{FoldableIntentBuilder, MagicIntentBundleBuilder};
-use crate::state::*;
 
 #[commit]
 #[derive(Accounts)]
@@ -21,6 +21,12 @@ pub fn handle_undelegate_match(ctx: Context<UndelegateMatch>) -> Result<()> {
         crate::errors::ChessError::UnauthorizedSigner
     );
 
+    // The commit CPI reads account bytes immediately. Persist the lifecycle
+    // flag before scheduling commit-and-undelegate so the base-layer snapshot
+    // cannot retain a stale `is_delegated = true` value.
+    ctx.accounts.chess_match.is_delegated = false;
+    ctx.accounts.chess_match.exit(ctx.program_id)?;
+
     let chess_match_info = ctx.accounts.chess_match.to_account_info();
     let payer_info = ctx.accounts.payer.to_account_info();
     let magic_ctx = ctx.accounts.magic_context.to_account_info();
@@ -29,8 +35,6 @@ pub fn handle_undelegate_match(ctx: Context<UndelegateMatch>) -> Result<()> {
     MagicIntentBundleBuilder::new(payer_info, magic_ctx, magic_prog)
         .commit_and_undelegate(&[chess_match_info])
         .build_and_invoke()?;
-
-    ctx.accounts.chess_match.is_delegated = false;
 
     Ok(())
 }

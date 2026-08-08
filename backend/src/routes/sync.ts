@@ -1,84 +1,75 @@
-import type { FastifyInstance } from "fastify";
+import { timingSafeEqual } from "node:crypto";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { Sql } from "postgres";
 import { sql } from "../db/pool.js";
 import { config } from "../config.js";
 import {
   initMatch,
-  applyMove,
   removeMatch,
-  rebuildBoardState,
 } from "../services/boardCache.js";
+import {
+  verifyProgramEvent,
+  type VerifiedProgramEvent,
+} from "../services/transactionVerifier.js";
+import type {
+  MatchNotification,
+  MatchRealtimeHub,
+} from "../services/matchRealtime.js";
 
 // ── Auth helper ──
-function requireApiKey(request: { headers: Record<string, string | undefined> }): void {
-  const key = request.headers["x-api-key"];
-  if (!key || key !== config.apiKey) {
+function requireApiKey(request: FastifyRequest): void {
+  const header = request.headers["x-api-key"];
+  const key = Array.isArray(header) ? header[0] : header;
+  const supplied = Buffer.from(key ?? "");
+  const expected = Buffer.from(config.apiKey);
+  if (
+    supplied.length !== expected.length ||
+    !timingSafeEqual(supplied, expected)
+  ) {
     throw { statusCode: 401, message: "Unauthorized — invalid or missing X-API-Key" };
   }
 }
 
-// ── Types for sync payloads ──
-
-interface SyncMatchCreated {
+interface SyncRequest {
   matchId: string;
-  creator: string; // base58 pubkey
-  bettingTokenMint: string;
-  betAmount: number;
-  moveTimeoutDuration: number;
-  platformFeeBasisPoints: number;
   signature: string;
-  slot: number;
+  runtimeEndpoint?: string;
+  eventIndex?: number;
 }
 
-interface SyncPlayerJoined {
-  matchId: string;
-  playerTwo: string;
-  betAmountPerPlayer: number;
-  signature: string;
-  slot: number;
+const syncBodySchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["matchId", "signature"],
+  properties: {
+    matchId: { type: "string", minLength: 1, maxLength: 32 },
+    signature: {
+      type: "string",
+      minLength: 64,
+      maxLength: 88,
+      pattern: "^[1-9A-HJ-NP-Za-km-z]+$",
+    },
+    runtimeEndpoint: { type: "string", maxLength: 255 },
+    eventIndex: { type: "integer", minimum: 0 },
+  },
+} as const;
+
+function assertMatchId(matchId: string): void {
+  if (Buffer.byteLength(matchId, "utf8") > 32) {
+    throw { statusCode: 400, message: "matchId must be at most 32 UTF-8 bytes" };
+  }
 }
 
-interface SyncMoveMade {
-  matchId: string;
-  player: string;
-  playerColor: string; // "white" | "black"
-  algebraicMove: string;
-  fromRow: number;
-  fromCol: number;
-  toRow: number;
-  toCol: number;
-  promotionPiece: string | null;
-  isCheck: boolean;
-  isCheckmate: boolean;
-  isStalemate: boolean;
-  signature: string;
-  slot: number;
-}
-
-interface SyncGameEnded {
-  matchId: string;
-  status: string; // "whiteWins" | "blackWins" | "draw"
-  winner: string | null;
-  reason: string;
-  signature: string;
-  slot: number;
-}
-
-interface SyncPayout {
-  matchId: string;
-  winner: string | null;
-  whitePlayer: string | null;
-  blackPlayer: string | null;
-  amount: number;
-  amountEach: number | null;
-  fee: number;
-  type: "win" | "draw";
-  signature: string;
-  slot: number;
+function eventAs<T extends VerifiedProgramEvent["name"]>(
+  event: VerifiedProgramEvent,
+  name: T
+): Extract<VerifiedProgramEvent, { name: T }> {
+  if (event.name !== name) throw new Error(`Expected ${name}, received ${event.name}`);
+  return event as Extract<VerifiedProgramEvent, { name: T }>;
 }
 
 // ── Helpers ──
 
-// Map SDK enum values (camelCase) to DB enum values (PascalCase)
 const gameStatusToDb: Record<string, string> = {
   whiteWins: "WhiteWins",
   blackWins: "BlackWins",
@@ -97,196 +88,465 @@ const gameEndReasonToDb: Record<string, string> = {
   insufficientMaterial: "InsufficientMaterial",
 };
 
-export function syncRoutes(app: FastifyInstance): void {
+type SyncEventType =
+  | "match-created"
+  | "player-joined"
+  | "move-made"
+  | "game-ended"
+  | "payout"
+  | "match-aborted";
+
+async function claimEvent(
+  s: Sql,
+  eventType: SyncEventType,
+  matchId: string,
+  signature: string,
+  slot: number,
+  eventIndex: number
+): Promise<boolean> {
+  const rows = await s`
+    INSERT INTO sync_events (
+      event_signature, event_type, match_id, event_slot, event_index
+    ) VALUES (${signature}, ${eventType}, ${matchId}, ${slot}, ${eventIndex})
+    ON CONFLICT (event_signature, event_type, match_id, event_index) DO NOTHING
+    RETURNING event_signature
+  `;
+  return rows.length === 1;
+}
+
+async function notifyRealtime(
+  app: FastifyInstance,
+  realtime: MatchRealtimeHub | undefined,
+  matchId: string,
+  notification: MatchNotification
+): Promise<void> {
+  if (!realtime) return;
+  try {
+    await realtime.refresh(matchId, notification);
+  } catch (error) {
+    // Indexing already committed. Realtime polling will reconcile shortly.
+    app.log.error({ error, matchId }, "Realtime notification failed");
+  }
+}
+
+function confirmedAt(blockTime: number | null): Date {
+  return blockTime === null ? new Date() : new Date(blockTime * 1000);
+}
+
+export function syncRoutes(
+  app: FastifyInstance,
+  realtime?: MatchRealtimeHub
+): void {
   // ── Match created ──
-  app.post<{ Body: SyncMatchCreated }>(
+  app.post<{ Body: SyncRequest }>(
     "/api/sync/match-created",
+    { schema: { body: syncBodySchema } },
     async (request, reply) => {
       requireApiKey(request);
-      const {
-        matchId,
-        creator,
-        bettingTokenMint,
-        betAmount,
-        moveTimeoutDuration,
-        platformFeeBasisPoints,
+      const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
+      assertMatchId(matchId);
+      const verified = await verifyProgramEvent({
         signature,
-        slot,
-      } = request.body;
+        matchId,
+        runtimeEndpoint,
+        eventIndex: requestedEventIndex,
+        eventNames: ["MatchCreatedEvent"],
+      });
+      const event = eventAs(verified.event, "MatchCreatedEvent");
+      const slot = verified.slot;
+      const eventIndex = verified.eventIndex;
 
-      await sql`
-        INSERT INTO matches (
-          match_id, white_player, betting_token_mint,
-          bet_amount_per_player, total_pot, platform_fee_bps,
-          move_timeout_seconds, last_webhook_slot, last_webhook_sig
-        ) VALUES (
-          ${matchId}, ${creator}, ${bettingTokenMint},
-          ${betAmount}, ${betAmount}, ${platformFeeBasisPoints},
-          ${moveTimeoutDuration}, ${slot}, ${signature}
-        )
-        ON CONFLICT (match_id) DO NOTHING
-      `;
+      const inserted = await sql.begin(async (tx) => {
+        const claimed = await claimEvent(
+          tx as unknown as Sql,
+          "match-created",
+          matchId,
+          signature,
+          slot,
+          eventIndex
+        );
+        if (!claimed) return false;
 
-      // Init board cache
+        const rows = await tx`
+          INSERT INTO matches (
+            match_id, white_player, betting_token_mint,
+            bet_amount_per_player, total_pot, platform_fee_bps,
+            move_timeout_seconds, last_webhook_slot, last_webhook_sig
+          ) VALUES (
+            ${matchId}, ${event.creator}, ${event.bettingTokenMint},
+            ${event.betAmount}, ${event.betAmount}, ${event.platformFeeBasisPoints},
+            ${event.moveTimeoutDuration}, ${slot}, ${signature}
+          )
+          ON CONFLICT (match_id) DO NOTHING
+          RETURNING match_id
+        `;
+        return rows.length === 1;
+      });
+
+      if (!inserted) {
+        return reply.send({ ok: true, duplicate: true });
+      }
+
       const fen = initMatch(matchId);
 
-      app.log.info({ matchId, creator }, "Match indexed");
+      await notifyRealtime(app, realtime, matchId, {
+        type: "match-created",
+        creator: event.creator,
+        signature,
+      });
+
+      app.log.info({ matchId, creator: event.creator }, "Match indexed");
       reply.send({ ok: true, fen });
     }
   );
 
   // ── Player joined ──
-  app.post<{ Body: SyncPlayerJoined }>(
+  app.post<{ Body: SyncRequest }>(
     "/api/sync/player-joined",
+    { schema: { body: syncBodySchema } },
     async (request, reply) => {
       requireApiKey(request);
-      const {
-        matchId,
-        playerTwo,
-        betAmountPerPlayer,
+      const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
+      assertMatchId(matchId);
+      const verified = await verifyProgramEvent({
         signature,
-        slot,
-      } = request.body;
+        matchId,
+        runtimeEndpoint,
+        eventIndex: requestedEventIndex,
+        eventNames: ["PlayerJoinedEvent"],
+      });
+      const event = eventAs(verified.event, "PlayerJoinedEvent");
+      const slot = verified.slot;
+      const eventIndex = verified.eventIndex;
+      const joinedAt = confirmedAt(verified.blockTime);
 
-      await sql`
-        UPDATE matches
-        SET black_player = ${playerTwo},
-            total_pot = total_pot + ${betAmountPerPlayer},
-            game_status = 'Active',
-            started_at = NOW(),
-            last_move_at = NOW(),
-            last_webhook_slot = ${slot},
-            last_webhook_sig = ${signature}
-        WHERE match_id = ${matchId}
-      `;
+      const updated = await sql.begin(async (tx) => {
+        const claimed = await claimEvent(
+          tx as unknown as Sql,
+          "player-joined",
+          matchId,
+          signature,
+          slot,
+          eventIndex
+        );
+        if (!claimed) return "duplicate" as const;
 
-      app.log.info({ matchId, playerTwo }, "Player joined indexed");
+        const rows = await tx`
+          UPDATE matches
+          SET black_player = ${event.playerTwo},
+              total_pot = bet_amount_per_player * 2,
+              game_status = 'Active',
+              started_at = ${joinedAt},
+              last_move_at = ${joinedAt},
+              last_webhook_slot = ${slot},
+              last_webhook_sig = ${signature}
+          WHERE match_id = ${matchId}
+            AND game_status = 'WaitingForOpponent'
+            AND black_player IS NULL
+            AND white_player = ${event.playerOne}
+            AND betting_token_mint = ${event.bettingTokenMint}
+            AND bet_amount_per_player = ${event.betAmountPerPlayer}
+          RETURNING match_id
+        `;
+        if (rows.length === 0) {
+          throw { statusCode: 409, message: "Match is missing or already joined" };
+        }
+        return "updated" as const;
+      });
+
+      if (updated === "duplicate") {
+        return reply.send({ ok: true, duplicate: true });
+      }
+
+      await notifyRealtime(app, realtime, matchId, {
+        type: "player-joined",
+        whitePlayer: event.playerOne,
+        blackPlayer: event.playerTwo,
+        signature,
+      });
+
+      app.log.info({ matchId, playerTwo: event.playerTwo }, "Player joined indexed");
       reply.send({ ok: true });
     }
   );
 
-  // ── Move made ──
-  app.post<{ Body: SyncMoveMade }>(
-    "/api/sync/move-made",
+  // ── Match aborted before an opponent joined ──
+  app.post<{ Body: SyncRequest }>(
+    "/api/sync/match-aborted",
+    { schema: { body: syncBodySchema } },
     async (request, reply) => {
       requireApiKey(request);
       const {
         matchId,
-        player,
-        playerColor,
-        algebraicMove,
-        fromRow,
-        fromCol,
-        toRow,
-        toCol,
-        promotionPiece,
-        isCheck,
-        isCheckmate,
-        isStalemate,
         signature,
-        slot,
+        runtimeEndpoint,
+        eventIndex: requestedEventIndex,
       } = request.body;
+      assertMatchId(matchId);
+      const verified = await verifyProgramEvent({
+        signature,
+        matchId,
+        runtimeEndpoint,
+        eventIndex: requestedEventIndex,
+        eventNames: ["MatchAbortedEvent"],
+      });
+      const event = eventAs(verified.event, "MatchAbortedEvent");
 
-      // Apply move to board cache, get FEN
-      let fen = applyMove(matchId, {
-        fromRow,
-        fromCol,
-        toRow,
-        toCol,
-        promotionPiece: promotionPiece || null,
-        playerColor: playerColor === "white" ? "white" : "black",
+      const updated = await sql.begin(async (tx) => {
+        const claimed = await claimEvent(
+          tx as unknown as Sql,
+          "match-aborted",
+          matchId,
+          signature,
+          verified.slot,
+          verified.eventIndex
+        );
+        if (!claimed) return false;
+
+        const rows = await tx`
+          UPDATE matches
+          SET game_status = 'Aborted',
+              game_end_reason = 'Aborted',
+              payout_processed = TRUE,
+              ended_at = NOW(),
+              last_webhook_slot = ${verified.slot},
+              last_webhook_sig = ${signature}
+          WHERE match_id = ${matchId}
+            AND game_status = 'WaitingForOpponent'
+            AND white_player = ${event.creator}
+          RETURNING match_id
+        `;
+        if (rows.length === 0) {
+          throw { statusCode: 409, message: "Match is missing or cannot be aborted" };
+        }
+        return true;
       });
 
-      if (!fen) {
-        // Cache miss — rebuild from DB moves replay, then apply this move
-        fen = await rebuildBoardState(
-          matchId,
-          {
-            fromRow,
-            fromCol,
-            toRow,
-            toCol,
-            promotionPiece: promotionPiece || null,
-            playerColor: playerColor === "white" ? "white" : "black",
-          },
-          (queryStr: string, ...params: unknown[]) =>
-            sql.unsafe(queryStr, ...params as any)
-        );
+      if (!updated) return reply.send({ ok: true, duplicate: true });
+      removeMatch(matchId);
+      await notifyRealtime(app, realtime, matchId, {
+        type: "match-aborted",
+        creator: event.creator,
+        signature,
+      });
+      app.log.info({ matchId }, "Match abort indexed");
+      return reply.send({ ok: true });
+    }
+  );
+
+  // ── Move made ──
+  app.post<{ Body: SyncRequest }>(
+    "/api/sync/move-made",
+    { schema: { body: syncBodySchema } },
+    async (request, reply) => {
+      requireApiKey(request);
+      const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
+      assertMatchId(matchId);
+      const verified = await verifyProgramEvent({
+        signature,
+        matchId,
+        runtimeEndpoint,
+        eventIndex: requestedEventIndex,
+        eventNames: ["MoveMadeEvent"],
+      });
+      const event = eventAs(verified.event, "MoveMadeEvent");
+      const slot = verified.slot;
+      const eventIndex = verified.eventIndex;
+      const movedAt = confirmedAt(verified.blockTime);
+
+      let result: { duplicate: boolean; fen: string | null; moveNumber: number };
+      try {
+        result = await sql.begin(async (tx) => {
+          const claimed = await claimEvent(
+            tx as unknown as Sql,
+            "move-made",
+            matchId,
+            signature,
+            slot,
+            eventIndex
+          );
+          if (!claimed) {
+            const existing = await tx`
+              SELECT move_number, fen_after_move
+              FROM moves
+              WHERE event_signature = ${signature}
+                AND match_id = ${matchId}
+                AND event_index = ${eventIndex}
+            `;
+            return {
+              duplicate: true,
+              fen: (existing[0]?.fenAfterMove as string | undefined) ?? null,
+              moveNumber: Number(existing[0]?.moveNumber ?? 0),
+            };
+          }
+
+          const matches = await tx`
+            SELECT match_id, last_move_slot, last_move_signature,
+                   last_move_event_index
+            FROM matches WHERE match_id = ${matchId} FOR UPDATE
+          `;
+          if (matches.length === 0) {
+            throw { statusCode: 409, message: "Match must be indexed before its moves" };
+          }
+          const lastMoveSlot = matches[0]?.lastMoveSlot;
+          const sameTransaction =
+            matches[0]?.lastMoveSignature === signature;
+          const staleSlot =
+            lastMoveSlot != null && BigInt(slot) < BigInt(String(lastMoveSlot));
+          const staleEventInTransaction =
+            sameTransaction &&
+            matches[0]?.lastMoveEventIndex != null &&
+            eventIndex <= Number(matches[0].lastMoveEventIndex);
+          if (staleSlot || staleEventInTransaction) {
+            throw {
+              statusCode: 409,
+              message: "Move event is stale or out of order; replay from the earliest missing move",
+            };
+          }
+
+          const latest = await tx`
+            SELECT COALESCE(MAX(move_number), 0) AS move_number
+            FROM moves WHERE match_id = ${matchId}
+          `;
+          const moveNumber = Number(latest[0]?.moveNumber ?? 0) + 1;
+          const dbColor = event.playerColor === "white" ? "White" : "Black";
+
+          await tx`
+            INSERT INTO moves (
+              match_id, move_number, player_pubkey, player_color,
+              from_row, from_col, to_row, to_col,
+              algebraic_move, promotion_piece, fen_after_move,
+              is_check, is_checkmate, is_stalemate,
+              event_slot, event_signature, event_index
+            ) VALUES (
+              ${matchId}, ${moveNumber}, ${event.player}, ${dbColor},
+              ${event.fromRow}, ${event.fromCol}, ${event.toRow}, ${event.toCol},
+              ${event.algebraicMove}, ${event.promotionPiece}, ${event.boardFen},
+              ${event.isCheck}, ${event.isCheckmate}, ${event.isStalemate},
+              ${slot}, ${signature}, ${eventIndex}
+            )
+          `;
+
+          await tx`
+            UPDATE matches
+            SET current_fen = ${event.boardFen},
+                last_move_slot = ${slot},
+                last_move_signature = ${signature},
+                last_move_event_index = ${eventIndex},
+                last_move_at = ${movedAt},
+                last_webhook_slot = ${slot},
+                last_webhook_sig = ${signature}
+            WHERE match_id = ${matchId}
+          `;
+
+          return { duplicate: false, fen: event.boardFen, moveNumber };
+        });
+      } catch (error) {
+        // A rolled-back write must not leave process-local state ahead of Postgres.
+        removeMatch(matchId);
+        throw error;
       }
 
-      // Get next move number
-      const count = await sql`
-        SELECT COUNT(*) as cnt FROM moves WHERE match_id = ${matchId}
-      `;
-      const moveNumber = Number(count[0]?.cnt ?? 0) + 1;
-
-      // Color to DB format
-      const dbColor =
-        playerColor === "white" ? "White" : "Black";
-
-      await sql`
-        INSERT INTO moves (
-          match_id, move_number, player_pubkey, player_color,
-          from_row, from_col, to_row, to_col,
-          algebraic_move, promotion_piece, fen_after_move,
-          is_check, is_checkmate, is_stalemate,
-          event_slot, event_signature
-        ) VALUES (
-          ${matchId}, ${moveNumber}, ${player}, ${dbColor},
-          ${fromRow}, ${fromCol}, ${toRow}, ${toCol},
-          ${algebraicMove}, ${promotionPiece ?? null}, ${fen ?? ""},
-          ${isCheck}, ${isCheckmate}, ${isStalemate},
-          ${slot}, ${signature}
-        )
-        ON CONFLICT (event_signature) DO NOTHING
-      `;
-
-      // Update match timestamp
-      await sql`
-        UPDATE matches
-        SET last_move_at = NOW(),
-            last_webhook_slot = ${slot},
-            last_webhook_sig = ${signature}
-        WHERE match_id = ${matchId}
-      `;
-
       app.log.info(
-        { matchId, moveNumber, algebraicMove },
+        { matchId, moveNumber: result.moveNumber, algebraicMove: event.algebraicMove },
         "Move indexed"
       );
-      reply.send({ ok: true, fen, moveNumber });
+      if (!result.duplicate) {
+        await notifyRealtime(app, realtime, matchId, {
+          type: "move-made",
+          moveNumber: result.moveNumber,
+          algebraicMove: event.algebraicMove,
+          player: event.player,
+          playerColor: event.playerColor,
+          signature,
+        });
+      }
+      reply.send({
+        ok: true,
+        duplicate: result.duplicate || undefined,
+        fen: result.fen,
+        moveNumber: result.moveNumber,
+      });
     }
   );
 
   // ── Game ended ──
-  app.post<{ Body: SyncGameEnded }>(
+  app.post<{ Body: SyncRequest }>(
     "/api/sync/game-ended",
+    { schema: { body: syncBodySchema } },
     async (request, reply) => {
       requireApiKey(request);
-      const { matchId, status, winner, reason, signature, slot } =
-        request.body;
+      const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
+      assertMatchId(matchId);
+      const verified = await verifyProgramEvent({
+        signature,
+        matchId,
+        runtimeEndpoint,
+        eventIndex: requestedEventIndex,
+        eventNames: ["GameEndedEvent"],
+      });
+      const event = eventAs(verified.event, "GameEndedEvent");
+      const slot = verified.slot;
+      const eventIndex = verified.eventIndex;
 
-      const dbStatus = gameStatusToDb[status] || status;
-      const dbReason = gameEndReasonToDb[reason] || reason;
+      const dbStatus = gameStatusToDb[event.status];
+      const dbReason = gameEndReasonToDb[event.reason];
+      if (!dbStatus || !dbReason) {
+        throw { statusCode: 422, message: "Unsupported terminal event values" };
+      }
 
-      await sql`
-        UPDATE matches
-        SET game_status = ${dbStatus},
-            game_end_reason = ${dbReason},
-            ended_at = NOW(),
-            last_webhook_slot = ${slot},
-            last_webhook_sig = ${signature}
-        WHERE match_id = ${matchId}
-      `;
+      const updated = await sql.begin(async (tx) => {
+        const claimed = await claimEvent(
+          tx as unknown as Sql,
+          "game-ended",
+          matchId,
+          signature,
+          slot,
+          eventIndex
+        );
+        if (!claimed) return false;
 
-      // Update player stats
-      await updatePlayerStats(matchId, status, winner, reason);
+        const rows = await tx`
+          UPDATE matches
+          SET game_status = ${dbStatus},
+              game_end_reason = ${dbReason},
+              ended_at = NOW(),
+              last_webhook_slot = ${slot},
+              last_webhook_sig = ${signature}
+          WHERE match_id = ${matchId}
+            AND game_status = 'Active'
+          RETURNING match_id
+        `;
+        if (rows.length === 0) {
+          throw { statusCode: 409, message: "Match is missing or already ended" };
+        }
+
+        await updatePlayerStats(
+          tx as unknown as Sql,
+          matchId,
+          event.status,
+          event.reason
+        );
+        return true;
+      });
+
+      if (!updated) {
+        return reply.send({ ok: true, duplicate: true });
+      }
 
       // Clean up board cache
       removeMatch(matchId);
 
+      await notifyRealtime(app, realtime, matchId, {
+        type: "game-ended",
+        status: dbStatus,
+        reason: dbReason,
+        winner: event.winner,
+        signature,
+      });
+
       app.log.info(
-        { matchId, status, reason },
+        { matchId, status: event.status, reason: event.reason },
         "Game end indexed"
       );
       reply.send({ ok: true });
@@ -294,20 +554,58 @@ export function syncRoutes(app: FastifyInstance): void {
   );
 
   // ── Payout processed ──
-  app.post<{ Body: SyncPayout }>(
+  app.post<{ Body: SyncRequest }>(
     "/api/sync/payout",
+    { schema: { body: syncBodySchema } },
     async (request, reply) => {
       requireApiKey(request);
-      const { matchId, signature, slot } = request.body;
+      const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
+      assertMatchId(matchId);
+      const verified = await verifyProgramEvent({
+        signature,
+        matchId,
+        runtimeEndpoint,
+        eventIndex: requestedEventIndex,
+        eventNames: ["PayoutEvent", "DrawPayoutEvent"],
+      });
+      const slot = verified.slot;
+      const eventIndex = verified.eventIndex;
 
-      await sql`
-        UPDATE matches
-        SET payout_processed = TRUE,
-            payout_tx_signature = ${signature},
-            last_webhook_slot = ${slot},
-            last_webhook_sig = ${signature}
-        WHERE match_id = ${matchId}
-      `;
+      const updated = await sql.begin(async (tx) => {
+        const claimed = await claimEvent(
+          tx as unknown as Sql,
+          "payout",
+          matchId,
+          signature,
+          slot,
+          eventIndex
+        );
+        if (!claimed) return false;
+
+        const rows = await tx`
+          UPDATE matches
+          SET payout_processed = TRUE,
+              payout_tx_signature = ${signature},
+              last_webhook_slot = ${slot},
+              last_webhook_sig = ${signature}
+          WHERE match_id = ${matchId}
+            AND payout_processed = FALSE
+          RETURNING match_id
+        `;
+        if (rows.length === 0) {
+          throw { statusCode: 409, message: "Match is missing or payout is already indexed" };
+        }
+        return true;
+      });
+
+      if (!updated) {
+        return reply.send({ ok: true, duplicate: true });
+      }
+
+      await notifyRealtime(app, realtime, matchId, {
+        type: "payout-processed",
+        signature,
+      });
 
       app.log.info({ matchId }, "Payout indexed");
       reply.send({ ok: true });
@@ -318,12 +616,12 @@ export function syncRoutes(app: FastifyInstance): void {
 // ── Player stats update ──
 
 async function updatePlayerStats(
+  s: Sql,
   matchId: string,
   status: string,
-  winner: string | null,
   reason: string
 ): Promise<void> {
-  const match = await sql`
+  const match = await s`
     SELECT white_player, black_player, bet_amount_per_player, total_pot
     FROM matches WHERE match_id = ${matchId}
   `;
@@ -334,8 +632,8 @@ async function updatePlayerStats(
 
   const white = whitePlayer as string;
   const black = blackPlayer as string;
-  const bet = Number(betAmountPerPlayer ?? 0);
-  const pot = Number(totalPot ?? 0);
+  const bet = String(betAmountPerPlayer ?? "0");
+  const pot = String(totalPot ?? "0");
 
   // Determine winner/loser
   let winnerPubkey: string | null = null;
@@ -365,13 +663,13 @@ async function updatePlayerStats(
   // Update winner
   if (winnerPubkey) {
     const reasonCol = winReasonColumn(reason);
-    await sql.unsafe(`
+    await s.unsafe(`
       INSERT INTO player_stats (
         player_pubkey, total_games, wins, ${reasonCol},
         current_streak, total_wagered, total_won, last_game_at
       ) VALUES (
-        '${winnerPubkey}', 1, 1, 1,
-        1, ${bet}, ${pot}, NOW()
+        $1, 1, 1, 1,
+        1, $2, $3, NOW()
       )
       ON CONFLICT (player_pubkey) DO UPDATE SET
         total_games = player_stats.total_games + 1,
@@ -384,53 +682,53 @@ async function updatePlayerStats(
         ),
         current_streak = CASE WHEN player_stats.current_streak >= 0
           THEN player_stats.current_streak + 1 ELSE 1 END,
-        total_wagered = player_stats.total_wagered + ${bet},
-        total_won = player_stats.total_won + ${pot},
+        total_wagered = player_stats.total_wagered + EXCLUDED.total_wagered,
+        total_won = player_stats.total_won + EXCLUDED.total_won,
         last_game_at = NOW(),
         updated_at = NOW()
-    `);
+    `, [winnerPubkey, bet, pot]);
   }
 
   // Update loser
   if (loserPubkey) {
-    await sql.unsafe(`
+    await s.unsafe(`
       INSERT INTO player_stats (
         player_pubkey, total_games, losses, current_streak,
         total_wagered, last_game_at
       ) VALUES (
-        '${loserPubkey}', 1, 1, -1,
-        ${bet}, NOW()
+        $1, 1, 1, -1,
+        $2, NOW()
       )
       ON CONFLICT (player_pubkey) DO UPDATE SET
         total_games = player_stats.total_games + 1,
         losses = player_stats.losses + 1,
         current_streak = CASE WHEN player_stats.current_streak <= 0
           THEN player_stats.current_streak - 1 ELSE -1 END,
-        total_wagered = player_stats.total_wagered + ${bet},
+        total_wagered = player_stats.total_wagered + EXCLUDED.total_wagered,
         last_game_at = NOW(),
         updated_at = NOW()
-    `);
+    `, [loserPubkey, bet]);
   }
 
   // Draw
   if (status === "draw") {
     for (const pubkey of [white, black]) {
       if (!pubkey) continue;
-      await sql.unsafe(`
+      await s.unsafe(`
         INSERT INTO player_stats (
           player_pubkey, total_games, draws,
           total_wagered, last_game_at
         ) VALUES (
-          '${pubkey}', 1, 1,
-          ${bet}, NOW()
+          $1, 1, 1,
+          $2, NOW()
         )
         ON CONFLICT (player_pubkey) DO UPDATE SET
           total_games = player_stats.total_games + 1,
           draws = player_stats.draws + 1,
-          total_wagered = player_stats.total_wagered + ${bet},
+          total_wagered = player_stats.total_wagered + EXCLUDED.total_wagered,
           last_game_at = NOW(),
           updated_at = NOW()
-      `);
+      `, [pubkey, bet]);
     }
   }
 }

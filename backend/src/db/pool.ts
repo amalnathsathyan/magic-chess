@@ -9,10 +9,14 @@ export const sql = postgres(config.db.url, {
   transform: postgres.camel,
 });
 
-export async function checkDbConnection(): Promise<boolean> {
+export async function checkDbReadiness(): Promise<boolean> {
   try {
-    await sql`SELECT 1`;
-    return true;
+    const rows = await sql`
+      SELECT EXISTS (
+        SELECT 1 FROM _migrations WHERE name = '005_unbounded_player_aggregates'
+      ) AS ready
+    `;
+    return rows[0]?.ready === true;
   } catch {
     return false;
   }

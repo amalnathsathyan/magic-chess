@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Chessboard } from "react-chessboard";
 import { Chess, type Square } from "chess.js";
 import { cn } from "@/lib/utils";
@@ -33,8 +33,13 @@ export function ChessBoard({
   className,
 }: ChessBoardProps) {
   const [moveFrom, setMoveFrom] = useState<Square | null>(null);
-  const [rightClickedSquares, setRightClickedSquares] = useState<any>({});
-  const [optionSquares, setOptionSquares] = useState<any>({});
+  const [rightClickedSquares, setRightClickedSquares] = useState<
+    Record<string, CSSProperties>
+  >({});
+  const [optionSquares, setOptionSquares] = useState<
+    Record<string, CSSProperties>
+  >({});
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   const game = useMemo(() => {
     try {
@@ -46,7 +51,26 @@ export function ChessBoard({
 
   const isGameOver = game.isGameOver();
 
+  useEffect(() => {
+    setMoveFrom(null);
+    setOptionSquares({});
+  }, [fen, arePiecesDraggable]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => setReduceMotion(mediaQuery.matches);
+    update();
+    mediaQuery.addEventListener("change", update);
+    return () => mediaQuery.removeEventListener("change", update);
+  }, []);
+
   function getMoveOptions(square: Square) {
+    if (!arePiecesDraggable || isGameOver) return false;
+    const selectedPiece = game.get(square);
+    if (!selectedPiece || selectedPiece.color !== game.turn()) {
+      setOptionSquares({});
+      return false;
+    }
     const moves = game.moves({
       square,
       verbose: true,
@@ -56,8 +80,8 @@ export function ChessBoard({
       return false;
     }
 
-    const newSquares: any = {};
-    moves.map((move) => {
+    const newSquares: Record<string, CSSProperties> = {};
+    moves.forEach((move) => {
       newSquares[move.to] = {
         background:
           game.get(move.to as Square) &&
@@ -66,7 +90,6 @@ export function ChessBoard({
             : "radial-gradient(circle, rgba(255,255,255,.25) 25%, transparent 25%)",
         borderRadius: "50%",
       };
-      return move;
     });
     newSquares[square] = {
       background: "rgba(255, 255, 255, 0.15)",
@@ -80,6 +103,8 @@ export function ChessBoard({
       onSquareClick(square);
     }
     
+    if (!arePiecesDraggable || isGameOver) return;
+
     setRightClickedSquares({});
 
     // From square
@@ -114,18 +139,19 @@ export function ChessBoard({
 
   function onSquareRightClick(square: Square) {
     const colour = "rgba(255, 255, 255, 0.2)";
-    setRightClickedSquares({
-      ...rightClickedSquares,
-      [square]:
-        rightClickedSquares[square] &&
-        rightClickedSquares[square].backgroundColor === colour
-          ? undefined
-          : { backgroundColor: colour },
+    setRightClickedSquares((current) => {
+      const next = { ...current };
+      if (current[square]?.backgroundColor === colour) {
+        delete next[square];
+      } else {
+        next[square] = { backgroundColor: colour };
+      }
+      return next;
     });
   }
 
   function onPieceDropInternal(sourceSquare: Square, targetSquare: Square) {
-    if (!onPieceDrop) return false;
+    if (!onPieceDrop || !arePiecesDraggable || isGameOver) return false;
     const success = onPieceDrop(sourceSquare, targetSquare);
     if (success) {
       setMoveFrom(null);
@@ -143,7 +169,7 @@ export function ChessBoard({
       for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
           const piece = board[r][c];
-          if (piece && piece.type === 'k' && piece.color === turn) {
+          if (piece && piece.type === "k" && piece.color === turn) {
             squares[piece.square] = { backgroundColor: "rgba(255, 0, 0, 0.5)" };
           }
         }
@@ -167,14 +193,10 @@ export function ChessBoard({
       styles[sq] = { ...styles[sq], ...style };
     }
     for (const [sq, style] of Object.entries(optionSquares)) {
-      if (style && typeof style === 'object') {
-        styles[sq] = { ...styles[sq], ...(style as any) };
-      }
+      styles[sq] = { ...styles[sq], ...style };
     }
     for (const [sq, style] of Object.entries(rightClickedSquares)) {
-      if (style && typeof style === 'object') {
-        styles[sq] = { ...styles[sq], ...(style as any) };
-      }
+      styles[sq] = { ...styles[sq], ...style };
     }
     return styles;
   }, [lastMove, highlightSquares, checkSquares, optionSquares, rightClickedSquares]);
@@ -185,13 +207,21 @@ export function ChessBoard({
   }, [customArrows]);
 
   return (
-    <div className={cn("mx-auto w-fit", className)}>
+    <div
+      className={cn("mx-auto w-fit", className)}
+      role="application"
+      aria-label={
+        arePiecesDraggable
+          ? "Interactive chess board. Select or drag a piece to make a legal move."
+          : "Read-only chess board"
+      }
+    >
       <Chessboard
         options={{
           position: fen,
           boardOrientation: orientation,
           allowDragging: arePiecesDraggable && !isGameOver,
-          animationDurationInMs: 200,
+          animationDurationInMs: reduceMotion ? 0 : 150,
           onPieceDrop: ({ sourceSquare, targetSquare }) => {
             if (!targetSquare) return false;
             return onPieceDropInternal(sourceSquare as Square, targetSquare as Square);

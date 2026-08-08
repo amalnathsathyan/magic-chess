@@ -1,7 +1,12 @@
 "use client";
 
 import { PrivyProvider } from "@privy-io/react-auth";
+import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import { SolanaProgramProvider } from "./SolanaProgramProvider";
+
+const solanaConnectors = toSolanaWalletConnectors({
+  shouldAutoConnect: true,
+});
 
 function AuthConfigurationError() {
   return (
@@ -45,6 +50,20 @@ function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
           theme: "dark",
           accentColor: "#00e676",
           logo: "/logo.svg",
+          walletChainType: "solana-only",
+          walletList: [
+            "phantom",
+            "solflare",
+            "backpack",
+            "detected_solana_wallets",
+            "wallet_connect_qr",
+          ],
+        },
+
+        externalWallets: {
+          solana: {
+            connectors: solanaConnectors,
+          },
         },
 
         embeddedWallets: {

@@ -22,6 +22,7 @@ export type {
   CreateMatchParams,
   JoinMatchParams,
   MatchInfo,
+  WagerInfo,
   MatchCreatedEvent,
   PlayerJoinedEvent,
   MoveMadeEvent,
@@ -49,8 +50,19 @@ export {
   MAGIC_CONTEXT_ID,
   getDelegationStatus,
   getERConnection,
+  resolveAccountRuntime,
+  waitForDelegation,
+  waitForUndelegation,
+  confirmCommitmentOnBase,
 } from "./magicblock";
-export type { DelegationStatus } from "./magicblock";
+export type {
+  AccountRuntime,
+  DelegationStatus,
+  LifecyclePollOptions,
+} from "./magicblock";
+
+// Wager display helpers
+export { formatRawTokenAmount, isFreeWager } from "./wager";
 
 // FEN utilities
 export { boardToFen, fenToBoard } from "./utils/fen";

@@ -57,26 +57,34 @@ pub fn handle_join_match(ctx: Context<JoinMatch>, bet_amount_arg: u64) -> Result
     );
 
     // 3. Perform the token transfer from joining player to the match escrow
-    let cpi_accounts_transfer = Transfer {
-        from: ctx.accounts.player_token_account.to_account_info(),
-        to: ctx.accounts.match_escrow_token_account.to_account_info(),
-        authority: player_two.to_account_info(),
-    };
-    let cpi_context_transfer = CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts_transfer);
-    token::transfer(cpi_context_transfer, bet_amount_arg)?;
+    if bet_amount_arg > 0 {
+        let cpi_accounts_transfer = Transfer {
+            from: ctx.accounts.player_token_account.to_account_info(),
+            to: ctx.accounts.match_escrow_token_account.to_account_info(),
+            authority: player_two.to_account_info(),
+        };
+        let cpi_context_transfer =
+            CpiContext::new(ctx.accounts.token_program.key(), cpi_accounts_transfer);
+        token::transfer(cpi_context_transfer, bet_amount_arg)?;
+    }
 
     // 4. Update chess match state
     chess_match.players[1] = player_two.key();
     chess_match.game_status = GameStatus::Active;
     chess_match.bet_amount_player_two = bet_amount_arg;
-    chess_match.total_pot = chess_match.bet_amount_player_one
+    chess_match.total_pot = chess_match
+        .bet_amount_player_one
         .checked_add(bet_amount_arg)
         .ok_or(ChessError::MathError)?;
 
     // When player 2 joins, reset the move timestamp so player 1 gets full time
     chess_match.last_move_timestamp = Clock::get()?.unix_timestamp;
 
-    msg!("Player {} joined match {}. Game is now active.", player_two.key(), chess_match.match_id);
+    msg!(
+        "Player {} joined match {}. Game is now active.",
+        player_two.key(),
+        chess_match.match_id
+    );
 
     // 5. Emit PlayerJoinedEvent
     emit!(PlayerJoinedEvent {
