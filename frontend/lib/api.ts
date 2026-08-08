@@ -5,6 +5,13 @@
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
+export function getApiUrl(path: string): string {
+  if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured for this deployment.");
+  }
+  return new URL(path, API_URL).toString();
+}
+
 async function fetchApi<T>(
   path: string,
   init?: RequestInit

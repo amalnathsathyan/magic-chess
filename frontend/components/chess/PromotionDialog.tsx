@@ -8,7 +8,7 @@ interface PromotionDialogProps {
   isOpen: boolean;
   color: "white" | "black";
   onSelect: (piece: PromotionPiece) => void;
-  onCancel: () => void;
+  onCancel?: () => void;
   className?: string;
 }
 
@@ -50,7 +50,7 @@ export function PromotionDialog({
       aria-modal="true"
       aria-label="Choose a promotion piece"
       onKeyDown={(event) => {
-        if (event.key === "Escape") onCancel();
+        if (event.key === "Escape") onCancel?.();
       }}
       className={cn(
         "glass-card absolute z-20 flex gap-1 p-2",

@@ -55,12 +55,6 @@ export default function ArenaPage() {
         <div>
           <div className="flex items-baseline gap-3">
             <h1 className="font-heading text-3xl font-bold">Live lobby</h1>
-            {counts.live > 0 ? (
-              <span className="inline-flex items-center gap-1.5 text-sm text-accent">
-                <span className="h-2 w-2 rounded-full bg-accent" aria-hidden="true" />
-                {counts.live} live
-              </span>
-            ) : null}
           </div>
           <p className="mt-1 text-muted-foreground">
             Join an open on-chain match or create your own.

@@ -44,7 +44,6 @@ export function parseTokenAmount(value: string, decimals: number): bigint {
   const units = BigInt(whole) * 10n ** BigInt(decimals);
   const fractionalUnits = BigInt(fraction.padEnd(decimals, "0") || "0");
   const amount = units + fractionalUnits;
-  if (amount < 1n) throw new Error("Wager must be greater than zero.");
   return amount;
 }
 

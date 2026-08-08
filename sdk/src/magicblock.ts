@@ -1,4 +1,9 @@
-import { Connection, PublicKey } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  type TransactionSignature,
+} from "@solana/web3.js";
+import { Connection as MagicBlockConnection } from "@magicblock-labs/ephemeral-rollups-kit";
 
 // ── MagicBlock Endpoints ────────────────────────────────────────
 
@@ -97,6 +102,141 @@ export interface AccountRuntime {
   accountInfo: NonNullable<Awaited<ReturnType<Connection["getAccountInfo"]>>>;
   runtime: "base" | "ephemeral";
   delegation?: DelegationStatus;
+}
+
+export interface LifecyclePollOptions {
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+}
+
+const DEFAULT_LIFECYCLE_TIMEOUT_MS = 30_000;
+const DEFAULT_POLL_INTERVAL_MS = 500;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function lifecycleOptions(options?: LifecyclePollOptions) {
+  return {
+    timeoutMs: options?.timeoutMs ?? DEFAULT_LIFECYCLE_TIMEOUT_MS,
+    pollIntervalMs: options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
+  };
+}
+
+/** Wait until base ownership, router status, and ER ownership agree. */
+export async function waitForDelegation(
+  baseConnection: Connection,
+  account: PublicKey,
+  expectedProgramId: PublicKey,
+  routerEndpoint = MAGICBLOCK_DEVNET_ROUTER,
+  options?: LifecyclePollOptions
+): Promise<AccountRuntime> {
+  const { timeoutMs, pollIntervalMs } = lifecycleOptions(options);
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
+
+  while (Date.now() < deadline) {
+    try {
+      const runtime = await resolveAccountRuntime(
+        baseConnection,
+        account,
+        expectedProgramId,
+        routerEndpoint
+      );
+      if (runtime?.runtime === "ephemeral") return runtime;
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(pollIntervalMs);
+  }
+
+  const detail = lastError instanceof Error ? `: ${lastError.message}` : "";
+  throw new Error(`Delegation did not propagate within ${timeoutMs}ms${detail}`);
+}
+
+/** Wait until the account is program-owned on base and absent from the ER route. */
+export async function waitForUndelegation(
+  baseConnection: Connection,
+  account: PublicKey,
+  expectedProgramId: PublicKey,
+  routerEndpoint = MAGICBLOCK_DEVNET_ROUTER,
+  options?: LifecyclePollOptions
+): Promise<AccountRuntime> {
+  const { timeoutMs, pollIntervalMs } = lifecycleOptions(options);
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
+
+  while (Date.now() < deadline) {
+    try {
+      const baseInfo = await baseConnection.getAccountInfo(account, "confirmed");
+      if (baseInfo?.owner.equals(expectedProgramId)) {
+        const status = await getDelegationStatus(account, routerEndpoint);
+        if (!status.isDelegated) {
+          return {
+            connection: baseConnection,
+            accountInfo: baseInfo,
+            runtime: "base",
+          };
+        }
+      }
+    } catch (error) {
+      lastError = error;
+    }
+    await delay(pollIntervalMs);
+  }
+
+  const detail = lastError instanceof Error ? `: ${lastError.message}` : "";
+  throw new Error(`Undelegation did not propagate within ${timeoutMs}ms${detail}`);
+}
+
+async function waitForSignature(
+  connection: Connection,
+  signature: TransactionSignature,
+  options?: LifecyclePollOptions
+): Promise<void> {
+  const { timeoutMs, pollIntervalMs } = lifecycleOptions(options);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const response = await connection.getSignatureStatuses([signature], {
+      searchTransactionHistory: true,
+    });
+    const status = response.value[0];
+    if (status?.err) {
+      throw new Error(`Transaction ${signature} failed: ${JSON.stringify(status.err)}`);
+    }
+    if (
+      status?.confirmationStatus === "confirmed" ||
+      status?.confirmationStatus === "finalized"
+    ) {
+      return;
+    }
+    await delay(pollIntervalMs);
+  }
+  throw new Error(`Transaction ${signature} was not confirmed within ${timeoutMs}ms`);
+}
+
+/**
+ * Resolve an ER intent transaction to the base-layer commitment signature and
+ * confirm that economic/durable state actually landed on base.
+ */
+export async function confirmCommitmentOnBase(
+  erConnection: Connection,
+  baseConnection: Connection,
+  erSignature: TransactionSignature,
+  options?: LifecyclePollOptions
+): Promise<TransactionSignature> {
+  const officialConnection = await MagicBlockConnection.create(
+    erConnection.rpcEndpoint
+  );
+  type MagicSignature = Parameters<
+    typeof officialConnection.getCommitmentSignature
+  >[0];
+  const baseSignature = (await officialConnection.getCommitmentSignature(
+    erSignature as MagicSignature
+  )) as TransactionSignature;
+
+  await waitForSignature(baseConnection, baseSignature, options);
+  return baseSignature;
 }
 
 /** Resolve the authoritative RPC for an existing program account. */

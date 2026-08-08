@@ -7,7 +7,7 @@ import {
   type TransactionSignature,
 } from "@solana/web3.js";
 import { BN, type Program } from "@anchor-lang/core";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { getMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 import type { MagicChess } from "./idl/magic_chess";
 import type {
@@ -19,6 +19,7 @@ import type {
   MoveResult,
   IntegerInput,
   MagicChessWallet,
+  WagerInfo,
 } from "./types";
 import { PieceType } from "./types";
 import { findChessMatchPda, findMatchEscrowPda, findPredictionPoolPda } from "./pda";
@@ -27,8 +28,12 @@ import {
   MAGICBLOCK_DEVNET_ROUTER,
   MAGIC_PROGRAM_ID,
   MAGIC_CONTEXT_ID,
+  confirmCommitmentOnBase,
   resolveAccountRuntime,
+  waitForDelegation,
+  waitForUndelegation,
 } from "./magicblock";
+import { formatRawTokenAmount, isFreeWager } from "./wager";
 
 const TOKEN_PROGRAM = TOKEN_PROGRAM_ID;
 const SYSTEM_PROGRAM = SystemProgram.programId;
@@ -77,8 +82,28 @@ export class MagicChessClient {
       recentBlockhash: latest.blockhash,
     }).add(instruction);
     const signed = await wallet.signTransaction(transaction);
-    const signature = await connection.sendRawTransaction(signed.serialize());
-    await connection.confirmTransaction({ signature, ...latest }, "confirmed");
+    const simulation = await connection.simulateTransaction(signed);
+    if (simulation.value.err) {
+      const logs = simulation.value.logs?.slice(-8).join("\n") ?? "No logs returned";
+      throw new Error(
+        `Transaction simulation failed: ${JSON.stringify(simulation.value.err)}\n${logs}`
+      );
+    }
+
+    const signature = await connection.sendRawTransaction(signed.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: "confirmed",
+      maxRetries: 3,
+    });
+    const confirmation = await connection.confirmTransaction(
+      { signature, ...latest },
+      "confirmed"
+    );
+    if (confirmation.value.err) {
+      throw new Error(
+        `Transaction ${signature} failed: ${JSON.stringify(confirmation.value.err)}`
+      );
+    }
     return signature;
   }
 
@@ -161,7 +186,7 @@ export class MagicChessClient {
     const [matchEscrowPda] = findMatchEscrowPda(params.matchId, this.programId);
 
     const sig = await this.program.methods
-      .joinMatch(toBN(params.betAmount, "betAmount", false))
+      .joinMatch(new BN(match.betAmountPlayerOne.toString()))
       .accountsPartial({
         chessMatch: chessMatchPda,
         playerTwoSigner: this.requireWallet("joinMatch").publicKey,
@@ -381,7 +406,10 @@ export class MagicChessClient {
    */
   async commitState(
     matchId: string
-  ): Promise<{ signature: TransactionSignature }> {
+  ): Promise<{
+    signature: TransactionSignature;
+    baseCommitmentSignature: TransactionSignature;
+  }> {
     const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
 
     if (!this.wallet) {
@@ -403,6 +431,11 @@ export class MagicChessClient {
       throw new Error(`Match ${matchId} is not delegated`);
     }
     const sig = await this.sendInstruction(runtime.connection, ix);
+    const baseCommitmentSignature = await confirmCommitmentOnBase(
+      runtime.connection,
+      this.baseConnection,
+      sig
+    );
 
     return { signature: sig, baseCommitmentSignature };
   }
@@ -418,7 +451,10 @@ export class MagicChessClient {
    */
   async undelegateMatch(
     matchId: string
-  ): Promise<{ signature: TransactionSignature }> {
+  ): Promise<{
+    signature: TransactionSignature;
+    baseCommitmentSignature: TransactionSignature;
+  }> {
     const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
 
     if (!this.wallet) {
@@ -440,27 +476,19 @@ export class MagicChessClient {
       throw new Error(`Match ${matchId} is not delegated`);
     }
     const sig = await this.sendInstruction(runtime.connection, ix);
+    const baseCommitmentSignature = await confirmCommitmentOnBase(
+      runtime.connection,
+      this.baseConnection,
+      sig
+    );
+    await waitForUndelegation(
+      this.baseConnection,
+      chessMatchPda,
+      this.programId,
+      this.routerEndpoint
+    );
 
     return { signature: sig, baseCommitmentSignature };
-  }
-
-  /** Register a real session signer on the authoritative runtime. */
-  async setSessionKey(
-    matchId: string,
-    sessionSigner: PublicKey,
-    expiresAt: IntegerInput
-  ): Promise<{ signature: TransactionSignature }> {
-    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
-    const ix = await this.program.methods
-      .setSessionKey(sessionSigner, toBN(expiresAt, "expiresAt", true))
-      .accountsPartial({
-        chessMatch: chessMatchPda,
-        player: this.requireWallet("setSessionKey").publicKey,
-      })
-      .instruction();
-    const runtime = await this.runtimeForMatch(matchId);
-    const signature = await this.sendInstruction(runtime.connection, ix);
-    return { signature };
   }
 
   /** Register a real session signer on the authoritative runtime. */
@@ -501,6 +529,31 @@ export class MagicChessClient {
       runtime.accountInfo.data
     );
     return normalizeChessMatch(account);
+  }
+
+  /** Read the wager amount, mint, decimals, and free/paid state from chain. */
+  async getMatchWager(matchId: string): Promise<WagerInfo | null> {
+    const match = await this.getMatch(matchId);
+    if (!match) return null;
+
+    const mint = await getMint(
+      this.baseConnection,
+      match.bettingTokenMint,
+      "confirmed",
+      TOKEN_PROGRAM
+    );
+    return {
+      mint: match.bettingTokenMint,
+      decimals: mint.decimals,
+      rawAmountPerPlayer: match.betAmountPlayerOne,
+      rawTotalPot: match.totalPot,
+      amountPerPlayer: formatRawTokenAmount(
+        match.betAmountPlayerOne,
+        mint.decimals
+      ),
+      totalPot: formatRawTokenAmount(match.totalPot, mint.decimals),
+      isFree: isFreeWager(match.betAmountPlayerOne),
+    };
   }
 
   /**
@@ -711,20 +764,27 @@ function toBigInt(value: unknown, label: string): bigint {
 }
 
 function toBN(value: IntegerInput, label: string, allowNegative: boolean): BN {
-  let parsed: bigint;
-  if (typeof value === "bigint") parsed = value;
-  else if (typeof value === "object" && value !== null) {
-    parsed = BigInt(value.toString(10));
-  } else {
-    if (!Number.isSafeInteger(value)) {
-      throw new RangeError(`${label} must be a safe integer, bigint, or BN`);
-    }
-    parsed = BigInt(value);
-  }
+  const parsed = integerToBigInt(value, label);
   if (!allowNegative && parsed < BigInt(0)) {
     throw new RangeError(`${label} cannot be negative`);
   }
+  const min = allowNegative ? -(1n << 63n) : 0n;
+  const max = allowNegative ? (1n << 63n) - 1n : (1n << 64n) - 1n;
+  if (parsed < min || parsed > max) {
+    throw new RangeError(`${label} is outside the on-chain integer range`);
+  }
   return new BN(parsed.toString());
+}
+
+function integerToBigInt(value: IntegerInput, label: string): bigint {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "object" && value !== null) {
+    return BigInt(value.toString(10));
+  }
+  if (!Number.isSafeInteger(value)) {
+    throw new RangeError(`${label} must be a safe integer, bigint, or BN`);
+  }
+  return BigInt(value);
 }
 
 function toAnchorPieceType(piece: PieceType) {
@@ -803,6 +863,7 @@ function toMatchInfo(account: ChessMatch): MatchInfo {
     totalPot: account.totalPot,
     moveTimeoutDuration: account.moveTimeoutDuration,
     lastMoveTimestamp: account.lastMoveTimestamp,
+    isFree: isFreeWager(account.betAmountPlayerOne),
   };
 }
 
