@@ -139,6 +139,11 @@ anchor idl fetch FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h --provider.cluster
 
 ### 5. Upgrade (re-deploy)
 
+Deploy program upgrades **before** a frontend release that contains a new
+generated IDL. Account layouts and instruction account ordering are part of the
+runtime interface; publishing the frontend first can make valid transactions
+fail or prevent match accounts from decoding.
+
 To upgrade an existing program:
 
 ```bash
@@ -154,6 +159,17 @@ Then update the IDL:
 anchor idl upgrade FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h \
   --filepath target/idl/magic_chess.json \
   --provider.cluster devnet
+```
+
+Finally, sync the exact generated artifacts into the SDK and verify there is no
+drift:
+
+```bash
+cd ../sdk
+npm run sync-idl
+cd ..
+cmp magic-chess-program/target/idl/magic_chess.json sdk/src/idl/magic_chess.json
+cmp magic-chess-program/target/types/magic_chess.ts sdk/src/idl/magic_chess.ts
 ```
 
 ## Configuration

@@ -1,17 +1,34 @@
 "use client";
 
 import { PrivyProvider } from "@privy-io/react-auth";
-import { Provider as JotaiProvider } from "jotai";
 import { SolanaProgramProvider } from "./SolanaProgramProvider";
-import { JotaiPrivySync } from "./JotaiPrivySync";
+
+function AuthConfigurationError() {
+  return (
+    <div className="flex min-h-screen w-full items-center justify-center bg-background px-4 text-foreground">
+      <div
+        role="alert"
+        className="w-full max-w-md rounded-xl border border-destructive/30 bg-card p-6 text-center shadow-card"
+      >
+        <p className="font-heading text-xl font-bold">
+          Authentication is not configured
+        </p>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Add <code className="font-mono text-foreground">NEXT_PUBLIC_PRIVY_APP_ID</code>{" "}
+          to this deployment and rebuild Magic Chess.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
   const isPlaceholder = !appId || appId.includes("xxx") || appId.includes("your_privy_app_id_here") || appId.trim() === "";
 
   if (isPlaceholder) {
-    // Render children without Privy when no app ID is configured (dev mode)
-    return <>{children}</>;
+    // Do not mount any Privy consumers without their provider.
+    return <AuthConfigurationError />;
   }
 
   // At this point we know appId is a valid non-empty string.
@@ -31,8 +48,6 @@ function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
         },
 
         embeddedWallets: {
-          createOnLogin: "users-without-wallets",
-          // Auto-create Solana embedded wallet on login
           solana: {
             createOnLogin: "all-users",
           },
@@ -46,13 +61,8 @@ function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <JotaiProvider>
-      <PrivyAuthProvider>
-        <JotaiPrivySync />
-        <SolanaProgramProvider>
-          {children}
-        </SolanaProgramProvider>
-      </PrivyAuthProvider>
-    </JotaiProvider>
+    <PrivyAuthProvider>
+      <SolanaProgramProvider>{children}</SolanaProgramProvider>
+    </PrivyAuthProvider>
   );
 }

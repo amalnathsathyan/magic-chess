@@ -9,6 +9,7 @@ test-ledger/
 dist/
 .anchor/
 agent-findings/
+*-session.jsonl
 
 # Planning documents (not ready for official docs)
 docs/planning/

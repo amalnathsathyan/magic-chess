@@ -1,32 +1,26 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { PlusCircle, Zap, Trophy, Eye } from "lucide-react";
+import { PlusCircle, Zap, Trophy } from "lucide-react";
 
 const steps = [
   {
     icon: PlusCircle,
     title: "Create Match",
     description:
-      "Set your wager in SOL or SPL tokens. Your funds are locked securely in a PDA escrow until the match concludes.",
+      "Choose a per-move timer and wager. The configured SPL token is locked in a program-controlled escrow.",
   },
   {
     icon: Zap,
-    title: "Gasless Moves",
+    title: "Play on the ER",
     description:
-      "Play with 50ms latency. MagicBlock Ephemeral Rollups handle all moves off-chain without transaction fees, settling instantly.",
-  },
-  {
-    icon: Eye,
-    title: "Spectator Predictions",
-    description:
-      "Prediction pools let spectators predict the outcome of ongoing games. Opt-in parimutuel predictions, verified on-chain.",
+      "After both players join, the match account is delegated to MagicBlock for low-latency, on-chain move execution.",
   },
   {
     icon: Trophy,
-    title: "Win Escrow",
+    title: "Commit & Settle",
     description:
-      "Checkmate your opponent. The smart contract verifies the game state and automatically transfers the escrow to the winner.",
+      "A player commits the final game state back to Solana, then submits the program-verified escrow payout.",
   },
 ];
 
@@ -49,7 +43,7 @@ export function HowItWorks() {
           </p>
         </motion.div>
 
-        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-8 md:grid-cols-3">
           {steps.map((step, i) => (
             <motion.div
               key={step.title}

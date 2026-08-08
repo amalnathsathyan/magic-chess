@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { WalletButton } from "@/components/shared/WalletButton";
+import { AuthGate } from "@/components/shared/AuthGate";
 import { Swords, User } from "lucide-react";
 
 export default function ArenaLayout({
@@ -11,7 +11,7 @@ export default function ArenaLayout({
     <div className="min-h-screen">
       {/* Arena header */}
       <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-6xl items-center px-4 py-3 sm:px-6">
           <div className="flex items-center gap-6">
             <Link
               href="/"
@@ -36,13 +36,11 @@ export default function ArenaLayout({
               </Link>
             </nav>
           </div>
-
-          <WalletButton />
         </div>
       </header>
 
       {/* Page content */}
-      {children}
+      <AuthGate>{children}</AuthGate>
     </div>
   );
 }

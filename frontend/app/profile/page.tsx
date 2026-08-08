@@ -1,203 +1,357 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  AlertCircle,
+  ArrowLeft,
+  CircleDot,
+  LoaderCircle,
+  LogIn,
+  RefreshCw,
   User,
   Sword,
   Trophy,
   TrendingUp,
-  Clock,
-  ArrowLeft,
-  Play,
+  Scale,
+  ExternalLink,
 } from "lucide-react";
+import { usePrivy, useSolanaWallets } from "@privy-io/react-auth";
+import {
+  api,
+  type ApiMatch,
+  type ApiPlayerStats,
+} from "@/lib/api";
+import { shortenAddress } from "@/lib/chess";
 import { cn } from "@/lib/utils";
 
-// Mock profile stats
-const PROFILE = {
-  address: "7xQW...9mK2",
-  gamesPlayed: 142,
-  wins: 89,
-  losses: 38,
-  draws: 15,
-  winRate: 62.7,
-  totalWagered: 156.5,
-  totalWon: 98.2,
-  rating: 1842,
-  recentGames: [
-    {
-      id: "match_1",
-      opponent: "3bRT...1nL8",
-      result: "win" as const,
-      wager: 2.0,
-      timeControl: "5+3",
-      date: "2 hours ago",
-    },
-    {
-      id: "match_2",
-      opponent: "9yHJ...4pQ7",
-      result: "loss" as const,
-      wager: 1.0,
-      timeControl: "3+2",
-      date: "5 hours ago",
-    },
-    {
-      id: "match_3",
-      opponent: "5mNP...2kF4",
-      result: "win" as const,
-      wager: 0.5,
-      timeControl: "10+5",
-      date: "1 day ago",
-    },
-    {
-      id: "match_4",
-      opponent: "8cDW...6vG3",
-      result: "draw" as const,
-      wager: 3.0,
-      timeControl: "15+10",
-      date: "2 days ago",
-    },
-  ],
-};
+type PlayerMatch = ApiMatch & { playerColor: string };
+type MatchResult = "win" | "loss" | "draw" | "pending";
 
-export default function ProfilePage() {
+function normalizedStatus(status: string): string {
+  return status.replace(/[_\s-]/g, "").toLowerCase();
+}
+
+function getMatchResult(match: PlayerMatch): MatchResult {
+  const status = normalizedStatus(match.gameStatus);
+  if (status === "draw") return "draw";
+  if (status === "whitewins") {
+    return match.playerColor.toLowerCase() === "white" ? "win" : "loss";
+  }
+  if (status === "blackwins") {
+    return match.playerColor.toLowerCase() === "black" ? "win" : "loss";
+  }
+  return "pending";
+}
+
+function isTerminalStatus(status: string): boolean {
+  return ["whitewins", "blackwins", "draw", "aborted"].includes(
+    normalizedStatus(status)
+  );
+}
+
+function formatMatchDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function ProfileSkeleton() {
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      {/* Back link */}
-      <Link
-        href="/arena"
-        className="mb-6 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to Arena
-      </Link>
-
-      {/* Profile header */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="glass-card mb-8 flex flex-col gap-6 p-6 sm:flex-row sm:items-center"
-      >
-        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 border border-primary/20">
-          <User className="h-10 w-10 text-primary" />
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="font-heading text-2xl font-bold">Player Profile</h1>
-            <span className="rounded-md bg-primary/20 px-2.5 py-1 text-xs font-mono font-medium text-primary border border-primary/30">
-              {PROFILE.address}
-            </span>
-          </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            ELO Rating:{" "}
-            <span className="font-mono font-semibold text-emerald-400">
-              {PROFILE.rating}
-            </span>
-          </p>
-        </div>
-        <div className="flex gap-4">
-          <Link
-            href="/arena"
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-primary-foreground transition-all hover:bg-primary-hover shadow-[0_0_15px_rgba(0,230,118,0.3)]"
-          >
-            <Sword className="h-4 w-4" />
-            Play Now
-          </Link>
-        </div>
-      </motion.div>
-
-      {/* Stats grid */}
-      <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-5">
-        {[
-          {
-            icon: Sword,
-            label: "Games",
-            value: PROFILE.gamesPlayed,
-            color: "text-muted",
-          },
-          {
-            icon: Trophy,
-            label: "Wins",
-            value: PROFILE.wins,
-            color: "text-emerald-400",
-          },
-          {
-            icon: TrendingUp,
-            label: "Losses",
-            value: PROFILE.losses,
-            color: "text-destructive",
-          },
-          {
-            icon: Clock,
-            label: "Draws",
-            value: PROFILE.draws,
-            color: "text-amber-400",
-          },
-          {
-            icon: TrendingUp,
-            label: "Wagered",
-            value: `${PROFILE.totalWagered} SOL`,
-            color: "text-primary",
-          },
-        ].map((stat) => (
-          <motion.div
-            key={stat.label}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="glass-card p-4 text-center"
-          >
-            <stat.icon className={cn("mx-auto mb-2 h-5 w-5", stat.color)} />
-            <p className={cn("font-mono text-xl font-bold", stat.color)}>{stat.value}</p>
-            <p className="text-xs text-muted-foreground">{stat.label}</p>
-          </motion.div>
+    <div className="space-y-8" aria-label="Loading player profile">
+      <div className="glass-card h-36 animate-pulse" />
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, index) => (
+          <div key={index} className="glass-card h-24 animate-pulse" />
         ))}
       </div>
-
-      {/* Recent games */}
-      <div>
-        <h2 className="mb-4 font-heading text-lg font-semibold">
-          Match History
-        </h2>
-        <div className="space-y-3">
-          {PROFILE.recentGames.map((game, i) => (
-            <motion.div
-              key={game.id}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.05 }}
-              className="glass-card flex items-center justify-between p-4 group hover:bg-white/5 transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <div
-                  className={cn(
-                    "flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold font-mono border",
-                    game.result === "win" && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-                    game.result === "loss" && "bg-destructive/10 text-destructive border-destructive/20",
-                    game.result === "draw" && "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                  )}
-                >
-                  {game.result === "win"
-                    ? "W"
-                    : game.result === "loss"
-                      ? "L"
-                      : "D"}
-                </div>
-                <div>
-                  <p className="text-sm font-medium font-mono">vs {game.opponent}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {game.timeControl} &middot; {game.wager} SOL &middot; {game.date}
-                  </p>
-                </div>
-              </div>
-              <button className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white/5 text-xs font-medium text-muted-foreground opacity-0 group-hover:opacity-100 transition-all hover:bg-white/10 hover:text-foreground">
-                <Play className="h-3 w-3" />
-                Replay
-              </button>
-            </motion.div>
-          ))}
-        </div>
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div key={index} className="glass-card h-20 animate-pulse" />
+        ))}
       </div>
     </div>
   );
 }
 
+export default function ProfilePage() {
+  const { ready, authenticated, login } = usePrivy();
+  const { ready: walletsReady, wallets } = useSolanaWallets();
+  const walletAddress = wallets[0]?.address ?? null;
+  const [stats, setStats] = useState<ApiPlayerStats | null>(null);
+  const [matches, setMatches] = useState<PlayerMatch[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadProfile = useCallback(async () => {
+    if (!walletAddress) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const [statsResponse, matchesResponse] = await Promise.all([
+        api.getPlayerStats(walletAddress),
+        api.getPlayerMatches(walletAddress, { page: 1, limit: 20 }),
+      ]);
+      setStats(statsResponse);
+      setMatches(matchesResponse.matches);
+    } catch {
+      setError("We couldn't load this wallet's player activity.");
+    } finally {
+      setLoading(false);
+    }
+  }, [walletAddress]);
+
+  useEffect(() => {
+    if (authenticated && walletAddress) {
+      void loadProfile();
+    } else {
+      setStats(null);
+      setMatches([]);
+      setError(null);
+    }
+  }, [authenticated, walletAddress, loadProfile]);
+
+  const statCards = useMemo(
+    () =>
+      stats
+        ? [
+            {
+              icon: Sword,
+              label: "Games",
+              value: stats.totalGames,
+              color: "text-foreground",
+            },
+            {
+              icon: Trophy,
+              label: "Wins",
+              value: stats.wins,
+              color: "text-emerald-400",
+            },
+            {
+              icon: TrendingUp,
+              label: "Losses",
+              value: stats.losses,
+              color: "text-destructive",
+            },
+            {
+              icon: Scale,
+              label: "Draws",
+              value: stats.draws,
+              color: "text-amber-400",
+            },
+            {
+              icon: CircleDot,
+              label: "Win rate",
+              value: `${Math.round(stats.winRate * 100)}%`,
+              color: "text-primary",
+            },
+          ]
+        : [],
+    [stats]
+  );
+
+  const authLoading = !ready || !walletsReady;
+
+  return (
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+      <Link
+        href="/arena"
+        className="mb-6 inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        Back to Arena
+      </Link>
+
+      {authLoading ? (
+        <ProfileSkeleton />
+      ) : !authenticated ? (
+        <div className="glass-card flex flex-col items-center gap-4 px-6 py-12 text-center">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
+            <User className="h-7 w-7 text-primary" aria-hidden="true" />
+          </div>
+          <div className="space-y-1">
+            <h1 className="font-heading text-2xl font-bold">Sign in to view your profile</h1>
+            <p className="text-sm text-muted-foreground">
+              Your profile is linked to your authenticated Solana wallet.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={login}
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <LogIn className="h-4 w-4" aria-hidden="true" />
+            Sign in
+          </button>
+        </div>
+      ) : !walletAddress ? (
+        <div className="glass-card flex flex-col items-center gap-3 px-6 py-12 text-center">
+          <AlertCircle className="h-8 w-8 text-amber-400" aria-hidden="true" />
+          <h1 className="font-heading text-xl font-semibold">Solana wallet unavailable</h1>
+          <p className="max-w-md text-sm text-muted-foreground">
+            Your account is signed in, but no Solana wallet is available yet. Reopen the wallet menu and connect or create one.
+          </p>
+        </div>
+      ) : loading && !stats ? (
+        <ProfileSkeleton />
+      ) : error ? (
+        <div className="glass-card flex flex-col items-start gap-4 p-6">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertCircle className="h-5 w-5" aria-hidden="true" />
+            <h1 className="font-heading text-lg font-semibold">Profile unavailable</h1>
+          </div>
+          <p className="text-sm text-muted-foreground">{error} Try again in a moment.</p>
+          <button
+            type="button"
+            onClick={() => void loadProfile()}
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            Try again
+          </button>
+        </div>
+      ) : stats ? (
+        <>
+          <div className="glass-card mb-8 flex flex-col gap-6 p-6 sm:flex-row sm:items-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
+              <User className="h-10 w-10 text-primary" aria-hidden="true" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h1 className="font-heading text-2xl font-bold">Player profile</h1>
+              <p
+                className="mt-2 truncate font-mono text-sm text-muted-foreground"
+                title={walletAddress}
+              >
+                {shortenAddress(walletAddress, 6)}
+              </p>
+              {stats.lastGameAt ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Last match {formatMatchDate(stats.lastGameAt)}
+                </p>
+              ) : null}
+            </div>
+            <Link
+              href="/arena"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              <Sword className="h-4 w-4" aria-hidden="true" />
+              Play now
+            </Link>
+          </div>
+
+          <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-5">
+            {statCards.map((stat) => (
+              <div key={stat.label} className="glass-card p-4 text-center">
+                <stat.icon
+                  className={cn("mx-auto mb-2 h-5 w-5", stat.color)}
+                  aria-hidden="true"
+                />
+                <p className={cn("font-mono text-xl font-bold tabular-nums", stat.color)}>
+                  {stat.value}
+                </p>
+                <p className="text-xs text-muted-foreground">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+
+          <section aria-labelledby="match-history-heading">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 id="match-history-heading" className="font-heading text-lg font-semibold">
+                Match history
+              </h2>
+              {loading ? (
+                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  Updating
+                </span>
+              ) : null}
+            </div>
+
+            {matches.length === 0 ? (
+              <div className="glass-card flex flex-col items-center gap-3 px-6 py-10 text-center">
+                <Sword className="h-9 w-9 text-muted-foreground" aria-hidden="true" />
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">No matches yet</p>
+                  <p className="text-xs text-muted-foreground">
+                    Create or join a match to start building your history.
+                  </p>
+                </div>
+                <Link
+                  href="/arena"
+                  className="inline-flex min-h-10 items-center rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
+                  Enter the arena
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {matches.map((match) => {
+                  const result = getMatchResult(match);
+                  const opponent =
+                    match.playerColor.toLowerCase() === "white"
+                      ? match.blackPlayer
+                      : match.whitePlayer;
+                  const terminal = isTerminalStatus(match.gameStatus);
+                  const href = terminal
+                    ? `/play/${encodeURIComponent(match.matchId)}/spectate`
+                    : `/play/${encodeURIComponent(match.matchId)}`;
+
+                  return (
+                    <div
+                      key={match.matchId}
+                      className="glass-card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="flex min-w-0 items-center gap-4">
+                        <div
+                          className={cn(
+                            "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border font-mono text-sm font-bold",
+                            result === "win" &&
+                              "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
+                            result === "loss" &&
+                              "border-destructive/20 bg-destructive/10 text-destructive",
+                            result === "draw" &&
+                              "border-amber-500/20 bg-amber-500/10 text-amber-400",
+                            result === "pending" &&
+                              "border-border bg-muted text-muted-foreground"
+                          )}
+                          aria-label={`Result: ${result}`}
+                        >
+                          {result === "win"
+                            ? "W"
+                            : result === "loss"
+                              ? "L"
+                              : result === "draw"
+                                ? "D"
+                                : "…"}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-mono text-sm font-medium">
+                            vs {opponent ? shortenAddress(opponent) : "Waiting for opponent"}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatMatchDate(match.createdAt)} · {match.moveCount} moves
+                          </p>
+                        </div>
+                      </div>
+                      <Link
+                        href={href}
+                        className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                      >
+                        {terminal ? "Spectate" : "Open match"}
+                        <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                      </Link>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </>
+      ) : null}
+    </div>
+  );
+}

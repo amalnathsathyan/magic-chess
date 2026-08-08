@@ -6,27 +6,24 @@ import { Zap, Clock, Hourglass } from "lucide-react";
 const modes = [
   {
     icon: Zap,
-    title: "Blitz",
-    timeControl: "3 | 2",
-    description: "Fast-paced action. 3 minutes plus 2 seconds increment.",
-    wagers: ["0.1 SOL", "0.5 SOL", "1 SOL"],
-    tag: "High Intensity",
+    title: "Bullet",
+    timeControl: "1 minute",
+    description: "One minute is allowed for each move before the opponent can claim timeout.",
+    tag: "Per move",
   },
   {
     icon: Clock,
-    title: "Rapid",
-    timeControl: "10 | 0",
-    description: "The sweet spot. 10 minutes with no increment.",
-    wagers: ["0.5 SOL", "1 SOL", "5 SOL"],
-    tag: "Most Popular",
+    title: "Blitz",
+    timeControl: "3 minutes",
+    description: "Three minutes per move for a faster game with room to calculate.",
+    tag: "Per move",
   },
   {
     icon: Hourglass,
-    title: "Standard",
-    timeControl: "30 | 0",
-    description: "Deep calculation. 30 minutes with no increment.",
-    wagers: ["1 SOL", "5 SOL", "10 SOL"],
-    tag: "Strategic",
+    title: "Rapid",
+    timeControl: "10 minutes",
+    description: "Ten minutes per move for deliberate, higher-stakes positions.",
+    tag: "Per move",
   },
 ];
 
@@ -45,7 +42,7 @@ export function GameModes() {
             Choose Your Arena
           </h2>
           <p className="mt-3 font-body text-muted-foreground">
-            Select your preferred time control and wager amount
+            Choose the per-move timeout; set the wager when creating the match
           </p>
         </motion.div>
 
@@ -58,7 +55,7 @@ export function GameModes() {
               viewport={{ once: true }}
               whileHover={{ y: -5, borderColor: "var(--color-primary)", boxShadow: "var(--shadow-glow)" }}
               transition={{ delay: i * 0.1, duration: 0.3 }}
-              className="glass-card flex flex-col p-6 transition-all cursor-pointer border-transparent"
+              className="glass-card flex flex-col p-6 transition-all border-transparent"
             >
               <div className="flex items-start justify-between">
                 <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
@@ -78,16 +75,9 @@ export function GameModes() {
                 {mode.description}
               </p>
               
-              <div className="mt-auto">
-                <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wider">Popular Wagers</p>
-                <div className="flex flex-wrap gap-2">
-                  {mode.wagers.map((wager) => (
-                    <span key={wager} className="rounded border border-border bg-card/50 px-2 py-1 font-mono text-xs text-foreground hover:bg-primary/20 hover:border-primary/50 transition-colors">
-                      {wager}
-                    </span>
-                  ))}
-                </div>
-              </div>
+              <p className="mt-auto text-xs font-medium uppercase tracking-wider text-primary/80">
+                Wager selected at creation
+              </p>
             </motion.div>
           ))}
         </div>

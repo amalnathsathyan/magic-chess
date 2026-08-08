@@ -2,34 +2,28 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { FlipVertical, Flag, Hand, Volume2, VolumeX } from "lucide-react";
+import { FlipVertical, Flag, Volume2, VolumeX } from "lucide-react";
 import { sounds } from "@/lib/sounds";
 
 interface BoardControlsProps {
   onFlipBoard: () => void;
   onResign: () => void;
-  onOfferDraw: () => void;
+  canResign?: boolean;
   className?: string;
 }
 
 export function BoardControls({
   onFlipBoard,
   onResign,
-  onOfferDraw,
+  canResign = true,
   className,
 }: BoardControlsProps) {
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(() => !sounds.isEnabled());
 
   const toggleMute = () => {
-    // Basic implementation - in a real app you'd connect this to a sound context/store
     const newMuted = !isMuted;
     setIsMuted(newMuted);
-    if (newMuted) {
-      sounds.destroy();
-    } else {
-      // Re-init or toggle internal mute state
-      sounds.play("game_start"); // just to test
-    }
+    sounds.setEnabled(!newMuted);
   };
 
   return (
@@ -46,17 +40,9 @@ export function BoardControls({
       <div className="h-4 w-px bg-border/50" />
 
       <button
-        onClick={onOfferDraw}
-        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-secondary/50 hover:text-foreground"
-        title="Offer Draw"
-      >
-        <Hand className="h-4 w-4" />
-        <span className="hidden sm:inline">Draw</span>
-      </button>
-
-      <button
         onClick={onResign}
-        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
+        disabled={!canResign}
+        className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
         title="Resign"
       >
         <Flag className="h-4 w-4" />

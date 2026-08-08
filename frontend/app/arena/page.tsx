@@ -1,259 +1,148 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Filter, Plus, Search } from "lucide-react";
-import { useAtom, useAtomValue, useSetAtom } from "jotai";
+import { AlertCircle, Filter, Plus, Search } from "lucide-react";
+import { PublicKey } from "@solana/web3.js";
+import { useMatches } from "@magic-chess/sdk/react";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
 import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
 import {
-  lobbyFilterAtom,
-  lobbyWagerFilterAtom,
-  lobbyTimeFilterAtom,
-  lobbySearchAtom,
-  lobbyMatchesAtom,
-  refreshLobbyAtom,
-  lobbyLoadingAtom,
-} from "@/store/lobby";
-import { walletAddressAtom } from "@/store/wallet";
-import { useMatches } from "@magic-chess/sdk/react";
+  formatTokenAmount,
+  solanaConfig,
+} from "@/lib/solana-config";
 
 export default function ArenaPage() {
-  const [filter, setFilter] = useAtom(lobbyFilterAtom);
-  const [wagerFilter, setWagerFilter] = useAtom(lobbyWagerFilterAtom);
-  const [timeFilter, setTimeFilter] = useAtom(lobbyTimeFilterAtom);
-  const [search, setSearch] = useAtom(lobbySearchAtom);
+  const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [localMatches, setLocalMatches] = useState<MatchCardData[]>([]);
-  const walletAddress = useAtomValue(walletAddressAtom);
+  const { matches, loading, error } = useMatches();
 
-  // Backend-indexed matches (from lobby store)
-  const lobbyMatches = useAtomValue(lobbyMatchesAtom);
-  const lobbyLoading = useAtomValue(lobbyLoadingAtom);
-  const refreshLobby = useSetAtom(refreshLobbyAtom);
-
-  // On-chain SDK matches
-  const { matches: liveMatches, loading: sdkLoading } = useMatches();
-
-  // Refresh lobby on mount
-  useEffect(() => {
-    refreshLobby();
-  }, [refreshLobby]);
-
-  // Map backend lobby matches to card data
-  const backendMatchCards: MatchCardData[] = lobbyMatches.map((m) => ({
-    matchId: m.matchId,
-    whitePlayer: m.whitePlayer,
-    blackPlayer: m.blackPlayer,
-    wagerAmount: m.wagerAmount,
-    wagerToken: m.wagerToken,
-    timeControl: m.timeControl,
-    status: m.status,
-    createdAt: m.createdAt,
-    boardFen: m.boardFen,
-    moveCount: m.moveCount,
-  }));
-
-  // Map on-chain SDK matches to card data
-  const sdkMatches: MatchCardData[] = (liveMatches || []).map((m: any) => ({
-    matchId: m.matchId,
-    whitePlayer: m.playerOne?.toBase58() || "Unknown",
-    blackPlayer: m.playerTwo?.toBase58(),
-    wagerAmount: m.betAmount ? Number(m.betAmount) / 1e9 : 0,
-    wagerToken: "SOL",
-    timeControl: m.moveTimeoutDuration ? `${m.moveTimeoutDuration / 60}+0` : "Unknown",
-    status: m.state?.joinable ? "open" : (m.state?.inProgress ? "in_progress" : "completed"),
-    createdAt: Date.now(),
-  }));
-
-  // Deduplicate: SDK matches take precedence over backend matches with same ID
-  const sdkMatchIds = new Set(sdkMatches.map(m => m.matchId));
-  const uniqueBackend = backendMatchCards.filter(m => !sdkMatchIds.has(m.matchId));
-  const allMatches = [...localMatches, ...sdkMatches, ...uniqueBackend];
-  const loading = sdkLoading || lobbyLoading;
-
-  const filteredMatches = allMatches.filter((m) => {
-    if (filter === "open" && m.status !== "open") return false;
-    if (filter === "live" && m.status !== "in_progress") return false;
-
-    if (wagerFilter !== "all") {
-      if (wagerFilter === "free" && m.wagerAmount !== 0) return false;
-      if (wagerFilter === "0.1" && m.wagerAmount !== 0.1) return false;
-      if (wagerFilter === "0.5" && m.wagerAmount !== 0.5) return false;
-      if (wagerFilter === "1.0" && m.wagerAmount !== 1.0) return false;
-    }
-
-    if (timeFilter !== "all" && m.timeControl !== timeFilter) return false;
-
-    if (search) {
-      const q = search.toLowerCase();
-      if (!m.matchId.toLowerCase().includes(q) && 
-          !m.whitePlayer.toLowerCase().includes(q) && 
-          !m.blackPlayer?.toLowerCase().includes(q)) {
-        return false;
-      }
-    }
-
-    return true;
-  });
+  const matchCards = useMemo<MatchCardData[]>(() => {
+    const query = search.trim().toLowerCase();
+    return matches
+      .map((match) => {
+        const white = match.players[0].toBase58();
+        const black = match.players[1].equals(PublicKey.default)
+          ? undefined
+          : match.players[1].toBase58();
+        return {
+          matchId: match.matchId,
+          whitePlayer: white,
+          blackPlayer: black,
+          wagerAmount: formatTokenAmount(match.betAmountPlayerOne),
+          wagerToken: solanaConfig.wagerSymbol,
+          timeControl: `${Number(match.moveTimeoutDuration)}s / move`,
+          status: "open" as const,
+          createdAt: Number(match.lastMoveTimestamp) * 1_000,
+        };
+      })
+      .filter((match) => {
+        if (!query) return true;
+        return [match.matchId, match.whitePlayer, match.blackPlayer]
+          .filter(Boolean)
+          .some((value) => value!.toLowerCase().includes(query));
+      });
+  }, [matches, search]);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      {/* Page header */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4"
+        className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"
       >
         <div>
           <h1 className="font-heading text-3xl font-bold">Lobby Arena</h1>
           <p className="mt-1 text-muted-foreground">
-            Browse live and open matches. Join one or create your own.
+            Join an open on-chain match or create your own.
           </p>
         </div>
-        <div className="flex gap-2">
-          <button className="rounded-lg bg-card border border-border px-4 py-2 text-sm font-medium hover:bg-accent/10 hover:text-accent transition-colors">
-            Quick Play
-          </button>
-          <button className="rounded-lg bg-card border border-border px-4 py-2 text-sm font-medium hover:bg-accent/10 hover:text-accent transition-colors">
-            Play vs Computer
-          </button>
-          <button className="rounded-lg bg-card border border-border px-4 py-2 text-sm font-medium hover:bg-accent/10 hover:text-accent transition-colors">
-            Pass & Play
-          </button>
-        </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        >
+          <Plus className="h-4 w-4" aria-hidden="true" />
+          Create match
+        </button>
       </motion.div>
 
-      {/* Toolbar: filter + search + create */}
-      <div className="mb-6 flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          {/* Status Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            {(["all", "open", "live"] as const).map((f) => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
-                  filter === f
-                    ? "border-primary/50 bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:border-border-hover hover:text-foreground"
-                }`}
-              >
-                {f === "all" ? "All" : f === "open" ? "Open" : "Live"}
-              </button>
-            ))}
-            
-            <div className="h-4 w-px bg-border mx-2 hidden sm:block" />
-            
-            {/* Wager Filters */}
-            <div className="flex flex-wrap items-center gap-1">
-              {[
-                { value: "all", label: "Any Wager" },
-                { value: "free", label: "Free" },
-                { value: "0.1", label: "0.1 SOL" },
-                { value: "0.5", label: "0.5 SOL" },
-                { value: "1.0", label: "1.0 SOL" }
-              ].map((w) => (
-                <button
-                  key={w.value}
-                  onClick={() => setWagerFilter(w.value as any)}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                    wagerFilter === w.value
-                      ? "border-primary/50 bg-primary/10 text-primary"
-                      : "border-transparent text-muted-foreground hover:bg-card hover:text-foreground"
-                  }`}
-                >
-                  {w.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="h-4 w-px bg-border mx-2 hidden sm:block" />
-
-            {/* Time Control Filters */}
-            <div className="flex flex-wrap items-center gap-1">
-              {[
-                { value: "all", label: "Any Time" },
-                { value: "1+0", label: "Bullet 1+0" },
-                { value: "3+2", label: "Blitz 3+2" },
-                { value: "10+0", label: "Rapid 10+0" }
-              ].map((t) => (
-                <button
-                  key={t.value}
-                  onClick={() => setTimeFilter(t.value as any)}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                    timeFilter === t.value
-                      ? "border-accent/50 bg-accent/10 text-accent"
-                      : "border-transparent text-muted-foreground hover:bg-card hover:text-foreground"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
-              <input
-                type="text"
-                placeholder="Search matches..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-48 rounded-lg border border-border bg-card py-1.5 pl-8 pr-3 font-mono text-xs text-foreground placeholder:text-muted focus:border-primary/50 focus:outline-none"
-              />
-            </div>
-            <button
-              onClick={() => setShowCreate(!showCreate)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 font-heading text-sm font-semibold text-primary-foreground transition-all hover:bg-primary-hover"
-            >
-              <Plus className="h-4 w-4" />
-              Create
-            </button>
-          </div>
+      <div className="mb-6">
+        <label htmlFor="match-search" className="sr-only">
+          Search open matches
+        </label>
+        <div className="relative max-w-sm">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <input
+            id="match-search"
+            type="search"
+            placeholder="Search by match or player"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="h-11 w-full rounded-lg border border-border bg-card pl-10 pr-3 font-mono text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary"
+          />
         </div>
       </div>
 
-      {/* Create match form (modal) */}
       <CreateMatchForm
         isOpen={showCreate}
         onClose={() => setShowCreate(false)}
-        onSubmit={(data) => {
-          const newMatch: MatchCardData = {
-            matchId: `demo-${Date.now()}`,
-            whitePlayer: walletAddress || "You",
-            wagerAmount: data.wagerAmount,
-            wagerToken: data.wagerToken,
-            timeControl: `${data.timeControlMinutes}+${data.timeIncrementSeconds}`,
-            status: "open",
-            createdAt: Date.now(),
-            isLocal: true,
-          };
-          setLocalMatches((prev) => [newMatch, ...prev]);
-          setShowCreate(false);
-        }}
       />
 
-      {/* Match list */}
-      <div className="grid gap-4">
-        {loading ? (
-          <div className="flex justify-center py-8 text-muted-foreground">Loading matches...</div>
-        ) : filteredMatches.length === 0 ? (
-          <div className="glass-card flex flex-col items-center justify-center py-16">
-            <Filter className="mb-3 h-10 w-10 text-muted" />
-            <p className="text-muted-foreground">No matches found</p>
-            <p className="text-sm text-muted">
-              Try changing filters or create a new match
-            </p>
-          </div>
-        ) : (
-          filteredMatches.map((match) => (
+      {loading ? (
+        <div className="grid gap-4" aria-label="Loading open matches">
+          {[0, 1, 2].map((index) => (
+            <div
+              key={index}
+              className="h-40 animate-pulse rounded-xl border border-border bg-card/60"
+            />
+          ))}
+        </div>
+      ) : error ? (
+        <div className="glass-card flex flex-col items-center py-14 text-center">
+          <AlertCircle className="mb-3 h-9 w-9 text-destructive" aria-hidden="true" />
+          <h2 className="font-heading text-lg font-semibold">
+            Couldn&apos;t load on-chain matches
+          </h2>
+          <p className="mt-2 max-w-md text-sm text-muted-foreground">
+            {error.message}
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-5 min-h-10 rounded-lg border border-border px-4 text-sm font-medium hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            Retry
+          </button>
+        </div>
+      ) : matchCards.length === 0 ? (
+        <div className="glass-card flex flex-col items-center justify-center py-16 text-center">
+          <Filter className="mb-3 h-10 w-10 text-muted-foreground" aria-hidden="true" />
+          <h2 className="font-heading text-lg font-semibold">
+            {search ? "No matching lobbies" : "No open matches"}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {search
+              ? "Try another player address or match ID."
+              : "Create the first on-chain match and invite an opponent."}
+          </p>
+          {!search && (
+            <button
+              onClick={() => setShowCreate(true)}
+              className="mt-5 min-h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              Create match
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {matchCards.map((match) => (
             <MatchCard key={match.matchId} match={match} />
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,22 +1,21 @@
 /**
  * Backend API client — thin fetch wrapper.
- * Uses NEXT_PUBLIC_API_URL env var (defaults to localhost:3001).
+ * Uses the read-only indexer configured by NEXT_PUBLIC_API_URL.
  */
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
-const API_KEY =
-  process.env.NEXT_PUBLIC_API_KEY || "dev-api-key-change-in-production";
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 async function fetchApi<T>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
+  if (!API_URL) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured for this deployment.");
+  }
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      "X-API-Key": API_KEY,
       ...init?.headers,
     },
   });
@@ -170,75 +169,4 @@ export const api = {
     }>(`/api/leaderboard${query ? `?${query}` : ""}`);
   },
 
-  // Sync (frontend reports on-chain events to backend)
-  syncMatchCreated: (payload: {
-    matchId: string;
-    creator: string;
-    bettingTokenMint: string;
-    betAmount: number;
-    moveTimeoutDuration: number;
-    platformFeeBasisPoints: number;
-    signature: string;
-    slot: number;
-  }) =>
-    fetchApi<{ ok: boolean; fen: string }>("/api/sync/match-created", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
-
-  syncPlayerJoined: (payload: {
-    matchId: string;
-    playerTwo: string;
-    betAmountPerPlayer: number;
-    signature: string;
-    slot: number;
-  }) =>
-    fetchApi<{ ok: boolean }>("/api/sync/player-joined", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
-
-  syncMoveMade: (payload: {
-    matchId: string;
-    player: string;
-    playerColor: string;
-    algebraicMove: string;
-    fromRow: number;
-    fromCol: number;
-    toRow: number;
-    toCol: number;
-    promotionPiece: string | null;
-    isCheck: boolean;
-    isCheckmate: boolean;
-    isStalemate: boolean;
-    signature: string;
-    slot: number;
-  }) =>
-    fetchApi<{ ok: boolean; fen: string; moveNumber: number }>(
-      "/api/sync/move-made",
-      { method: "POST", body: JSON.stringify(payload) }
-    ),
-
-  syncGameEnded: (payload: {
-    matchId: string;
-    status: string;
-    winner: string | null;
-    reason: string;
-    signature: string;
-    slot: number;
-  }) =>
-    fetchApi<{ ok: boolean }>("/api/sync/game-ended", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
-
-  syncPayout: (payload: {
-    matchId: string;
-    signature: string;
-    slot: number;
-  }) =>
-    fetchApi<{ ok: boolean }>("/api/sync/payout", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
 };

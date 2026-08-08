@@ -9,12 +9,11 @@ export interface MatchCardData {
   matchId: string;
   whitePlayer: string;
   blackPlayer?: string;
-  wagerAmount: number;
+  wagerAmount: string;
   wagerToken: string; // "SOL" or SPL mint
   timeControl: string; // e.g. "5+3", "10+0"
   status: "open" | "in_progress" | "completed";
   createdAt: number;
-  isLocal?: boolean;
 }
 
 interface MatchCardProps {
@@ -37,7 +36,11 @@ export function MatchCard({ match, className }: MatchCardProps) {
       transition={{ duration: 0.3 }}
     >
       <Link
-        href={`/play/${match.matchId}`}
+        href={
+          isInProgress
+            ? `/play/${match.matchId}/spectate`
+            : `/play/${match.matchId}`
+        }
         className={cn(
           "group glass-card block p-5 transition-all hover:border-border-hover hover:shadow-glow",
           className
@@ -95,24 +98,17 @@ export function MatchCard({ match, className }: MatchCardProps) {
             <div className="flex items-center gap-1.5">
               <Coins className="h-4 w-4 text-accent" />
               <span className="font-mono text-sm font-semibold">
-                {match.wagerAmount === 0 ? "Free" : `${match.wagerAmount} ${match.wagerToken}`}
+                {match.wagerAmount} {match.wagerToken}
               </span>
             </div>
             <div className="flex items-center gap-1.5">
               <Clock className="h-4 w-4 text-muted" />
               <span className="font-mono text-sm">{match.timeControl}</span>
             </div>
-            {match.isLocal ? (
-              <div className="flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent/5 px-2 py-0.5">
-                <Zap className="h-3 w-3 text-accent" />
-                <span className="font-mono text-xs text-accent/90">Local</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5">
-                <Zap className="h-3 w-3 text-primary" />
-                <span className="font-mono text-xs text-primary/90">Gasless ER</span>
-              </div>
-            )}
+            <div className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5">
+              <Zap className="h-3 w-3 text-primary" aria-hidden="true" />
+              <span className="font-mono text-xs text-primary/90">On-chain</span>
+            </div>
           </div>
           
           <div>

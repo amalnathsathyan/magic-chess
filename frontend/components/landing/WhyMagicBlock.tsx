@@ -1,29 +1,29 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Zap, Clock, Key, Shield } from "lucide-react";
+import { Zap, Clock, Route, Shield } from "lucide-react";
 
 export function WhyMagicBlock() {
   const features = [
     {
       icon: Zap,
-      title: "Zero Gas Fees",
-      description: "Play without transaction costs. Ephemeral Rollups process every move without debiting your wallet.",
+      title: "Efficient Execution",
+      description: "The delegated match account executes on a MagicBlock Ephemeral Rollup, keeping repeated gameplay transactions lightweight.",
     },
     {
       icon: Clock,
-      title: "50ms Latency",
-      description: "Experience ultra-fast, seamless gameplay that matches traditional Web2 servers.",
+      title: "Low-Latency Play",
+      description: "Moves use the match account's authoritative ER endpoint while the base layer remains the source of settlement truth.",
     },
     {
-      icon: Key,
-      title: "Session Keys",
-      description: "Sign one transaction to start. Our on-chain session keys auto-approve all your moves in the background.",
+      icon: Route,
+      title: "Authoritative Routing",
+      description: "The client verifies account ownership, resolves the assigned rollup, and refuses unsafe base-layer fallbacks.",
     },
     {
       icon: Shield,
       title: "Trustless & Verifiable",
-      description: "Complete trustless model vs standard platforms. Anyone can create, join, and predict with logic verified on-chain.",
+      description: "Match creation, escrow, chess rules, moves, results, and payouts are enforced by the deployed Solana program.",
     }
   ];
 

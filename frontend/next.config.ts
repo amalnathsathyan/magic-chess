@@ -10,10 +10,6 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: __dirname,
 
-  // SDK has @solana/web3.js as peer dep — tsc can't resolve types from
-  // transpiled SDK files. Skip type errors in build; run `tsc --noEmit`
-  // separately for real type checking.
-  typescript: { ignoreBuildErrors: true },
   reactStrictMode: true,
 
   // Allow images from Solana token metadata and common CDNs

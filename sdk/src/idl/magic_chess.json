@@ -1,20 +1,14 @@
-/**
- * Program IDL in camelCase format in order to be used in JS/TS.
- *
- * Note that this is only a type helper and is not the actual IDL. The original
- * IDL can be found at `target/idl/magic_chess.json`.
- */
-export type MagicChess = {
+{
   "address": "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h",
   "metadata": {
-    "name": "magicChess",
+    "name": "magic_chess",
     "version": "0.1.0",
     "spec": "0.1.0",
     "description": "On-chain chess engine with wagering"
   },
   "instructions": [
     {
-      "name": "abortMatch",
+      "name": "abort_match",
       "discriminator": [
         165,
         210,
@@ -27,7 +21,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -49,14 +43,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "matchEscrowTokenAccount",
+          "name": "match_escrow_token_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -79,30 +73,30 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "playerTokenAccount",
+          "name": "player_token_account",
           "writable": true
         },
         {
-          "name": "playerSigner",
+          "name": "player_signer",
           "writable": true,
           "signer": true
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
     },
     {
-      "name": "cancelPredictionBet",
+      "name": "cancel_prediction_bet",
       "discriminator": [
         197,
         122,
@@ -115,7 +109,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "docs": [
             "The ChessMatch — must be WaitingForOpponent or Aborted, or be settled with no winners."
           ],
@@ -139,14 +133,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "predictionPool",
+          "name": "prediction_pool",
           "docs": [
             "The PredictionPool."
           ],
@@ -175,14 +169,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "predictionBet",
+          "name": "prediction_bet",
           "docs": [
             "The bettor's PredictionBet PDA."
           ],
@@ -210,7 +204,7 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "predictionPool"
+                "path": "prediction_pool"
               },
               {
                 "kind": "account",
@@ -220,7 +214,7 @@ export type MagicChess = {
           }
         },
         {
-          "name": "predictionPoolVault",
+          "name": "prediction_pool_vault",
           "docs": [
             "Vault token account for the prediction pool."
           ],
@@ -255,13 +249,13 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "predictionPool"
+                "path": "prediction_pool"
               }
             ]
           }
         },
         {
-          "name": "bettorTokenAccount",
+          "name": "bettor_token_account",
           "docs": [
             "The bettor's token account (destination for refund)."
           ],
@@ -273,14 +267,14 @@ export type MagicChess = {
           "signer": true
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
     },
     {
-      "name": "cancelTimeoutTask",
+      "name": "cancel_timeout_task",
       "discriminator": [
         119,
         179,
@@ -293,7 +287,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -315,8 +309,8 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
@@ -330,7 +324,7 @@ export type MagicChess = {
       "args": []
     },
     {
-      "name": "claimPredictionWinnings",
+      "name": "claim_prediction_winnings",
       "discriminator": [
         173,
         210,
@@ -343,7 +337,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "docs": [
             "The ChessMatch — read-only, used for constraints."
           ],
@@ -367,14 +361,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "predictionPool",
+          "name": "prediction_pool",
           "docs": [
             "The PredictionPool — must be settled. Mutable so Anchor allows PDA signing."
           ],
@@ -403,14 +397,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "predictionBet",
+          "name": "prediction_bet",
           "docs": [
             "The bettor's PredictionBet PDA."
           ],
@@ -438,7 +432,7 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "predictionPool"
+                "path": "prediction_pool"
               },
               {
                 "kind": "account",
@@ -448,7 +442,7 @@ export type MagicChess = {
           }
         },
         {
-          "name": "predictionPoolVault",
+          "name": "prediction_pool_vault",
           "docs": [
             "Vault token account holding all spectator bets."
           ],
@@ -483,13 +477,13 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "predictionPool"
+                "path": "prediction_pool"
               }
             ]
           }
         },
         {
-          "name": "bettorTokenAccount",
+          "name": "bettor_token_account",
           "docs": [
             "The bettor's token account (destination for winnings)."
           ],
@@ -501,14 +495,14 @@ export type MagicChess = {
           "signer": true
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
     },
     {
-      "name": "claimTimeoutWin",
+      "name": "claim_timeout_win",
       "discriminator": [
         175,
         234,
@@ -521,7 +515,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -543,14 +537,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "claimerSigner",
+          "name": "claimer_signer",
           "writable": true,
           "signer": true
         }
@@ -558,7 +552,7 @@ export type MagicChess = {
       "args": []
     },
     {
-      "name": "closeMatch",
+      "name": "close_match",
       "discriminator": [
         79,
         174,
@@ -571,7 +565,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -593,8 +587,8 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
@@ -608,7 +602,7 @@ export type MagicChess = {
       "args": []
     },
     {
-      "name": "commitState",
+      "name": "commit_state",
       "discriminator": [
         201,
         80,
@@ -626,15 +620,15 @@ export type MagicChess = {
           "signer": true
         },
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true
         },
         {
-          "name": "magicProgram",
+          "name": "magic_program",
           "address": "Magic11111111111111111111111111111111111111"
         },
         {
-          "name": "magicContext",
+          "name": "magic_context",
           "writable": true,
           "address": "MagicContext1111111111111111111111111111111"
         }
@@ -642,7 +636,7 @@ export type MagicChess = {
       "args": []
     },
     {
-      "name": "delegateMatch",
+      "name": "delegate_match",
       "discriminator": [
         30,
         116,
@@ -660,7 +654,7 @@ export type MagicChess = {
           "signer": true
         },
         {
-          "name": "bufferChessMatch",
+          "name": "buffer_chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -677,7 +671,7 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch"
+                "path": "chess_match"
               }
             ],
             "program": {
@@ -720,7 +714,7 @@ export type MagicChess = {
           }
         },
         {
-          "name": "delegationRecordChessMatch",
+          "name": "delegation_record_chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -741,17 +735,17 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch"
+                "path": "chess_match"
               }
             ],
             "program": {
               "kind": "account",
-              "path": "delegationProgram"
+              "path": "delegation_program"
             }
           }
         },
         {
-          "name": "delegationMetadataChessMatch",
+          "name": "delegation_metadata_chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -781,17 +775,17 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch"
+                "path": "chess_match"
               }
             ],
             "program": {
               "kind": "account",
-              "path": "delegationProgram"
+              "path": "delegation_program"
             }
           }
         },
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "docs": [
             "program. UncheckedAccount with `del` avoids Anchor exit serialization",
             "on an account we no longer own (per MagicBlock delegation docs)."
@@ -799,22 +793,22 @@ export type MagicChess = {
           "writable": true
         },
         {
-          "name": "ownerProgram",
+          "name": "owner_program",
           "address": "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h"
         },
         {
-          "name": "delegationProgram",
+          "name": "delegation_program",
           "address": "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": []
     },
     {
-      "name": "initializeMatch",
+      "name": "initialize_match",
       "discriminator": [
         156,
         133,
@@ -827,7 +821,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -849,28 +843,28 @@ export type MagicChess = {
               },
               {
                 "kind": "arg",
-                "path": "matchIdArg"
+                "path": "match_id_arg"
               }
             ]
           }
         },
         {
-          "name": "playerSigner",
+          "name": "player_signer",
           "writable": true,
           "signer": true
         },
         {
-          "name": "bettingTokenMintAccount",
+          "name": "betting_token_mint_account",
           "docs": [
             "The SPL token mint used for betting — any SPL token is accepted"
           ]
         },
         {
-          "name": "playerTokenAccount",
+          "name": "player_token_account",
           "writable": true
         },
         {
-          "name": "matchEscrowTokenAccount",
+          "name": "match_escrow_token_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -893,49 +887,49 @@ export type MagicChess = {
               },
               {
                 "kind": "arg",
-                "path": "matchIdArg"
+                "path": "match_id_arg"
               }
             ]
           }
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "matchIdArg",
+          "name": "match_id_arg",
           "type": "string"
         },
         {
-          "name": "betAmountArg",
+          "name": "bet_amount_arg",
           "type": "u64"
         },
         {
-          "name": "moveTimeoutDurationArg",
+          "name": "move_timeout_duration_arg",
           "type": "i64"
         },
         {
-          "name": "platformFeeBasisPointsArg",
+          "name": "platform_fee_basis_points_arg",
           "type": "u16"
         },
         {
-          "name": "platformFeeWalletArg",
+          "name": "platform_fee_wallet_arg",
           "type": "pubkey"
         },
         {
-          "name": "predictionEnabledArg",
+          "name": "prediction_enabled_arg",
           "type": "bool"
         }
       ]
     },
     {
-      "name": "initializePredictionPool",
+      "name": "initialize_prediction_pool",
       "discriminator": [
         143,
         97,
@@ -948,7 +942,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "docs": [
             "The ChessMatch this pool tracks. Must have prediction_enabled = true."
           ],
@@ -972,14 +966,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "predictionPool",
+          "name": "prediction_pool",
           "docs": [
             "PredictionPool PDA — one per match."
           ],
@@ -1008,14 +1002,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "predictionPoolVault",
+          "name": "prediction_pool_vault",
           "docs": [
             "Vault token account that holds all spectator bets. Owned by the prediction pool PDA."
           ],
@@ -1050,13 +1044,13 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "predictionPool"
+                "path": "prediction_pool"
               }
             ]
           }
         },
         {
-          "name": "bettingTokenMint",
+          "name": "betting_token_mint",
           "docs": [
             "The SPL token mint used for betting (same as the chess match)."
           ]
@@ -1067,23 +1061,23 @@ export type MagicChess = {
           "signer": true
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "platformFeeBpsArg",
+          "name": "platform_fee_bps_arg",
           "type": "u16"
         }
       ]
     },
     {
-      "name": "joinMatch",
+      "name": "join_match",
       "discriminator": [
         244,
         8,
@@ -1096,7 +1090,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1118,23 +1112,23 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "playerTwoSigner",
+          "name": "player_two_signer",
           "writable": true,
           "signer": true
         },
         {
-          "name": "playerTokenAccount",
+          "name": "player_token_account",
           "writable": true
         },
         {
-          "name": "matchEscrowTokenAccount",
+          "name": "match_escrow_token_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1157,30 +1151,30 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "betAmountArg",
+          "name": "bet_amount_arg",
           "type": "u64"
         }
       ]
     },
     {
-      "name": "makeMove",
+      "name": "make_move",
       "discriminator": [
         78,
         77,
@@ -1193,7 +1187,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1215,8 +1209,8 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
@@ -1232,14 +1226,14 @@ export type MagicChess = {
           "name": "args",
           "type": {
             "defined": {
-              "name": "makeMoveArgs"
+              "name": "MakeMoveArgs"
             }
           }
         }
       ]
     },
     {
-      "name": "placePredictionBet",
+      "name": "place_prediction_bet",
       "discriminator": [
         95,
         44,
@@ -1252,7 +1246,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "docs": [
             "The ChessMatch — read-only, used for constraints."
           ],
@@ -1276,14 +1270,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "predictionPool",
+          "name": "prediction_pool",
           "docs": [
             "The PredictionPool tracking accumulated bets."
           ],
@@ -1312,14 +1306,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "predictionBet",
+          "name": "prediction_bet",
           "docs": [
             "PDA per bettor — created once per bettor per pool."
           ],
@@ -1347,7 +1341,7 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "predictionPool"
+                "path": "prediction_pool"
               },
               {
                 "kind": "account",
@@ -1357,7 +1351,7 @@ export type MagicChess = {
           }
         },
         {
-          "name": "predictionPoolVault",
+          "name": "prediction_pool_vault",
           "docs": [
             "Vault token account that receives all spectator bets."
           ],
@@ -1392,13 +1386,13 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "predictionPool"
+                "path": "prediction_pool"
               }
             ]
           }
         },
         {
-          "name": "bettorTokenAccount",
+          "name": "bettor_token_account",
           "docs": [
             "The bettor's token account (source of bet funds)."
           ],
@@ -1410,27 +1404,27 @@ export type MagicChess = {
           "signer": true
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "betAmountArg",
+          "name": "bet_amount_arg",
           "type": "u64"
         },
         {
-          "name": "predictedOutcomeArg",
+          "name": "predicted_outcome_arg",
           "type": "u8"
         }
       ]
     },
     {
-      "name": "processMatchSettlement",
+      "name": "process_match_settlement",
       "discriminator": [
         236,
         106,
@@ -1443,7 +1437,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1465,14 +1459,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "matchEscrowTokenAccount",
+          "name": "match_escrow_token_account",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1495,22 +1489,22 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "playerOneAta",
+          "name": "player_one_ata",
           "writable": true
         },
         {
-          "name": "playerTwoAta",
+          "name": "player_two_ata",
           "writable": true
         },
         {
-          "name": "platformFeeAta",
+          "name": "platform_fee_ata",
           "writable": true
         },
         {
@@ -1521,14 +1515,14 @@ export type MagicChess = {
           "writable": true
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
     },
     {
-      "name": "processUndelegation",
+      "name": "process_undelegation",
       "discriminator": [
         196,
         28,
@@ -1541,7 +1535,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "baseAccount",
+          "name": "base_account",
           "writable": true
         },
         {
@@ -1572,7 +1566,7 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "baseAccount"
+                "path": "base_account"
               }
             ],
             "program": {
@@ -1619,13 +1613,13 @@ export type MagicChess = {
           "writable": true
         },
         {
-          "name": "systemProgram",
+          "name": "system_program",
           "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
         {
-          "name": "accountSeeds",
+          "name": "account_seeds",
           "type": {
             "vec": "bytes"
           }
@@ -1633,7 +1627,7 @@ export type MagicChess = {
       ]
     },
     {
-      "name": "resignGame",
+      "name": "resign_game",
       "discriminator": [
         43,
         29,
@@ -1646,7 +1640,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1668,14 +1662,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "playerSigner",
+          "name": "player_signer",
           "writable": true,
           "signer": true
         }
@@ -1683,7 +1677,7 @@ export type MagicChess = {
       "args": []
     },
     {
-      "name": "revokeSessionKey",
+      "name": "revoke_session_key",
       "discriminator": [
         81,
         192,
@@ -1696,7 +1690,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1718,8 +1712,8 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
@@ -1732,7 +1726,7 @@ export type MagicChess = {
       "args": []
     },
     {
-      "name": "scheduleTimeout",
+      "name": "schedule_timeout",
       "discriminator": [
         243,
         168,
@@ -1745,7 +1739,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1767,8 +1761,8 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
@@ -1781,13 +1775,13 @@ export type MagicChess = {
       ],
       "args": [
         {
-          "name": "taskId",
+          "name": "task_id",
           "type": "i64"
         }
       ]
     },
     {
-      "name": "setSessionKey",
+      "name": "set_session_key",
       "discriminator": [
         13,
         147,
@@ -1800,7 +1794,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1822,8 +1816,8 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
@@ -1838,17 +1832,17 @@ export type MagicChess = {
       ],
       "args": [
         {
-          "name": "sessionSigner",
+          "name": "session_signer",
           "type": "pubkey"
         },
         {
-          "name": "expiresAt",
+          "name": "expires_at",
           "type": "i64"
         }
       ]
     },
     {
-      "name": "settlePredictionPool",
+      "name": "settle_prediction_pool",
       "discriminator": [
         172,
         46,
@@ -1861,7 +1855,7 @@ export type MagicChess = {
       ],
       "accounts": [
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "pda": {
             "seeds": [
               {
@@ -1882,14 +1876,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "predictionPool",
+          "name": "prediction_pool",
           "writable": true,
           "pda": {
             "seeds": [
@@ -1915,14 +1909,14 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
+                "path": "chess_match.match_id",
+                "account": "ChessMatch"
               }
             ]
           }
         },
         {
-          "name": "predictionPoolVault",
+          "name": "prediction_pool_vault",
           "docs": [
             "Vault holding all spectator bets. PDA-owned by prediction_pool."
           ],
@@ -1957,27 +1951,27 @@ export type MagicChess = {
               },
               {
                 "kind": "account",
-                "path": "predictionPool"
+                "path": "prediction_pool"
               }
             ]
           }
         },
         {
-          "name": "matchWinnerAta",
+          "name": "match_winner_ata",
           "docs": [
             "Match winner's ATA. In a draw, this is the White player's ATA."
           ],
           "writable": true
         },
         {
-          "name": "matchLoserAta",
+          "name": "match_loser_ata",
           "docs": [
             "Match loser's ATA. In a draw, this is the Black player's ATA."
           ],
           "writable": true
         },
         {
-          "name": "platformFeeAta",
+          "name": "platform_fee_ata",
           "docs": [
             "Platform fee ATA. Must be owned by the platform_fee_wallet from ChessMatch."
           ],
@@ -1991,14 +1985,14 @@ export type MagicChess = {
           "writable": true
         },
         {
-          "name": "tokenProgram",
+          "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
         }
       ],
       "args": []
     },
     {
-      "name": "undelegateMatch",
+      "name": "undelegate_match",
       "discriminator": [
         142,
         117,
@@ -2016,15 +2010,15 @@ export type MagicChess = {
           "signer": true
         },
         {
-          "name": "chessMatch",
+          "name": "chess_match",
           "writable": true
         },
         {
-          "name": "magicProgram",
+          "name": "magic_program",
           "address": "Magic11111111111111111111111111111111111111"
         },
         {
-          "name": "magicContext",
+          "name": "magic_context",
           "writable": true,
           "address": "MagicContext1111111111111111111111111111111"
         }
@@ -2034,7 +2028,7 @@ export type MagicChess = {
   ],
   "accounts": [
     {
-      "name": "chessMatch",
+      "name": "ChessMatch",
       "discriminator": [
         72,
         241,
@@ -2047,7 +2041,7 @@ export type MagicChess = {
       ]
     },
     {
-      "name": "predictionBet",
+      "name": "PredictionBet",
       "discriminator": [
         49,
         105,
@@ -2060,7 +2054,7 @@ export type MagicChess = {
       ]
     },
     {
-      "name": "predictionPool",
+      "name": "PredictionPool",
       "discriminator": [
         242,
         147,
@@ -2075,7 +2069,7 @@ export type MagicChess = {
   ],
   "events": [
     {
-      "name": "drawPayoutEvent",
+      "name": "DrawPayoutEvent",
       "discriminator": [
         204,
         185,
@@ -2088,7 +2082,7 @@ export type MagicChess = {
       ]
     },
     {
-      "name": "gameEndedEvent",
+      "name": "GameEndedEvent",
       "discriminator": [
         124,
         244,
@@ -2101,7 +2095,7 @@ export type MagicChess = {
       ]
     },
     {
-      "name": "matchAbortedEvent",
+      "name": "MatchAbortedEvent",
       "discriminator": [
         93,
         79,
@@ -2114,7 +2108,7 @@ export type MagicChess = {
       ]
     },
     {
-      "name": "matchClosedEvent",
+      "name": "MatchClosedEvent",
       "discriminator": [
         205,
         185,
@@ -2127,7 +2121,7 @@ export type MagicChess = {
       ]
     },
     {
-      "name": "matchCreatedEvent",
+      "name": "MatchCreatedEvent",
       "discriminator": [
         101,
         99,
@@ -2140,7 +2134,7 @@ export type MagicChess = {
       ]
     },
     {
-      "name": "moveMadeEvent",
+      "name": "MoveMadeEvent",
       "discriminator": [
         116,
         181,
@@ -2153,7 +2147,7 @@ export type MagicChess = {
       ]
     },
     {
-      "name": "payoutEvent",
+      "name": "PayoutEvent",
       "discriminator": [
         84,
         234,
@@ -2166,7 +2160,7 @@ export type MagicChess = {
       ]
     },
     {
-      "name": "playerJoinedEvent",
+      "name": "PlayerJoinedEvent",
       "discriminator": [
         80,
         201,
@@ -2182,327 +2176,327 @@ export type MagicChess = {
   "errors": [
     {
       "code": 6000,
-      "name": "invalidOwner",
+      "name": "InvalidOwner",
       "msg": "The provided token account is not owned by the player."
     },
     {
       "code": 6001,
-      "name": "invalidMint",
+      "name": "InvalidMint",
       "msg": "The provided token account's mint does not match the betting token mint."
     },
     {
       "code": 6002,
-      "name": "invalidBetAmount",
+      "name": "InvalidBetAmount",
       "msg": "The bet amount is invalid."
     },
     {
       "code": 6003,
-      "name": "matchAlreadyFull",
+      "name": "MatchAlreadyFull",
       "msg": "The match is already full."
     },
     {
       "code": 6004,
-      "name": "invalidMatchIdLength",
+      "name": "InvalidMatchIdLength",
       "msg": "Match ID length is invalid or exceeds maximum allowed."
     },
     {
       "code": 6005,
-      "name": "invalidPublicKeyString",
+      "name": "InvalidPublicKeyString",
       "msg": "Invalid public key string format during parsing."
     },
     {
       "code": 6006,
-      "name": "invalidPlatformFee",
+      "name": "InvalidPlatformFee",
       "msg": "Platform fee basis points exceed maximum (10000)."
     },
     {
       "code": 6007,
-      "name": "unsupportedBettingToken",
+      "name": "UnsupportedBettingToken",
       "msg": "Unsupported betting token mint. Only SEND or wSOL allowed."
     },
     {
       "code": 6008,
-      "name": "invalidMoveOutOfBounds",
+      "name": "InvalidMoveOutOfBounds",
       "msg": "Invalid move: Coordinates out of bounds."
     },
     {
       "code": 6009,
-      "name": "invalidMoveEmptySource",
+      "name": "InvalidMoveEmptySource",
       "msg": "Invalid move: Source square is empty."
     },
     {
       "code": 6010,
-      "name": "invalidMoveNotYourPiece",
+      "name": "InvalidMoveNotYourPiece",
       "msg": "Invalid move: Not your piece to move."
     },
     {
       "code": 6011,
-      "name": "invalidMoveCannotCaptureOwnPiece",
+      "name": "InvalidMoveCannotCaptureOwnPiece",
       "msg": "Invalid move: Cannot capture your own piece."
     },
     {
       "code": 6012,
-      "name": "invalidMoveIllegalPieceMovement",
+      "name": "InvalidMoveIllegalPieceMovement",
       "msg": "Invalid move: Illegal movement for this piece type."
     },
     {
       "code": 6013,
-      "name": "invalidMoveLeavesKingInCheck",
+      "name": "InvalidMoveLeavesKingInCheck",
       "msg": "Invalid move: Move leaves king in check."
     },
     {
       "code": 6014,
-      "name": "invalidPromotionPiece",
+      "name": "InvalidPromotionPiece",
       "msg": "Invalid promotion: Specified piece type is not allowed for promotion."
     },
     {
       "code": 6015,
-      "name": "invalidPromotionNotOnLastRank",
+      "name": "InvalidPromotionNotOnLastRank",
       "msg": "Invalid promotion: Pawn is not on the last rank for promotion."
     },
     {
       "code": 6016,
-      "name": "invalidPromotionNotAPawn",
+      "name": "InvalidPromotionNotAPawn",
       "msg": "Invalid promotion: Only pawns can be promoted."
     },
     {
       "code": 6017,
-      "name": "kingNotFound",
+      "name": "KingNotFound",
       "msg": "Internal error: King not found on the board."
     },
     {
       "code": 6018,
-      "name": "invalidMatchId",
+      "name": "InvalidMatchId",
       "msg": "Invalid Match ID provided."
     },
     {
       "code": 6019,
-      "name": "alreadyJoined",
+      "name": "AlreadyJoined",
       "msg": "You are already joined this match."
     },
     {
       "code": 6020,
-      "name": "invalidEscrowAccount",
+      "name": "InvalidEscrowAccount",
       "msg": "Invalid escrow account authority."
     },
     {
       "code": 6021,
-      "name": "mathError",
+      "name": "MathError",
       "msg": "Arithmetic operation overflow/underflow."
     },
     {
       "code": 6022,
-      "name": "gameNotActive",
+      "name": "GameNotActive",
       "msg": "The game is not currently active."
     },
     {
       "code": 6023,
-      "name": "notAPlayer",
+      "name": "NotAPlayer",
       "msg": "The signer is not a registered player in this match."
     },
     {
       "code": 6024,
-      "name": "notYourTurn",
+      "name": "NotYourTurn",
       "msg": "It is not the signer's turn to move."
     },
     {
       "code": 6025,
-      "name": "playerTimedOut",
+      "name": "PlayerTimedOut",
       "msg": "Player has timed out."
     },
     {
       "code": 6026,
-      "name": "matchAlreadyFullOrActive",
+      "name": "MatchAlreadyFullOrActive",
       "msg": "Match is already full or active, cannot join."
     },
     {
       "code": 6027,
-      "name": "invalidMintForJoin",
+      "name": "InvalidMintForJoin",
       "msg": "The mint of your token account does not match the established betting token for this match."
     },
     {
       "code": 6028,
-      "name": "cannotJoinOwnMatch",
+      "name": "CannotJoinOwnMatch",
       "msg": "Player cannot join their own match as the second player."
     },
     {
       "code": 6029,
-      "name": "betAmountMismatch",
+      "name": "BetAmountMismatch",
       "msg": "Joining bet amount does not match the creator's bet amount."
     },
     {
       "code": 6030,
-      "name": "opponentNotJoinedYet",
+      "name": "OpponentNotJoinedYet",
       "msg": "Opponent has not joined the match yet, cannot determine winner by resignation."
     },
     {
       "code": 6031,
-      "name": "notOpponentsTurnToClaimTimeout",
+      "name": "NotOpponentsTurnToClaimTimeout",
       "msg": "It is not the opponent's turn, so you cannot claim a timeout win yet."
     },
     {
       "code": 6032,
-      "name": "timeoutNotConfigured",
+      "name": "TimeoutNotConfigured",
       "msg": "Move timeout is not configured for this match."
     },
     {
       "code": 6033,
-      "name": "opponentNotTimedOut",
+      "name": "OpponentNotTimedOut",
       "msg": "Opponent has not actually timed out yet."
     },
     {
       "code": 6034,
-      "name": "gameNotConcluded",
+      "name": "GameNotConcluded",
       "msg": "The game has not yet concluded."
     },
     {
       "code": 6035,
-      "name": "payoutAlreadyProcessed",
+      "name": "PayoutAlreadyProcessed",
       "msg": "Payout for this match has already been processed."
     },
     {
       "code": 6036,
-      "name": "playerTokenAccountMismatch",
+      "name": "PlayerTokenAccountMismatch",
       "msg": "Player token account mismatch for payout."
     },
     {
       "code": 6037,
-      "name": "platformTokenAccountError",
+      "name": "PlatformTokenAccountError",
       "msg": "Platform fee token account mismatch or invalid mint for payout."
     },
     {
       "code": 6038,
-      "name": "invalidPlatformFeeWallet",
+      "name": "InvalidPlatformFeeWallet",
       "msg": "Platform fee wallet does not match the expected recipient."
     },
     {
       "code": 6039,
-      "name": "duplicateAccounts",
+      "name": "DuplicateAccounts",
       "msg": "Duplicate mutable accounts detected — state corruption risk."
     },
     {
       "code": 6040,
-      "name": "invalidGameStateForPayout",
+      "name": "InvalidGameStateForPayout",
       "msg": "Game state is invalid for processing a payout (e.g., winner does not exist)."
     },
     {
       "code": 6041,
-      "name": "unauthorizedSigner",
+      "name": "UnauthorizedSigner",
       "msg": "Signer is not authorized — must be the player whose turn it is or a valid session key."
     },
     {
       "code": 6042,
-      "name": "invalidSession",
+      "name": "InvalidSession",
       "msg": "Session key is expired or invalid for this action."
     },
     {
       "code": 6043,
-      "name": "matchNotWaitingForOpponent",
+      "name": "MatchNotWaitingForOpponent",
       "msg": "Match is not in WaitingForOpponent state, cannot abort."
     },
     {
       "code": 6044,
-      "name": "notMatchCreator",
+      "name": "NotMatchCreator",
       "msg": "Only the match creator can perform this action."
     },
     {
       "code": 6045,
-      "name": "matchNotSettled",
+      "name": "MatchNotSettled",
       "msg": "Match settlement has not been processed yet, cannot close."
     },
     {
       "code": 6046,
-      "name": "predictionNotEnabled",
+      "name": "PredictionNotEnabled",
       "msg": "Prediction market is not enabled for this match."
     },
     {
       "code": 6047,
-      "name": "predictionPoolAlreadyExists",
+      "name": "PredictionPoolAlreadyExists",
       "msg": "A prediction pool already exists for this match."
     },
     {
       "code": 6048,
-      "name": "predictionPoolNotFound",
+      "name": "PredictionPoolNotFound",
       "msg": "Prediction pool not found for this match."
     },
     {
       "code": 6049,
-      "name": "playersCannotBet",
+      "name": "PlayersCannotBet",
       "msg": "Players in the match cannot place prediction bets."
     },
     {
       "code": 6050,
-      "name": "bettingClosed",
+      "name": "BettingClosed",
       "msg": "Betting is closed — the match is no longer Active."
     },
     {
       "code": 6051,
-      "name": "invalidOutcome",
+      "name": "InvalidOutcome",
       "msg": "Invalid outcome — must be 0 (White), 1 (Black), or 2 (Draw)."
     },
     {
       "code": 6052,
-      "name": "settlementAlreadyProcessed",
+      "name": "SettlementAlreadyProcessed",
       "msg": "Prediction settlement has already been processed for this pool."
     },
     {
       "code": 6053,
-      "name": "alreadyClaimed",
+      "name": "AlreadyClaimed",
       "msg": "Winnings have already been claimed for this bet."
     },
     {
       "code": 6054,
-      "name": "nothingToClaim",
+      "name": "NothingToClaim",
       "msg": "Nothing to claim — no balance available for this bet."
     },
     {
       "code": 6055,
-      "name": "matchNotAborted",
+      "name": "MatchNotAborted",
       "msg": "The match has not been aborted, cannot cancel this way."
     },
     {
       "code": 6056,
-      "name": "cannotCancelActiveMatch",
+      "name": "CannotCancelActiveMatch",
       "msg": "Cannot cancel bet on an Active match."
     },
     {
       "code": 6057,
-      "name": "invalidTimeoutDuration",
+      "name": "InvalidTimeoutDuration",
       "msg": "Move timeout duration must be non-negative."
     }
   ],
   "types": [
     {
-      "name": "castlingRights",
+      "name": "CastlingRights",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "whiteKingside",
+            "name": "white_kingside",
             "type": "bool"
           },
           {
-            "name": "whiteQueenside",
+            "name": "white_queenside",
             "type": "bool"
           },
           {
-            "name": "blackKingside",
+            "name": "black_kingside",
             "type": "bool"
           },
           {
-            "name": "blackQueenside",
+            "name": "black_queenside",
             "type": "bool"
           }
         ]
       }
     },
     {
-      "name": "chessMatch",
+      "name": "ChessMatch",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "matchId",
+            "name": "match_id",
             "type": "string"
           },
           {
@@ -2515,39 +2509,39 @@ export type MagicChess = {
             }
           },
           {
-            "name": "currentPlayerIdx",
+            "name": "current_player_idx",
             "type": "u8"
           },
           {
-            "name": "currentTurn",
+            "name": "current_turn",
             "type": {
               "defined": {
-                "name": "playerColor"
+                "name": "PlayerColor"
               }
             }
           },
           {
-            "name": "lastMoveTimestamp",
+            "name": "last_move_timestamp",
             "type": "i64"
           },
           {
-            "name": "moveTimeoutDuration",
+            "name": "move_timeout_duration",
             "type": "i64"
           },
           {
-            "name": "gameStatus",
+            "name": "game_status",
             "type": {
               "defined": {
-                "name": "gameStatus"
+                "name": "GameStatus"
               }
             }
           },
           {
-            "name": "gameEndReason",
+            "name": "game_end_reason",
             "type": {
               "option": {
                 "defined": {
-                  "name": "gameEndReason"
+                  "name": "GameEndReason"
                 }
               }
             }
@@ -2561,7 +2555,7 @@ export type MagicChess = {
                     {
                       "option": {
                         "defined": {
-                          "name": "piece"
+                          "name": "Piece"
                         }
                       }
                     },
@@ -2573,95 +2567,95 @@ export type MagicChess = {
             }
           },
           {
-            "name": "castlingRights",
+            "name": "castling_rights",
             "type": {
               "defined": {
-                "name": "castlingRights"
+                "name": "CastlingRights"
               }
             }
           },
           {
-            "name": "enPassantTarget",
+            "name": "en_passant_target",
             "type": {
               "option": {
                 "defined": {
-                  "name": "enPassantSquare"
+                  "name": "EnPassantSquare"
                 }
               }
             }
           },
           {
-            "name": "halfmoveClock",
+            "name": "halfmove_clock",
             "type": "u8"
           },
           {
-            "name": "fullmoveNumber",
+            "name": "fullmove_number",
             "type": "u16"
           },
           {
-            "name": "positionHistory",
+            "name": "position_history",
             "type": {
               "vec": "u64"
             }
           },
           {
-            "name": "bettingTokenMint",
+            "name": "betting_token_mint",
             "type": "pubkey"
           },
           {
-            "name": "betAmountPlayerOne",
+            "name": "bet_amount_player_one",
             "type": "u64"
           },
           {
-            "name": "betAmountPlayerTwo",
+            "name": "bet_amount_player_two",
             "type": "u64"
           },
           {
-            "name": "totalPot",
+            "name": "total_pot",
             "type": "u64"
           },
           {
-            "name": "platformFeeBasisPoints",
+            "name": "platform_fee_basis_points",
             "type": "u16"
           },
           {
-            "name": "platformFeeWallet",
+            "name": "platform_fee_wallet",
             "type": "pubkey"
           },
           {
-            "name": "payoutProcessed",
+            "name": "payout_processed",
             "type": "bool"
           },
           {
-            "name": "predictionEnabled",
+            "name": "prediction_enabled",
             "type": "bool"
           },
           {
-            "name": "delegationUid",
+            "name": "delegation_uid",
             "type": "string"
           },
           {
-            "name": "isDelegated",
+            "name": "is_delegated",
             "type": "bool"
           },
           {
-            "name": "whiteSessionSigner",
+            "name": "white_session_signer",
             "type": "pubkey"
           },
           {
-            "name": "whiteSessionExpiresAt",
+            "name": "white_session_expires_at",
             "type": "i64"
           },
           {
-            "name": "blackSessionSigner",
+            "name": "black_session_signer",
             "type": "pubkey"
           },
           {
-            "name": "blackSessionExpiresAt",
+            "name": "black_session_expires_at",
             "type": "i64"
           },
           {
-            "name": "activeTaskId",
+            "name": "active_task_id",
             "type": "i64"
           },
           {
@@ -2669,31 +2663,31 @@ export type MagicChess = {
             "type": "u8"
           },
           {
-            "name": "matchEscrowBump",
+            "name": "match_escrow_bump",
             "type": "u8"
           }
         ]
       }
     },
     {
-      "name": "drawPayoutEvent",
+      "name": "DrawPayoutEvent",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "matchId",
+            "name": "match_id",
             "type": "string"
           },
           {
-            "name": "whitePlayer",
+            "name": "white_player",
             "type": "pubkey"
           },
           {
-            "name": "blackPlayer",
+            "name": "black_player",
             "type": "pubkey"
           },
           {
-            "name": "amountEach",
+            "name": "amount_each",
             "type": "u64"
           },
           {
@@ -2704,7 +2698,7 @@ export type MagicChess = {
       }
     },
     {
-      "name": "enPassantSquare",
+      "name": "EnPassantSquare",
       "type": {
         "kind": "struct",
         "fields": [
@@ -2720,51 +2714,51 @@ export type MagicChess = {
       }
     },
     {
-      "name": "gameEndReason",
+      "name": "GameEndReason",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "checkmate"
+            "name": "Checkmate"
           },
           {
-            "name": "stalemate"
+            "name": "Stalemate"
           },
           {
-            "name": "resignation"
+            "name": "Resignation"
           },
           {
-            "name": "timeout"
+            "name": "Timeout"
           },
           {
-            "name": "fiftyMoveRule"
+            "name": "FiftyMoveRule"
           },
           {
-            "name": "threefoldRepetition"
+            "name": "ThreefoldRepetition"
           },
           {
-            "name": "aborted"
+            "name": "Aborted"
           },
           {
-            "name": "insufficientMaterial"
+            "name": "InsufficientMaterial"
           }
         ]
       }
     },
     {
-      "name": "gameEndedEvent",
+      "name": "GameEndedEvent",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "matchId",
+            "name": "match_id",
             "type": "string"
           },
           {
             "name": "status",
             "type": {
               "defined": {
-                "name": "gameStatus"
+                "name": "GameStatus"
               }
             }
           },
@@ -2773,7 +2767,7 @@ export type MagicChess = {
             "type": {
               "option": {
                 "defined": {
-                  "name": "playerColor"
+                  "name": "PlayerColor"
                 }
               }
             }
@@ -2782,7 +2776,7 @@ export type MagicChess = {
             "name": "reason",
             "type": {
               "defined": {
-                "name": "gameEndReason"
+                "name": "GameEndReason"
               }
             }
           }
@@ -2790,50 +2784,50 @@ export type MagicChess = {
       }
     },
     {
-      "name": "gameStatus",
+      "name": "GameStatus",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "waitingForOpponent"
+            "name": "WaitingForOpponent"
           },
           {
-            "name": "active"
+            "name": "Active"
           },
           {
-            "name": "whiteWins"
+            "name": "WhiteWins"
           },
           {
-            "name": "blackWins"
+            "name": "BlackWins"
           },
           {
-            "name": "draw"
+            "name": "Draw"
           },
           {
-            "name": "aborted"
+            "name": "Aborted"
           }
         ]
       }
     },
     {
-      "name": "makeMoveArgs",
+      "name": "MakeMoveArgs",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "fromRow",
+            "name": "from_row",
             "type": "u8"
           },
           {
-            "name": "fromCol",
+            "name": "from_col",
             "type": "u8"
           },
           {
-            "name": "toRow",
+            "name": "to_row",
             "type": "u8"
           },
           {
-            "name": "toCol",
+            "name": "to_col",
             "type": "u8"
           },
           {
@@ -2841,7 +2835,7 @@ export type MagicChess = {
             "type": {
               "option": {
                 "defined": {
-                  "name": "pieceType"
+                  "name": "PieceType"
                 }
               }
             }
@@ -2850,12 +2844,12 @@ export type MagicChess = {
       }
     },
     {
-      "name": "matchAbortedEvent",
+      "name": "MatchAbortedEvent",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "matchId",
+            "name": "match_id",
             "type": "string"
           },
           {
@@ -2866,24 +2860,24 @@ export type MagicChess = {
       }
     },
     {
-      "name": "matchClosedEvent",
+      "name": "MatchClosedEvent",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "matchId",
+            "name": "match_id",
             "type": "string"
           }
         ]
       }
     },
     {
-      "name": "matchCreatedEvent",
+      "name": "MatchCreatedEvent",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "matchId",
+            "name": "match_id",
             "type": "string"
           },
           {
@@ -2891,31 +2885,31 @@ export type MagicChess = {
             "type": "pubkey"
           },
           {
-            "name": "bettingTokenMint",
+            "name": "betting_token_mint",
             "type": "pubkey"
           },
           {
-            "name": "betAmount",
+            "name": "bet_amount",
             "type": "u64"
           },
           {
-            "name": "moveTimeoutDuration",
+            "name": "move_timeout_duration",
             "type": "i64"
           },
           {
-            "name": "platformFeeBasisPoints",
+            "name": "platform_fee_basis_points",
             "type": "u16"
           }
         ]
       }
     },
     {
-      "name": "moveMadeEvent",
+      "name": "MoveMadeEvent",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "matchId",
+            "name": "match_id",
             "type": "string"
           },
           {
@@ -2923,69 +2917,69 @@ export type MagicChess = {
             "type": "pubkey"
           },
           {
-            "name": "playerColor",
+            "name": "player_color",
             "type": {
               "defined": {
-                "name": "playerColor"
+                "name": "PlayerColor"
               }
             }
           },
           {
-            "name": "algebraicMove",
+            "name": "algebraic_move",
             "type": "string"
           },
           {
-            "name": "fromRow",
+            "name": "from_row",
             "type": "u8"
           },
           {
-            "name": "fromCol",
+            "name": "from_col",
             "type": "u8"
           },
           {
-            "name": "toRow",
+            "name": "to_row",
             "type": "u8"
           },
           {
-            "name": "toCol",
+            "name": "to_col",
             "type": "u8"
           },
           {
-            "name": "promotionPiece",
+            "name": "promotion_piece",
             "type": {
               "option": {
                 "defined": {
-                  "name": "pieceType"
+                  "name": "PieceType"
                 }
               }
             }
           },
           {
-            "name": "boardFen",
+            "name": "board_fen",
             "type": "string"
           },
           {
-            "name": "isCheck",
+            "name": "is_check",
             "type": "bool"
           },
           {
-            "name": "isCheckmate",
+            "name": "is_checkmate",
             "type": "bool"
           },
           {
-            "name": "isStalemate",
+            "name": "is_stalemate",
             "type": "bool"
           }
         ]
       }
     },
     {
-      "name": "payoutEvent",
+      "name": "PayoutEvent",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "matchId",
+            "name": "match_id",
             "type": "string"
           },
           {
@@ -3004,15 +2998,15 @@ export type MagicChess = {
       }
     },
     {
-      "name": "piece",
+      "name": "Piece",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "pieceType",
+            "name": "piece_type",
             "type": {
               "defined": {
-                "name": "pieceType"
+                "name": "PieceType"
               }
             }
           },
@@ -3020,7 +3014,7 @@ export type MagicChess = {
             "name": "color",
             "type": {
               "defined": {
-                "name": "playerColor"
+                "name": "PlayerColor"
               }
             }
           }
@@ -3028,75 +3022,75 @@ export type MagicChess = {
       }
     },
     {
-      "name": "pieceType",
+      "name": "PieceType",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "pawn"
+            "name": "Pawn"
           },
           {
-            "name": "knight"
+            "name": "Knight"
           },
           {
-            "name": "bishop"
+            "name": "Bishop"
           },
           {
-            "name": "rook"
+            "name": "Rook"
           },
           {
-            "name": "queen"
+            "name": "Queen"
           },
           {
-            "name": "king"
+            "name": "King"
           }
         ]
       }
     },
     {
-      "name": "playerColor",
+      "name": "PlayerColor",
       "type": {
         "kind": "enum",
         "variants": [
           {
-            "name": "white"
+            "name": "White"
           },
           {
-            "name": "black"
+            "name": "Black"
           }
         ]
       }
     },
     {
-      "name": "playerJoinedEvent",
+      "name": "PlayerJoinedEvent",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "matchId",
+            "name": "match_id",
             "type": "string"
           },
           {
-            "name": "playerOne",
+            "name": "player_one",
             "type": "pubkey"
           },
           {
-            "name": "playerTwo",
+            "name": "player_two",
             "type": "pubkey"
           },
           {
-            "name": "bettingTokenMint",
+            "name": "betting_token_mint",
             "type": "pubkey"
           },
           {
-            "name": "betAmountPerPlayer",
+            "name": "bet_amount_per_player",
             "type": "u64"
           }
         ]
       }
     },
     {
-      "name": "predictionBet",
+      "name": "PredictionBet",
       "docs": [
         "One bettor's prediction on a match.",
         "Pull-model: payout is claimed individually via claim_prediction_winnings."
@@ -3117,7 +3111,7 @@ export type MagicChess = {
             "type": "u64"
           },
           {
-            "name": "predictedOutcome",
+            "name": "predicted_outcome",
             "type": "u8"
           },
           {
@@ -3132,7 +3126,7 @@ export type MagicChess = {
       }
     },
     {
-      "name": "predictionPool",
+      "name": "PredictionPool",
       "docs": [
         "Pools all prediction bets for a single chess match.",
         "Parimutuel model — winners split the losing pool proportionally."
@@ -3141,31 +3135,31 @@ export type MagicChess = {
         "kind": "struct",
         "fields": [
           {
-            "name": "matchId",
+            "name": "match_id",
             "type": "string"
           },
           {
-            "name": "chessMatch",
+            "name": "chess_match",
             "type": "pubkey"
           },
           {
-            "name": "totalBetOnWhite",
+            "name": "total_bet_on_white",
             "type": "u64"
           },
           {
-            "name": "totalBetOnBlack",
+            "name": "total_bet_on_black",
             "type": "u64"
           },
           {
-            "name": "totalBetOnDraw",
+            "name": "total_bet_on_draw",
             "type": "u64"
           },
           {
-            "name": "platformFeeBps",
+            "name": "platform_fee_bps",
             "type": "u16"
           },
           {
-            "name": "settlementProcessed",
+            "name": "settlement_processed",
             "type": "bool"
           },
           {
@@ -3176,4 +3170,4 @@ export type MagicChess = {
       }
     }
   ]
-};
+}
