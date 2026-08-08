@@ -21,7 +21,10 @@
     ],
     "paths": {
       "@/*": ["./*"],
-      "@solana/*": ["./node_modules/@solana/*"]
+      "@solana/web3.js": ["./node_modules/@solana/web3.js"],
+      "@solana/spl-token": ["./node_modules/@solana/spl-token"],
+      "@anchor-lang/core": ["./node_modules/@anchor-lang/core"],
+      "@magicblock-labs/ephemeral-rollups-kit": ["./node_modules/@magicblock-labs/ephemeral-rollups-kit"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

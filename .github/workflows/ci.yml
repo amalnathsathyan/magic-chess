@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Rust Program Tests ──────────────────────────────────────────
+  program-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust + Solana tools
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Unit tests
+        run: cargo test -p magic_chess --lib
+
+      - name: Build program (.so for LiteSVM)
+        working-directory: magic-chess-program
+        run: cargo build-sbf --tools-version v1.52
+
+      - name: LiteSVM integration tests
+        run: cargo test -p magic_chess -- litesvm
+
+      - name: Payout integration tests
+        run: cargo test -p magic_chess --test payout_full_flow
+
+      - name: Mollusk CU benchmarks
+        run: cargo test -p magic_chess --features integration-tests --test cu_benchmarks
+
+  # ── Frontend Typecheck + Lint ───────────────────────────────────
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+  # ── SDK Typecheck ───────────────────────────────────────────────
+  sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        working-directory: sdk
+        run: npm install
+
+      - name: Typecheck
+        working-directory: sdk
+        run: npx tsc --noEmit

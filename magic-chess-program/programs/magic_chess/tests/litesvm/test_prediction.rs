@@ -711,3 +711,84 @@ fn test_full_prediction_flow_with_platform_fee() {
     let balance_after = svm.get_token_balance(&s1_ata);
     assert_eq!(balance_after - balance_before, 500_000);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. Lifecycle: claim before settle → must fail
+// ─────────────────────────────────────────────────────────────────────────────
+#[test]
+fn test_claim_before_settle_rejected() {
+    let mut svm = TestSvm::new();
+    let p1_pk = svm.payer_pubkey();
+    let (_p2, mint, match_pda, _escrow, _p1_ata, _p2_ata, _platform_ata) =
+        setup_match_for_prediction(&mut svm, &p1_pk, "pred-claim-pre");
+
+    let (pool_pda, _) = find_prediction_pool_pda("pred-claim-pre");
+    let (vault_pda, _) = find_prediction_pool_vault_pda(&pool_pda);
+
+    let init_ix = initialize_prediction_pool_ix(
+        &match_pda, &pool_pda, &vault_pda, &mint, &p1_pk, 0,
+    );
+    svm.send_ix(init_ix, &[]);
+
+    let bettor = svm.create_funded_account(1_000_000_000);
+    let bettor_ata = svm.create_ata(&mint, &bettor.pubkey());
+    svm.mint_tokens(&mint, &bettor_ata, 200_000);
+    let (bet_pda, _) = find_prediction_bet_pda(&pool_pda, &bettor.pubkey());
+    svm.send_ix(place_prediction_bet_ix(
+        &match_pda, &pool_pda, &bet_pda, &vault_pda,
+        &bettor_ata, &bettor.pubkey(), 50_000, 0,
+    ), &[&bettor]);
+
+    // Try to claim before settle — must fail (settlement_processed is false)
+    let claim_ix = claim_prediction_winnings_ix(
+        &match_pda, &pool_pda, &bet_pda, &vault_pda, &bettor_ata, &bettor.pubkey(),
+    );
+    let err = svm.send_ix_expect_err(claim_ix, &[&bettor]);
+    assert!(
+        err.contains("InstructionError") || err.contains("Custom"),
+        "Expected error for claim before settle, got: {}", err
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. Lifecycle: claim with wrong winner → must fail
+// ─────────────────────────────────────────────────────────────────────────────
+#[test]
+fn test_claim_with_wrong_winner_rejected() {
+    let mut svm = TestSvm::new();
+    let p1_pk = svm.payer_pubkey();
+    let (_p2, mint, match_pda, _escrow, p1_ata, p2_ata, platform_ata) =
+        setup_match_for_prediction(&mut svm, &p1_pk, "pred-wrong-w");
+
+    let (pool_pda, _) = find_prediction_pool_pda("pred-wrong-w");
+    let (vault_pda, _) = find_prediction_pool_vault_pda(&pool_pda);
+
+    let init_ix = initialize_prediction_pool_ix(
+        &match_pda, &pool_pda, &vault_pda, &mint, &p1_pk, 0,
+    );
+    svm.send_ix(init_ix, &[]);
+
+    // Bet on Black (outcome 1)
+    let bettor = svm.create_funded_account(1_000_000_000);
+    let bettor_ata = svm.create_ata(&mint, &bettor.pubkey());
+    svm.mint_tokens(&mint, &bettor_ata, 200_000);
+    let (bet_pda, _) = find_prediction_bet_pda(&pool_pda, &bettor.pubkey());
+    svm.send_ix(place_prediction_bet_ix(
+        &match_pda, &pool_pda, &bet_pda, &vault_pda,
+        &bettor_ata, &bettor.pubkey(), 50_000, 1, // bet on Black
+    ), &[&bettor]);
+
+    // White wins — bettor bet on Black
+    set_game_status(&mut svm, &match_pda, GameStatus::WhiteWins, GameEndReason::Checkmate);
+    svm.send_ix(settle_prediction_pool_ix(&match_pda, &pool_pda, &vault_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk), &[]);
+
+    // Try to claim winnings for Black bet when White won
+    let claim_ix = claim_prediction_winnings_ix(
+        &match_pda, &pool_pda, &bet_pda, &vault_pda, &bettor_ata, &bettor.pubkey(),
+    );
+    let err = svm.send_ix_expect_err(claim_ix, &[&bettor]);
+    assert!(
+        err.contains("InstructionError") || err.contains("Custom"),
+        "Expected NothingToClaim error for wrong winner, got: {}", err
+    );
+}
