@@ -1,4 +1,5 @@
 import { atom } from "jotai";
+import { api, type ApiMatch } from "@/lib/api";
 
 export interface LobbyMatch {
   matchId: string;
@@ -9,6 +10,8 @@ export interface LobbyMatch {
   timeControl: string;
   status: "open" | "in_progress" | "completed";
   createdAt: number;
+  boardFen?: string | null;
+  moveCount?: number;
 }
 
 // Current filter state
@@ -22,7 +25,7 @@ export const lobbyTimeFilterAtom = atom<TimeControlFilter>("all");
 
 export const lobbySearchAtom = atom<string>("");
 
-// Match list (fetched from chain / SDK)
+// Match list (fetched from backend API)
 export const lobbyMatchesAtom = atom<LobbyMatch[]>([]);
 
 // Loading / error states
@@ -67,12 +70,45 @@ export const filteredMatchesAtom = atom<LobbyMatch[]>((get) => {
   });
 });
 
+// Helper: map API match to lobby match
+function mapMatchToLobby(m: ApiMatch): LobbyMatch {
+  const statusMap: Record<string, "open" | "in_progress" | "completed"> = {
+    WaitingForOpponent: "open",
+    Active: "in_progress",
+    WhiteWins: "completed",
+    BlackWins: "completed",
+    Draw: "completed",
+  };
+
+  return {
+    matchId: m.matchId,
+    whitePlayer: m.whitePlayer,
+    blackPlayer: m.blackPlayer ?? undefined,
+    wagerAmount: Number(m.totalPot) / 1e9, // lamports → SOL
+    wagerToken: "SOL", // ponytail: hardcoded, parse from mint when multi-token
+    timeControl: `${Math.floor(m.moveTimeoutSeconds / 60)}+0`,
+    status: statusMap[m.gameStatus] ?? "open",
+    createdAt: new Date(m.createdAt).getTime(),
+    boardFen: m.boardFen,
+    moveCount: m.moveCount,
+  };
+}
+
 // Actions
-export const refreshLobbyAtom = atom(null, (_get, set) => {
+export const refreshLobbyAtom = atom(null, async (_get, set) => {
   set(lobbyLoadingAtom, true);
   set(lobbyErrorAtom, null);
-  // TODO: Fetch matches from SDK
-  // const matches = await sdk.getMatches();
-  // set(lobbyMatchesAtom, matches);
-  set(lobbyLoadingAtom, false);
+  try {
+    const open = await api.listMatches({ status: "WaitingForOpponent" });
+    const active = await api.listMatches({ status: "Active" });
+    const all = [...open.matches, ...active.matches];
+    set(lobbyMatchesAtom, all.map(mapMatchToLobby));
+  } catch (err) {
+    set(
+      lobbyErrorAtom,
+      err instanceof Error ? err.message : "Failed to fetch matches"
+    );
+  } finally {
+    set(lobbyLoadingAtom, false);
+  }
 });
