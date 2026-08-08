@@ -1,6 +1,7 @@
 // ── Barrel export — all public API ──
 
-// IDL type
+// Generated IDL and type
+export { MAGIC_CHESS_IDL } from "./idl";
 export type { MagicChess } from "./idl";
 
 // Types
@@ -12,6 +13,7 @@ export {
   MoveResult,
 } from "./types";
 export type {
+  MagicChessWallet,
   Piece,
   CastlingRights,
   EnPassantSquare,

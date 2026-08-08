@@ -1,312 +1,194 @@
 "use client";
 
 import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Sword, Coins, Clock } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { usePrivy, useWallets } from "@privy-io/react-auth";
-// @ts-ignore
-import { useMagicChessClient } from "@magic-chess/sdk/react";
-// @ts-ignore
+import * as Dialog from "@radix-ui/react-dialog";
 import { PublicKey } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { usePrivy } from "@privy-io/react-auth";
+import { useSolanaWallets } from "@privy-io/react-auth/solana";
+import { Clock, Coins, Sword, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
-
-// Wrapped SOL mint on devnet/mainnet
-const WRAPPED_SOL_MINT = new PublicKey("So11111111111111111111111111111111111111112");
+import { useMagicChessClient } from "@magic-chess/sdk/react";
+import { cn } from "@/lib/utils";
+import {
+  getPlatformFeeWallet,
+  parseTokenAmount,
+  solanaConfig,
+  WRAPPED_SOL_MINT,
+} from "@/lib/solana-config";
+import { prepareWagerAccount } from "@/lib/wager";
 
 interface CreateMatchFormProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit?: (data: CreateMatchData) => void;
   className?: string;
 }
 
-export interface CreateMatchData {
-  wagerAmount: number;
-  wagerToken: string;
-  timeControlMinutes: number;
-  timeIncrementSeconds: number;
-  rated: boolean;
-  side: "white" | "black" | "random";
-  ephemeralRollup: boolean;
-  enablePredictions: boolean;
-}
-
 const TIME_CONTROLS = [
-  { label: "Bullet 1+0", minutes: 1, increment: 0 },
-  { label: "Blitz 3+2", minutes: 3, increment: 2 },
-  { label: "Rapid 10+0", minutes: 10, increment: 0 },
-];
+  { label: "Bullet", minutes: 1 },
+  { label: "Blitz", minutes: 3 },
+  { label: "Rapid", minutes: 10 },
+] as const;
 
 export function CreateMatchForm({
   isOpen,
   onClose,
-  onSubmit,
   className,
 }: CreateMatchFormProps) {
-  const [wagerAmount, setWagerAmount] = useState(0);
-  const [timeControl, setTimeControl] = useState(TIME_CONTROLS[1]);
-  const [side, setSide] = useState<"white" | "black" | "random">("random");
-  const [ephemeralRollup, setEphemeralRollup] = useState(true);
-  const [enablePredictions, setEnablePredictions] = useState(false);
+  const [wagerAmount, setWagerAmount] = useState("0.01");
+  const [timeControl, setTimeControl] = useState<
+    (typeof TIME_CONTROLS)[number]
+  >(TIME_CONTROLS[1]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const { authenticated } = usePrivy();
-  const { wallets } = useWallets();
+  const { authenticated, login } = usePrivy();
+  const { wallets } = useSolanaWallets();
+  const client = useMagicChessClient();
   const router = useRouter();
 
-  // Try to get the client from context
-  let client: any = null;
-  try {
-    client = useMagicChessClient();
-  } catch (e) {
-    // If provider is missing, we gracefully fallback
-  }
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const data: CreateMatchData = {
-      wagerAmount,
-      wagerToken: "SOL",
-      timeControlMinutes: timeControl.minutes,
-      timeIncrementSeconds: timeControl.increment,
-      rated: true,
-      side,
-      ephemeralRollup,
-      enablePredictions,
-    };
-
-    onSubmit?.(data);
-
-    const timeParams = `time=${timeControl.minutes * 60 * 1000}&increment=${timeControl.increment * 1000}`;
-
-    // No wallet connected — always do local demo
     if (!authenticated) {
-      toast.success("Starting local game (connect wallet for on-chain matches)");
-      router.push(`/play/demo-${Date.now()}?${timeParams}`);
-      onClose();
+      login();
       return;
     }
 
-    // Wallet connected but free game — local demo
-    if (wagerAmount === 0) {
-      toast.success("Starting local free game");
-      router.push(`/play/demo-${Date.now()}?${timeParams}`);
-      onClose();
+    const wallet = wallets[0];
+    if (!wallet) {
+      toast.error("Your Solana wallet is still being prepared. Try again shortly.");
       return;
     }
 
-    // Wallet connected AND wager > 0 — try SDK call
-    if (client) {
-      try {
-        setIsSubmitting(true);
-        const matchId = `match_${Date.now()}`;
-        const wallet = wallets[0];
-        if (!wallet?.address) {
-          toast.error("No wallet found");
-          setIsSubmitting(false);
-          return;
-        }
+    setIsSubmitting(true);
+    try {
+      const rawWager = parseTokenAmount(
+        wagerAmount,
+        solanaConfig.wagerDecimals
+      );
+      const player = new PublicKey(wallet.address);
+      const mint = new PublicKey(solanaConfig.wagerMint);
+      const platformFeeWallet = getPlatformFeeWallet();
+      const playerTokenAccount = await prepareWagerAccount(
+        client,
+        player,
+        mint,
+        rawWager
+      );
 
-        const walletPubkey = new PublicKey(wallet.address);
-        // Derive the player's wrapped SOL ATA
-        const playerTokenAccount = getAssociatedTokenAddressSync(
-          WRAPPED_SOL_MINT,
-          walletPubkey
-        );
-        // ponytail: platform fees go to match creator for MVP testing
-        const platformFeeWallet = walletPubkey;
+      const matchId = `mc-${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`;
+      const { signature } = await client.createMatch({
+        matchId,
+        betAmount: rawWager,
+        moveTimeoutDuration: BigInt(timeControl.minutes * 60),
+        platformFeeBasisPoints: solanaConfig.platformFeeBps,
+        platformFeeWallet,
+        bettingTokenMint: mint,
+        playerTokenAccount,
+        predictionEnabled: false,
+      });
 
-        const { match, signature } = await client.createMatch({
-          matchId,
-          betAmount: wagerAmount * 1e9, // SOL to lamports
-          moveTimeoutDuration: timeControl.minutes * 60,
-          platformFeeBasisPoints: 100, // 1%
-          platformFeeWallet,
-          bettingTokenMint: WRAPPED_SOL_MINT,
-          playerTokenAccount,
-        });
-
-        toast.success("Match created on-chain!");
-        // Sync to backend (fire-and-forget)
-        api.syncMatchCreated({
-          matchId,
-          creator: wallet.address,
-          bettingTokenMint: WRAPPED_SOL_MINT.toBase58(),
-          betAmount: wagerAmount * 1e9,
-          moveTimeoutDuration: timeControl.minutes * 60,
-          platformFeeBasisPoints: 100,
-          signature,
-          slot: 0,
-        }).catch(err => console.warn("Backend sync failed:", err));
-
-        router.push(`/play/${matchId}`);
-      } catch (err) {
-        console.error(err);
-        toast.error("Failed to create match");
-      } finally {
-        setIsSubmitting(false);
-      }
-    } else {
-      // No SDK client — fallback to local demo
-      toast.success("Starting local game (connect wallet for on-chain matches)");
-      router.push(`/play/demo-${Date.now()}?${timeParams}`);
+      toast.success("Match created on Solana", {
+        description: `${signature.slice(0, 8)}…${signature.slice(-8)}`,
+      });
       onClose();
+      router.push(`/play/${matchId}`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to create the match.";
+      toast.error("Match creation failed", { description: message });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className={cn("glass-card w-full max-w-md p-6 shadow-card", className)}
-          >
-            <div className="mb-6 flex items-center justify-between">
-              <h2 className="font-heading text-lg font-bold">Create Match</h2>
-              <button
-                onClick={onClose}
-                className="rounded-lg p-1.5 text-muted hover:bg-card hover:text-foreground"
+    <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" />
+        <Dialog.Content
+          className={cn(
+            "glass-card fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 p-6 shadow-card focus:outline-none",
+            className
+          )}
+        >
+          <div className="mb-6 flex items-center justify-between">
+            <Dialog.Title className="font-heading text-lg font-bold">
+              Create on-chain match
+            </Dialog.Title>
+            <Dialog.Close
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="Close create match dialog"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </Dialog.Close>
+          </div>
+          <Dialog.Description className="mb-5 text-sm text-muted-foreground">
+            The creator plays White. The match moves to MagicBlock after an
+            opponent joins.
+          </Dialog.Description>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label
+                htmlFor="wager-amount"
+                className="mb-2 flex items-center gap-2 text-sm font-medium"
               >
-                ✕
-              </button>
+                <Coins className="h-4 w-4" aria-hidden="true" />
+                Wager ({solanaConfig.wagerSymbol})
+              </label>
+              <input
+                id="wager-amount"
+                type="text"
+                inputMode="decimal"
+                value={wagerAmount}
+                onChange={(event) => setWagerAmount(event.target.value)}
+                autoComplete="off"
+                className="h-11 w-full rounded-lg border border-border bg-card px-3 font-mono text-sm text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+              />
+              {solanaConfig.wagerMint === WRAPPED_SOL_MINT.toBase58() && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Native SOL is wrapped to WSOL before the match transaction.
+                </p>
+              )}
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <Coins className="h-4 w-4" />
-                  Wager Amount (SOL)
-                </label>
-                <input
-                  type="number"
-                  value={wagerAmount}
-                  onChange={(e) => setWagerAmount(Number(e.target.value))}
-                  min={0}
-                  step={0.01}
-                  className="w-full rounded-lg border border-border bg-card px-3 py-2 font-mono text-sm text-foreground focus:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <Clock className="h-4 w-4" />
-                  Time Control
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {TIME_CONTROLS.map((tc) => (
-                    <button
-                      key={tc.label}
-                      type="button"
-                      onClick={() => setTimeControl(tc)}
-                      className={cn(
-                        "rounded-lg border border-border px-3 py-2 text-xs font-mono transition-all",
-                        timeControl.label === tc.label
-                          ? "border-primary/50 bg-primary/10 text-primary"
-                          : "hover:border-border-hover hover:bg-card"
-                      )}
-                    >
-                      {tc.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-2 flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  Play As
-                </label>
-                <div className="flex gap-2">
-                  {(["random", "white", "black"] as const).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSide(s)}
-                      className={cn(
-                        "flex-1 rounded-lg border border-border px-3 py-2 text-xs font-semibold capitalize transition-all",
-                        side === s
-                          ? "border-primary/50 bg-primary/10 text-primary"
-                          : "hover:border-border-hover hover:bg-card"
-                      )}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between rounded-lg border border-border bg-card/50 p-3">
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">Ephemeral Rollup</span>
-                  <span className="text-xs text-muted-foreground">Zero gas fees during gameplay</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEphemeralRollup(!ephemeralRollup)}
-                  className={cn(
-                    "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary/20",
-                    ephemeralRollup ? "bg-primary" : "bg-muted"
-                  )}
-                >
-                  <span
+            <fieldset>
+              <legend className="mb-2 flex items-center gap-2 text-sm font-medium">
+                <Clock className="h-4 w-4" aria-hidden="true" />
+                Per-move timeout
+              </legend>
+              <div className="grid grid-cols-3 gap-2">
+                {TIME_CONTROLS.map((control) => (
+                  <button
+                    key={control.label}
+                    type="button"
+                    onClick={() => setTimeControl(control)}
+                    aria-pressed={timeControl.label === control.label}
                     className={cn(
-                      "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                      ephemeralRollup ? "translate-x-4" : "translate-x-1"
+                      "min-h-10 rounded-lg border px-3 py-2 text-xs font-mono transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+                      timeControl.label === control.label
+                        ? "border-primary/50 bg-primary/10 text-primary"
+                        : "border-border hover:bg-card"
                     )}
-                  />
-                </button>
+                  >
+                    {control.label} · {control.minutes}m
+                  </button>
+                ))}
               </div>
+            </fieldset>
 
-              <div className="flex items-center justify-between rounded-lg border border-border bg-card/50 p-3">
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium">Prediction Market</span>
-                  <span className="text-xs text-muted-foreground">Allow spectators to predict winner</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEnablePredictions(!enablePredictions)}
-                  className={cn(
-                    "relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary/20",
-                    enablePredictions ? "bg-primary" : "bg-muted"
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                      enablePredictions ? "translate-x-4" : "translate-x-1"
-                    )}
-                  />
-                </button>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 font-heading text-sm font-semibold text-primary-foreground transition-all hover:bg-primary-hover hover:shadow-glow disabled:opacity-50"
-              >
-                {!authenticated ? (
-                  <>
-                    <Sword className="h-4 w-4" />
-                    Create Local Demo
-                  </>
-                ) : (
-                  <>
-                    <Sword className="h-4 w-4" />
-                    {isSubmitting ? "Creating..." : "Create Match"}
-                  </>
-                )}
-              </button>
-            </form>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              aria-busy={isSubmitting}
+              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Sword className="h-4 w-4" aria-hidden="true" />
+              {isSubmitting ? "Creating on Solana…" : "Review and create"}
+            </button>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

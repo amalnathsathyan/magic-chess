@@ -26,7 +26,7 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "Magic Chess — On-Chain Chess on Solana",
   description:
-    "Play chess for real stakes on Solana. Gasless moves powered by MagicBlock Ephemeral Rollups. Wager SOL or SPL tokens in competitive matches.",
+    "Play wagered chess with program-enforced escrow on Solana and low-latency moves powered by MagicBlock Ephemeral Rollups.",
   keywords: ["chess", "solana", "magicblock", "on-chain", "wagering", "crypto"],
   openGraph: {
     title: "Magic Chess",

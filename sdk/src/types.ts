@@ -1,5 +1,22 @@
-// @ts-nocheck
-import type { PublicKey } from "@solana/web3.js";
+import type {
+  PublicKey,
+  Transaction,
+  VersionedTransaction,
+} from "@solana/web3.js";
+
+/** Browser-compatible signing surface used by Anchor and Privy wallets. */
+export interface MagicChessWallet {
+  publicKey: PublicKey;
+  signTransaction<T extends Transaction | VersionedTransaction>(
+    transaction: T
+  ): Promise<T>;
+  signAllTransactions<T extends Transaction | VersionedTransaction>(
+    transactions: T[]
+  ): Promise<T[]>;
+}
+
+/** Anchor BN-compatible input without forcing consumers to install a second BN copy. */
+export type IntegerInput = number | bigint | { toString(radix?: number): string };
 
 // ── Enums (matching the on-chain Rust definitions) ──
 
@@ -73,8 +90,8 @@ export interface ChessMatch {
   players: [PublicKey, PublicKey];
   currentPlayerIdx: number;
   currentTurn: PlayerColor;
-  lastMoveTimestamp: number;
-  moveTimeoutDuration: number;
+  lastMoveTimestamp: bigint;
+  moveTimeoutDuration: bigint;
   gameStatus: GameStatus;
   gameEndReason: GameEndReason | null;
   board: (Piece | null)[][];
@@ -82,14 +99,22 @@ export interface ChessMatch {
   enPassantTarget: EnPassantSquare | null;
   halfmoveClock: number;
   fullmoveNumber: number;
-  positionHistory: number[];
+  positionHistory: bigint[];
   bettingTokenMint: PublicKey;
-  betAmountPlayerOne: number;
-  betAmountPlayerTwo: number;
-  totalPot: number;
+  betAmountPlayerOne: bigint;
+  betAmountPlayerTwo: bigint;
+  totalPot: bigint;
   platformFeeBasisPoints: number;
   platformFeeWallet: PublicKey;
   payoutProcessed: boolean;
+  predictionEnabled: boolean;
+  delegationUid: string;
+  isDelegated: boolean;
+  whiteSessionSigner: PublicKey;
+  whiteSessionExpiresAt: bigint;
+  blackSessionSigner: PublicKey;
+  blackSessionExpiresAt: bigint;
+  activeTaskId: bigint;
   bump: number;
   matchEscrowBump: number;
 }
@@ -110,9 +135,9 @@ export interface CreateMatchParams {
   /** Unique match identifier (max 32 bytes) */
   matchId: string;
   /** Bet amount in raw token units (minimum 1) */
-  betAmount: number;
+  betAmount: IntegerInput;
   /** Seconds allowed per move (0 = no timeout) */
-  moveTimeoutDuration: number;
+  moveTimeoutDuration: IntegerInput;
   /** Platform fee in basis points (max 10000) */
   platformFeeBasisPoints: number;
   /** Wallet that receives platform fees */
@@ -121,6 +146,8 @@ export interface CreateMatchParams {
   bettingTokenMint: PublicKey;
   /** Player 1's associated token account for the betting mint */
   playerTokenAccount: PublicKey;
+  /** Enable the spectator prediction pool for this match. Defaults to false. */
+  predictionEnabled?: boolean;
 }
 
 // ── JoinMatchParams ──
@@ -129,7 +156,7 @@ export interface JoinMatchParams {
   /** ID of the match to join */
   matchId: string;
   /** Bet amount (must match creator's bet) */
-  betAmount: number;
+  betAmount: IntegerInput;
   /** Player 2's associated token account for the match's betting mint */
   playerTokenAccount: PublicKey;
 }
@@ -141,10 +168,10 @@ export interface MatchInfo {
   players: [PublicKey, PublicKey];
   gameStatus: GameStatus;
   bettingTokenMint: PublicKey;
-  betAmountPlayerOne: number;
-  totalPot: number;
-  moveTimeoutDuration: number;
-  lastMoveTimestamp: number;
+  betAmountPlayerOne: bigint;
+  totalPot: bigint;
+  moveTimeoutDuration: bigint;
+  lastMoveTimestamp: bigint;
 }
 
 // ── Prediction Market ──
@@ -152,9 +179,9 @@ export interface MatchInfo {
 export interface PredictionPool {
   matchId: string;
   chessMatch: PublicKey;
-  totalBetOnWhite: number;
-  totalBetOnBlack: number;
-  totalBetOnDraw: number;
+  totalBetOnWhite: bigint;
+  totalBetOnBlack: bigint;
+  totalBetOnDraw: bigint;
   platformFeeBps: number;
   settlementProcessed: boolean;
   bump: number;
@@ -163,7 +190,7 @@ export interface PredictionPool {
 export interface PredictionBet {
   bettor: PublicKey;
   pool: PublicKey;
-  amount: number;
+  amount: bigint;
   predictedOutcome: number; // 0 = White, 1 = Black, 2 = Draw
   claimed: boolean;
   bump: number;

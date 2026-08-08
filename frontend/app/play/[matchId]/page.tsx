@@ -1,718 +1,743 @@
 "use client";
 
-import { use, useState, useCallback, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { motion } from "framer-motion";
-import { ArrowLeft, Eye, User } from "lucide-react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChessBoard } from "@/components/chess/ChessBoard";
-import { ChessClock } from "@/components/chess/ChessClock";
-import { MoveList } from "@/components/chess/MoveList";
-import { CapturedPieces } from "@/components/chess/CapturedPieces";
-import { GameStatus } from "@/components/chess/GameStatus";
-import { PromotionDialog } from "@/components/chess/PromotionDialog";
-import { PlayerCard } from "@/components/chess/PlayerCard";
-import { BoardControls } from "@/components/chess/BoardControls";
-import { TransactionStatus } from "@/components/shared/TransactionStatus";
-import type { Square } from "chess.js";
-import { Chess } from "chess.js";
-import { sounds } from "@/lib/sounds";
-// @ts-ignore
-import { useMatch, useMatchEvents, useMagicChessClient } from "@magic-chess/sdk/react";
-// @ts-ignore
-import { boardToFen } from "@magic-chess/sdk";
-// @ts-ignore
+import {
+  AlertCircle,
+  ArrowLeft,
+  Clock3,
+  ExternalLink,
+  LoaderCircle,
+  RefreshCw,
+  ShieldCheck,
+  User,
+} from "lucide-react";
+import { Chess, type Move as ChessMove, type Square } from "chess.js";
 import { PublicKey } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { useSolanaWallets } from "@privy-io/react-auth/solana";
+import {
+  boardToFen,
+  GameStatus,
+  type ChessMatch,
+  type Piece,
+} from "@magic-chess/sdk";
+import { useMagicChessClient, useMatch } from "@magic-chess/sdk/react";
 import { toast } from "sonner";
-
-const WRAPPED_SOL_MINT = new PublicKey("So11111111111111111111111111111111111111112");
-import { useChessClock } from "@/hooks/useChessClock";
-import { useAtomValue } from "jotai";
-import { shortAddressAtom } from "@/store/wallet";
+import { AuthGate } from "@/components/shared/AuthGate";
+import { TransactionStatus } from "@/components/shared/TransactionStatus";
+import { ChessBoard } from "@/components/chess/ChessBoard";
+import { MoveList } from "@/components/chess/MoveList";
+import { PromotionDialog } from "@/components/chess/PromotionDialog";
+import { BoardControls } from "@/components/chess/BoardControls";
+import { api, type ApiMatchHistory } from "@/lib/api";
+import { shortenAddress } from "@/lib/chess";
+import { sounds } from "@/lib/sounds";
+import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
+import {
+  prepareSettlementAccounts,
+  prepareWagerAccount,
+} from "@/lib/wager";
 import { useMagicBlock } from "@/hooks/useMagicBlock";
-import { useWallets, usePrivy } from "@privy-io/react-auth";
-import { PredictionBars } from "@/components/chess/PredictionBars";
-import { usePredictionPool } from "@/hooks/usePredictionPool";
-import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
+
 interface PlayPageProps {
   params: Promise<{ matchId: string }>;
 }
 
+type TxStatus = "idle" | "submitting" | "confirming" | "success" | "error";
+type PromotionPiece = "q" | "r" | "b" | "n";
+
+const EMPTY_PUBLIC_KEY = PublicKey.default.toBase58();
+
+function normalizeBoardPiece(piece: Piece | null): {
+  pieceType: "Pawn" | "Knight" | "Bishop" | "Rook" | "Queen" | "King";
+  color: "White" | "Black";
+} | null {
+  if (!piece) return null;
+  const names = {
+    pawn: "Pawn",
+    knight: "Knight",
+    bishop: "Bishop",
+    rook: "Rook",
+    queen: "Queen",
+    king: "King",
+  } as const;
+  return {
+    pieceType: names[piece.pieceType],
+    color: piece.color === "white" ? "White" : "Black",
+  };
+}
+
+function matchToFen(match: ChessMatch): string {
+  return boardToFen(
+    match.board.map((row) => row.map(normalizeBoardPiece)),
+    match.currentTurn,
+    match.castlingRights,
+    match.enPassantTarget,
+    match.halfmoveClock,
+    match.fullmoveNumber
+  );
+}
+
+function statusLabel(status: GameStatus): string {
+  const labels: Record<GameStatus, string> = {
+    [GameStatus.WaitingForOpponent]: "Waiting for opponent",
+    [GameStatus.Active]: "In progress",
+    [GameStatus.WhiteWins]: "White won",
+    [GameStatus.BlackWins]: "Black won",
+    [GameStatus.Draw]: "Draw",
+    [GameStatus.Aborted]: "Aborted",
+  };
+  return labels[status];
+}
+
+function formatRemaining(milliseconds: number): string {
+  const seconds = Math.max(0, Math.ceil(milliseconds / 1_000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function isSquare(value: string): value is Square {
+  return /^[a-h][1-8]$/.test(value);
+}
+
+function PlayerRow({
+  address,
+  color,
+  active,
+  connectedAddress,
+}: {
+  address: string | null;
+  color: "White" | "Black";
+  active: boolean;
+  connectedAddress?: string;
+}) {
+  const isYou = Boolean(address && connectedAddress === address);
+  return (
+    <div
+      className={cn(
+        "flex min-h-12 w-full max-w-[560px] items-center justify-between gap-3 rounded-lg border px-3 py-2",
+        active ? "border-primary/40 bg-primary/10" : "border-border bg-card/40"
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary">
+          <User className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs text-muted-foreground">
+            {color}{isYou ? " · You" : ""}
+          </p>
+          <p className="truncate font-mono text-sm font-semibold" title={address ?? undefined}>
+            {address ? shortenAddress(address, 6) : "Waiting for opponent"}
+          </p>
+        </div>
+      </div>
+      {active ? (
+        <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary">
+          To move
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export default function PlayPage({ params }: PlayPageProps) {
   const { matchId } = use(params);
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const client = useMagicChessClient();
+  const { match, loading, error, refetch } = useMatch(matchId);
+  const { wallets } = useSolanaWallets();
+  const wallet = wallets[0];
+  const { submitMove } = useMagicBlock();
 
-  // SDK Hooks
-  let client: any = null;
-  let matchContext: any = { match: null, loading: false, refetch: async () => {} };
-
-  try {
-    client = useMagicChessClient();
-    matchContext = useMatch(matchId);
-  } catch (e) {
-    // Graceful fallback when no provider
-  }
-
-  const { match, loading, refetch } = matchContext;
-  const { pool, loading: poolLoading } = usePredictionPool(matchId);
-
-  const [fen, setFen] = useState("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-  const [moves, setMoves] = useState<string[]>([]);
-  const [currentMoveIndex, setCurrentMoveIndex] = useState(-1);
-  const [lastMove, setLastMove] = useState<{ from: Square; to: Square } | null>(null);
-  const [promotionSquare, setPromotionSquare] = useState<Square | null>(null);
+  const [history, setHistory] = useState<ApiMatchHistory | null>(null);
+  const [historyUnavailable, setHistoryUnavailable] = useState(false);
   const [orientation, setOrientation] = useState<"white" | "black">("white");
-  const [resigned, setResigned] = useState<"white" | "black" | null>(null);
-  const [firstMoveMade, setFirstMoveMade] = useState(false);
+  const [boardWidth, setBoardWidth] = useState(320);
+  const [now, setNow] = useState(() => Date.now());
+  const [optimisticFen, setOptimisticFen] = useState<string | null>(null);
+  const [optimisticMove, setOptimisticMove] = useState<ChessMove | null>(null);
+  const [pendingPromotion, setPendingPromotion] = useState<{
+    from: Square;
+    to: Square;
+  } | null>(null);
+  const [txStatus, setTxStatus] = useState<TxStatus>("idle");
+  const [txSignature, setTxSignature] = useState<string>();
+  const [txError, setTxError] = useState<string>();
 
-  // Read time control from URL search params
-  const timeParam = searchParams.get("time");
-  const incrementParam = searchParams.get("increment");
-  const initialTimeMs = timeParam ? parseInt(timeParam, 10) : 300_000; // 5 min default
-  const incrementMs = incrementParam ? parseInt(incrementParam, 10) : 2000; // 2 sec default
+  const loadHistory = useCallback(async () => {
+    try {
+      setHistory(await api.getMatchHistory(matchId));
+      setHistoryUnavailable(false);
+    } catch {
+      setHistoryUnavailable(true);
+    }
+  }, [matchId]);
 
-  // Wire the chess clock hook
-  const clock = useChessClock({
-    initialTimeMs,
-    incrementMs,
-  });
-
-  // Sync with on-chain match — convert board array to FEN
   useEffect(() => {
-    if (match && match.board && Array.isArray(match.board) && match.board.length === 8) {
-      try {
-        // Convert on-chain board to FEN
-        // Handle both Anchor object-enum format ({pawn:{}}) and string format ("Pawn")
-        const normalizePiece = (p: any) => {
-          if (!p) return null;
-          const pieceType = typeof p.pieceType === 'string'
-            ? p.pieceType
-            : (p.pieceType?.pawn ? 'Pawn' : p.pieceType?.knight ? 'Knight' :
-               p.pieceType?.bishop ? 'Bishop' : p.pieceType?.rook ? 'Rook' :
-               p.pieceType?.queen ? 'Queen' : p.pieceType?.king ? 'King' : null);
-          const color = typeof p.color === 'string'
-            ? p.color
-            : (p.color?.white ? 'White' : p.color?.black ? 'Black' : null);
-          if (!pieceType || !color) return null;
-          return { pieceType, color };
-        };
+    void loadHistory();
+    let polling = false;
+    const intervalId = window.setInterval(() => {
+      if (polling) return;
+      polling = true;
+      void Promise.allSettled([refetch(), loadHistory()]).finally(() => {
+        polling = false;
+      });
+    }, 3_000);
+    return () => window.clearInterval(intervalId);
+  }, [loadHistory, refetch]);
 
-        const board = match.board.map((row: any[]) =>
-          row.map((p: any) => normalizePiece(p))
-        );
+  useEffect(() => {
+    const intervalId = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
-        const turn = match.currentTurn
-          ? (typeof match.currentTurn === 'string'
-              ? match.currentTurn
-              : (match.currentTurn?.white ? 'White' : 'Black'))
-          : 'White';
+  useEffect(() => {
+    const resize = () =>
+      setBoardWidth(Math.min(560, Math.max(280, window.innerWidth - 32)));
+    resize();
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
 
-        const castlingRights = match.castlingRights || {
-          whiteKingside: true, whiteQueenside: true,
-          blackKingside: true, blackQueenside: true,
-        };
-
-        const fen = boardToFen(
-          board,
-          turn,
-          castlingRights,
-          match.enPassantTarget || null,
-          match.halfmoveClock ?? 0,
-          match.fullmoveNumber ?? 1
-        );
-
-        if (fen && fen !== 'invalid') {
-          setFen(fen);
-        }
-      } catch (e) {
-        console.warn("Failed to sync board from chain:", e);
-      }
+  const authoritativeFen = useMemo(() => {
+    if (!match) return null;
+    try {
+      return matchToFen(match);
+    } catch {
+      return null;
     }
   }, [match]);
 
-  // Subscribe to live move events
-  let unsubscribeEvents = () => {};
-  try {
-    unsubscribeEvents = useMatchEvents(matchId, {
-      onMoveMade: (event: any) => {
-        setFen(event.boardFen);
-        if (event.algebraicMove) {
-          setMoves((prev) => [...prev, event.algebraicMove]);
-          setCurrentMoveIndex((prev) => prev + 1);
-        }
-        sounds.playMoveSound(event.algebraicMove || "move");
-      },
-      onGameEnded: (event: any) => {
-        sounds.play("game_end");
-        toast.info(`Game ended! ${event.status}`);
-      }
-    });
-  } catch (e) {}
+  useEffect(() => {
+    setOptimisticFen(null);
+    setOptimisticMove(null);
+  }, [authoritativeFen]);
+
+  const displayFen = optimisticFen ?? authoritativeFen;
+  const whiteAddress = match?.players[0].toBase58() ?? null;
+  const rawBlackAddress = match?.players[1].toBase58() ?? null;
+  const blackAddress = rawBlackAddress === EMPTY_PUBLIC_KEY ? null : rawBlackAddress;
+  const walletAddress = wallet?.address;
+  const playerColor =
+    walletAddress && walletAddress === whiteAddress
+      ? "white"
+      : walletAddress && walletAddress === blackAddress
+        ? "black"
+        : null;
+  const isParticipant = playerColor !== null;
+  const isWaiting = match?.gameStatus === GameStatus.WaitingForOpponent;
+  const isActive = match?.gameStatus === GameStatus.Active;
+  const isFinished = Boolean(match && !isWaiting && !isActive);
+  const isMyTurn = Boolean(
+    match && playerColor && match.currentTurn === playerColor
+  );
+  const isBusy = txStatus === "submitting" || txStatus === "confirming";
+  const canMove = Boolean(
+    isActive && match?.isDelegated && isMyTurn && !isBusy && displayFen
+  );
 
   useEffect(() => {
-    sounds.play("game_start");
-    return () => {
-      sounds.destroy();
-      unsubscribeEvents();
-    };
-  }, [unsubscribeEvents]);
+    if (playerColor) setOrientation(playerColor);
+  }, [playerColor]);
 
-  // Pause clock when game is over or someone resigned
-  useEffect(() => {
-    if (resigned) {
-      clock.pauseClock();
-    }
-  }, [resigned, clock]);
+  const timeoutMilliseconds = match
+    ? Number(match.moveTimeoutDuration) * 1_000
+    : 0;
+  const remainingMilliseconds =
+    match && isActive && timeoutMilliseconds > 0
+      ? Math.max(
+          0,
+          timeoutMilliseconds -
+            (now - Number(match.lastMoveTimestamp) * 1_000)
+        )
+      : null;
+  const canClaimTimeout = Boolean(
+    isParticipant &&
+      isActive &&
+      !isMyTurn &&
+      remainingMilliseconds === 0 &&
+      !isBusy
+  );
 
-  const { submitMove } = useMagicBlock();
-  const [txStatus, setTxStatus] = useState<"idle" | "submitting" | "confirming" | "success" | "error">("idle");
-  const [txSignature, setTxSignature] = useState<string | undefined>();
-  const { authenticated } = usePrivy();
-  const { wallets } = useWallets();
-  const wallet = wallets[0];
+  const historyMoves = history?.moves.map((move) => move.algebraicMove) ?? [];
+  const moves = optimisticMove
+    ? [...historyMoves, optimisticMove.san]
+    : historyMoves;
+  const lastHistoryMove = history?.moves.at(-1);
+  const lastMove = optimisticMove
+    ? { from: optimisticMove.from, to: optimisticMove.to }
+    : lastHistoryMove &&
+        isSquare(lastHistoryMove.from) &&
+        isSquare(lastHistoryMove.to)
+      ? { from: lastHistoryMove.from, to: lastHistoryMove.to }
+      : null;
 
-  const handleJoinMatch = async () => {
-    if (!client || !match) return;
+  const resetTransaction = () => {
+    setTxStatus("idle");
+    setTxSignature(undefined);
+    setTxError(undefined);
+  };
+
+  const runTransaction = async (
+    action: () => Promise<{ signature: string }>,
+    successMessage: string
+  ) => {
+    resetTransaction();
+    setTxStatus("submitting");
     try {
-      setTxStatus("submitting");
-      setTxSignature(undefined);
-      if (!wallet?.address) {
-        toast.error("No wallet found");
-        return;
-      }
-      const walletPubkey = new PublicKey(wallet.address);
-      const playerTokenAccount = getAssociatedTokenAddressSync(
-        WRAPPED_SOL_MINT,
-        walletPubkey
-      );
-
-      const res = await client.joinMatch({
-        matchId,
-        betAmount: match.betAmount,
-        playerTokenAccount,
-      });
-      setTxSignature(res.signature);
+      const result = await action();
+      setTxStatus("confirming");
+      setTxSignature(result.signature);
+      await Promise.allSettled([refetch(), loadHistory()]);
       setTxStatus("success");
-      toast.success("Joined match!");
-      // Sync to backend (fire-and-forget)
-      api.syncPlayerJoined({
-        matchId,
-        playerTwo: wallet.address,
-        betAmountPerPlayer: Number(match.betAmount ?? match.betAmountPlayerTwo ?? 0),
-        signature: res.signature,
-        slot: 0,
-      }).catch(err => console.warn("Backend sync failed:", err));
-      setTimeout(() => setTxStatus("idle"), 5000);
-      refetch();
-    } catch (e) {
-      console.error(e);
+      toast.success(successMessage);
+      return result.signature;
+    } catch (transactionError) {
+      const message =
+        transactionError instanceof Error
+          ? transactionError.message
+          : "Transaction failed.";
+      setTxError(message);
       setTxStatus("error");
-      toast.error("Failed to join match");
-      setTimeout(() => setTxStatus("idle"), 5000);
+      toast.error(message);
+      throw transactionError;
     }
   };
 
-  const handlePieceDrop = useCallback(
-    (sourceSquare: Square, targetSquare: Square): boolean => {
-      // Don't allow moves after resignation or game over
-      if (resigned) return false;
-
-      try {
-        const game = new Chess(fen);
-
-        if (game.isGameOver()) return false;
-
-        // Check for promotion
-        const piece = game.get(sourceSquare as never);
-        if (
-          piece &&
-          piece.type === "p" &&
-          ((piece.color === "w" && targetSquare[1] === "8") ||
-            (piece.color === "b" && targetSquare[1] === "1"))
-        ) {
-          setPromotionSquare(targetSquare);
-          return false;
-        }
-
-        // Enforce turn — only allow the current side to move
-        const turnColor = game.turn() === "w" ? "white" : "black";
-        if (piece && piece.color !== game.turn()) {
-          return false;
-        }
-
-        const move = game.move({
-          from: sourceSquare,
-          to: targetSquare,
-        });
-
-        if (move) {
-          // Start clock on first move
-          if (!firstMoveMade) {
-            setFirstMoveMade(true);
-            clock.startClock();
-          }
-
-          // Optimistic update
-          setFen(game.fen());
-          setMoves((prev) => [...prev, move.san]);
-          setCurrentMoveIndex((prev) => prev + 1);
-          setLastMove({ from: sourceSquare, to: targetSquare });
-
-          // Notify clock: increment the side that just moved and switch
-          clock.onMove(turnColor);
-
-          if (game.isGameOver()) {
-            sounds.play("game_end");
-            clock.pauseClock();
-          } else {
-            sounds.playMoveSound(move.san);
-          }
-
-          // Trigger on-chain move here if client is available
-          if (client && wallet && !matchId.startsWith("demo-")) {
-            setTxStatus("submitting");
-            setTxSignature(undefined);
-            const moveData = move; // capture for sync
-            const gameForSync = new Chess(game.fen());
-            submitMove(matchId, sourceSquare, targetSquare).then(sig => {
-              if (sig) {
-                setTxSignature(sig);
-                setTxStatus("success");
-                toast.success("Move submitted");
-                // Sync move to backend (fire-and-forget)
-                const color = moveData.color === "w" ? "white" : "black";
-                api.syncMoveMade({
-                  matchId,
-                  player: wallet.address,
-                  playerColor: color,
-                  algebraicMove: moveData.san,
-                  fromRow: sourceSquare.charCodeAt(0) - 97,
-                  fromCol: parseInt(sourceSquare[1]) - 1,
-                  toRow: targetSquare.charCodeAt(0) - 97,
-                  toCol: parseInt(targetSquare[1]) - 1,
-                  promotionPiece: moveData.promotion || null,
-                  isCheck: gameForSync.isCheck(),
-                  isCheckmate: gameForSync.isCheckmate(),
-                  isStalemate: gameForSync.isStalemate(),
-                  signature: sig,
-                  slot: 0,
-                }).catch(err => console.warn("Backend sync failed:", err));
-                setTimeout(() => setTxStatus("idle"), 5000);
-              } else {
-                setTxStatus("error");
-              }
-            }).catch(e => {
-              console.error(e);
-              setTxStatus("error");
-              toast.error("Failed to submit move on-chain");
-              setTimeout(() => setTxStatus("idle"), 5000);
-            });
-          }
-
-          return true;
-        }
-
-        return false;
-      } catch {
-        return false;
+  const handleJoin = async () => {
+    if (!match || !wallet || !isWaiting) return;
+    let joined = false;
+    try {
+      const owner = new PublicKey(wallet.address);
+      const amount = match.betAmountPlayerOne;
+      const playerTokenAccount = await prepareWagerAccount(
+        client,
+        owner,
+        match.bettingTokenMint,
+        amount
+      );
+      await runTransaction(
+        () =>
+          client.joinMatch({
+            matchId,
+            betAmount: amount,
+            playerTokenAccount,
+          }),
+        "You joined the match"
+      );
+      joined = true;
+      await runTransaction(
+        () => client.delegateMatch(matchId),
+        "Fast on-chain play is ready"
+      );
+    } catch {
+      if (joined) {
+        toast.info(
+          "The match is joined. Use “Enable fast play” to retry delegation."
+        );
       }
-    },
-    [fen, client, matchId, resigned, firstMoveMade, clock]
-  );
+    } finally {
+      await refetch();
+    }
+  };
 
-  const handlePromotion = useCallback(
-    (piece: "q" | "r" | "b" | "n") => {
-      if (!promotionSquare) return;
+  const handleDelegate = async () => {
+    try {
+      await runTransaction(
+        () => client.delegateMatch(matchId),
+        "Fast on-chain play is ready"
+      );
+    } catch {
+      // TransactionStatus contains the actionable error.
+    }
+  };
 
-      try {
-        const game = new Chess(fen);
-        const legalMoves = game.moves({ verbose: true });
-        const promoMove = legalMoves.find(
-          (m) => m.to === promotionSquare && m.promotion
+  const submitLegalMove = async (
+    source: Square,
+    target: Square,
+    promotion?: PromotionPiece
+  ) => {
+    if (!displayFen || !canMove) return;
+    const chess = new Chess(displayFen);
+    const move = chess.move({ from: source, to: target, promotion });
+    if (!move) return;
+
+    setOptimisticFen(chess.fen());
+    setOptimisticMove(move);
+    resetTransaction();
+    setTxStatus("submitting");
+    try {
+      const signature = await submitMove(matchId, source, target, promotion);
+      setTxSignature(signature);
+      setTxStatus("confirming");
+      await Promise.all([refetch(), loadHistory()]);
+      setTxStatus("success");
+      sounds.playMoveSound(move.san);
+    } catch (moveError) {
+      const message =
+        moveError instanceof Error ? moveError.message : "Move was rejected.";
+      setOptimisticFen(null);
+      setOptimisticMove(null);
+      setTxError(message);
+      setTxStatus("error");
+      toast.error("Move was not accepted", { description: message });
+    }
+  };
+
+  const handlePieceDrop = (source: Square, target: Square): boolean => {
+    if (!displayFen || !canMove) return false;
+    const chess = new Chess(displayFen);
+    const piece = chess.get(source);
+    if (
+      piece?.type === "p" &&
+      ((piece.color === "w" && target[1] === "8") ||
+        (piece.color === "b" && target[1] === "1"))
+    ) {
+      const canPromote = chess
+        .moves({ square: source, verbose: true })
+        .some((move) => move.to === target && move.promotion);
+      if (canPromote) setPendingPromotion({ from: source, to: target });
+      return false;
+    }
+
+    try {
+      const legal = chess.move({ from: source, to: target });
+      if (!legal) return false;
+      void submitLegalMove(source, target);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleResign = async () => {
+    if (!isParticipant || !isActive) return;
+    if (!window.confirm("Resign this on-chain match? This cannot be undone.")) {
+      return;
+    }
+    try {
+      await runTransaction(() => client.resign(matchId), "Resignation confirmed");
+    } catch {
+      // TransactionStatus contains the actionable error.
+    }
+  };
+
+  const handleClaimTimeout = async () => {
+    try {
+      await runTransaction(
+        () => client.claimTimeout(matchId),
+        "Timeout win confirmed"
+      );
+    } catch {
+      // TransactionStatus contains the actionable error.
+    }
+  };
+
+  const handleFinalize = async () => {
+    if (!match || !wallet || !isFinished || match.payoutProcessed) return;
+    try {
+      let baseMatch: ChessMatch | null = match;
+      if (match.isDelegated) {
+        await runTransaction(
+          () => client.undelegateMatch(matchId),
+          "Final state committed to Solana"
         );
 
-        if (promoMove) {
-          const turnColor = game.turn() === "w" ? "white" : "black";
-
-          game.move({ from: promoMove.from as Square, to: promotionSquare, promotion: piece });
-          setFen(game.fen());
-          setMoves((prev) => [...prev, promoMove.san]);
-          setCurrentMoveIndex((prev) => prev + 1);
-          setLastMove({ from: promoMove.from as Square, to: promotionSquare });
-
-          // Notify clock: increment the side that just moved and switch
-          clock.onMove(turnColor);
-
-          if (game.isGameOver()) {
-            sounds.play("game_end");
-            clock.pauseClock();
-          } else {
-            sounds.playMoveSound(promoMove.san);
-          }
-
-          // Trigger on-chain move here if client is available
-          if (client && wallet && !matchId.startsWith("demo-")) {
-             setTxStatus("submitting");
-             setTxSignature(undefined);
-             const promoMoveData = promoMove; // capture for sync
-             const gameForSync = new Chess(game.fen());
-             submitMove(matchId, promoMove.from, promotionSquare, piece).then(sig => {
-               if (sig) {
-                 setTxSignature(sig);
-                 setTxStatus("success");
-                 toast.success("Move submitted");
-                 // Sync move to backend (fire-and-forget)
-                 const color = promoMoveData.color === "w" ? "white" : "black";
-                 api.syncMoveMade({
-                   matchId,
-                   player: wallet.address,
-                   playerColor: color,
-                   algebraicMove: promoMoveData.san,
-                   fromRow: promoMoveData.from.charCodeAt(0) - 97,
-                   fromCol: parseInt(promoMoveData.from[1]) - 1,
-                   toRow: promotionSquare.charCodeAt(0) - 97,
-                   toCol: parseInt(promotionSquare[1]) - 1,
-                   promotionPiece: piece,
-                   isCheck: gameForSync.isCheck(),
-                   isCheckmate: gameForSync.isCheckmate(),
-                   isStalemate: gameForSync.isStalemate(),
-                   signature: sig,
-                   slot: 0,
-                 }).catch(err => console.warn("Backend sync failed:", err));
-                 setTimeout(() => setTxStatus("idle"), 5000);
-               } else {
-                 setTxStatus("error");
-               }
-             }).catch(e => {
-               console.error(e);
-               setTxStatus("error");
-               toast.error("Failed to submit move on-chain");
-               setTimeout(() => setTxStatus("idle"), 5000);
-             });
-          }
-        }
-      } catch {
-        // Invalid move
-      }
-
-      setPromotionSquare(null);
-    },
-    [fen, promotionSquare, client, matchId, clock]
-  );
-
-  // Determine game result
-  const game = new Chess(fen);
-  const isGameOver = game.isGameOver() || resigned !== null;
-  const turn = game.turn();
-
-  let result: "in_progress" | "checkmate" | "stalemate" | "draw" | "resign" = "in_progress";
-  let winner: "white" | "black" | null = null;
-
-  if (resigned) {
-    result = "resign";
-    winner = resigned === "white" ? "black" : "white";
-  } else if (game.isCheckmate()) {
-    result = "checkmate";
-    winner = turn === "w" ? "black" : "white";
-  } else if (game.isStalemate()) {
-    result = "stalemate";
-  } else if (game.isDraw()) {
-    result = "draw";
-  }
-
-  // Calculate captured pieces
-  const calculateCaptured = () => {
-    const startCounts: Record<string, number> = {
-      p: 8, n: 2, b: 2, r: 2, q: 1,
-      P: 8, N: 2, B: 2, R: 2, Q: 1,
-    };
-    const board = game.board();
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        const piece = board[r][c];
-        if (piece) {
-          const char = piece.color === 'w' ? piece.type.toUpperCase() : piece.type;
-          if (startCounts[char] !== undefined) startCounts[char]--;
+        baseMatch = null;
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          baseMatch = await client.getMatch(matchId);
+          if (baseMatch && !baseMatch.isDelegated) break;
+          await new Promise((resolve) => window.setTimeout(resolve, 1_000));
         }
       }
-    }
-
-    const wCaptured: string[] = []; // Black pieces captured by White
-    const bCaptured: string[] = []; // White pieces captured by Black
-
-    Object.entries(startCounts).forEach(([char, count]) => {
-      for (let i = 0; i < count; i++) {
-        if (char === char.toLowerCase()) {
-          wCaptured.push(char); // Black piece
-        } else {
-          bCaptured.push(char.toLowerCase()); // White piece
-        }
+      if (!baseMatch || baseMatch.isDelegated) {
+        throw new Error(
+          "The final state is still settling. Refresh shortly to process the payout."
+        );
       }
-    });
-    return { wCaptured, bCaptured };
-  };
 
-  const { wCaptured, bCaptured } = calculateCaptured();
-
-  const shortAddress = useAtomValue(shortAddressAtom);
-
-  // Build player labels from on-chain match data when available
-  const getPlayerLabel = (side: "white" | "black"): string => {
-    const sideLabel = side === "white" ? "White" : "Black";
-    // Try to get real pubkey from match data
-    let playerPubkey: string | null = null;
-    if (match) {
-      // SDK match format: players[0] = white, players[1] = black
-      if (match.players && Array.isArray(match.players) && match.players.length === 2) {
-        const idx = side === "white" ? 0 : 1;
-        const pk = match.players[idx];
-        if (pk) {
-          playerPubkey = typeof pk === 'string' ? pk : pk.toBase58?.() ?? String(pk);
-        }
+      const payer = new PublicKey(wallet.address);
+      if (!payer.equals(baseMatch.players[0]) && !payer.equals(baseMatch.players[1])) {
+        throw new Error("Only a match player can finalize this game.");
       }
-      // Alternative: playerOne/playerTwo format
-      if (!playerPubkey && match[side === "white" ? "playerOne" : "playerTwo"]) {
-        const pk = match[side === "white" ? "playerOne" : "playerTwo"];
-        playerPubkey = typeof pk === 'string' ? pk : pk?.toBase58?.() ?? String(pk);
-      }
+      const [playerOneAta, playerTwoAta, platformFeeAta] =
+        await prepareSettlementAccounts(
+          client,
+          payer,
+          baseMatch.bettingTokenMint,
+          [
+            baseMatch.players[0],
+            baseMatch.players[1],
+            baseMatch.platformFeeWallet,
+          ]
+        );
+      await runTransaction(
+        () =>
+          client.settleMatch(
+            matchId,
+            playerOneAta,
+            playerTwoAta,
+            platformFeeAta
+          ),
+        "Payout settled on Solana"
+      );
+    } catch {
+      await refetch();
     }
-
-    if (playerPubkey) {
-      const short = playerPubkey.slice(0, 4) + "..." + playerPubkey.slice(-4);
-      // Check if this is the connected wallet
-      const isYou = wallet?.address && playerPubkey === wallet.address;
-      return isYou ? `You (${sideLabel})` : `${short} (${sideLabel})`;
-    }
-
-    // Fallback for demo mode
-    if (side === orientation) {
-      if (shortAddress) return `${shortAddress} (${sideLabel})`;
-      return `You (${sideLabel})`;
-    }
-    return `Opponent (${sideLabel})`;
-  };
-
-  const calculateMaterialAdvantage = (side: "white" | "black") => {
-    const values: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9 };
-    let white = 0, black = 0;
-    const board = game.board();
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        const piece = board[r][c];
-        if (piece) {
-          if (piece.color === 'w') white += values[piece.type] || 0;
-          else black += values[piece.type] || 0;
-        }
-      }
-    }
-    const diff = side === "white" ? white - black : black - white;
-    return diff > 0 ? `+${diff}` : null;
-  };
-
-  const renderPlayerHeader = (side: "white" | "black") => {
-    const isWhite = side === "white";
-    const isActive = turn === (isWhite ? "w" : "b") && !isGameOver;
-    const time = isWhite ? clock.whiteTime : clock.blackTime;
-    const adv = calculateMaterialAdvantage(side);
-    
-    return (
-      <div className="flex w-full max-w-[560px] items-center justify-between mb-3 mt-3">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary border border-border overflow-hidden">
-             <User className="h-5 w-5 text-muted-foreground" />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm">{getPlayerLabel(side)}</span>
-            {adv && <span className="text-xs font-medium text-emerald-500">{adv}</span>}
-          </div>
-        </div>
-        <ChessClock time={time} isActive={isActive} />
-      </div>
-    );
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <GameStatus
-        result={result}
-        winner={winner}
-        turn={turn === "w" ? "white" : "black"}
-      />
-
-      {/* Top bar */}
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push("/arena")}
-              className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to Arena
-            </button>
-            <span className="hidden text-sm text-muted sm:inline">|</span>
-            <span className="hidden font-mono text-xs text-muted sm:inline">
-              Match ID: {matchId}
-            </span>
-            {match && (
-              <>
-                <span className="hidden text-sm text-muted sm:inline">|</span>
-                <span className="hidden font-mono text-xs text-muted sm:inline">
-                  Wager: {Number(match.betAmount) / 1e9} per player
-                </span>
-                <span className="hidden text-sm text-muted sm:inline">|</span>
-                <span className="hidden font-mono text-xs text-muted sm:inline">
-                  Mint: {match.bettingTokenMint?.toBase58() === "11111111111111111111111111111111" ? "Native SOL" : (match.bettingTokenMint?.toBase58().slice(0, 4) + "..." + match.bettingTokenMint?.toBase58().slice(-4))}
-                </span>
-              </>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
+    <AuthGate>
+      <div className="min-h-screen bg-background">
+        <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
             <Link
-              href={`/play/${matchId}/spectate`}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              href="/arena"
+              className="inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
             >
-              <Eye className="h-3.5 w-3.5" />
-              Spectate
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Arena
             </Link>
-            <div className="absolute top-16 right-4 z-50">
-               <TransactionStatus status={txStatus} signature={txSignature} onDismiss={() => setTxStatus("idle")} />
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Game layout */}
-      <div className="mx-auto max-w-6xl px-4 py-6 relative">
-        {match?.state?.joinable && authenticated && wallet?.address !== match?.playerOne?.toBase58() && (
-          <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/50 backdrop-blur-sm">
-            <div className="glass-card p-6 flex flex-col items-center gap-4 text-center">
-              <h2 className="font-heading text-xl font-bold">Match is Open</h2>
-              <p className="text-muted-foreground text-sm max-w-sm">
-                Wager: {Number(match.betAmount) / 1e9} SOL. Join to play as Black.
-              </p>
-              <button
-                onClick={handleJoinMatch}
-                disabled={txStatus === "submitting" || txStatus === "confirming"}
-                className="bg-primary text-primary-foreground px-6 py-2 rounded-lg font-semibold hover:bg-primary/90 disabled:opacity-50"
-              >
-                {txStatus === "submitting" || txStatus === "confirming" ? "Joining..." : "Join Match"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="grid gap-6 lg:grid-cols-[1fr_320px]"
-        >
-          {/* Left column: board */}
-          <div className="flex flex-col items-center justify-center w-full">
-            {/* Top Player */}
-            {renderPlayerHeader(orientation === "white" ? "black" : "white")}
-
-            {/* Chess board */}
-            <div className="relative w-full max-w-[560px]">
-              <ChessBoard
-                fen={fen}
-                orientation={orientation}
-                boardWidth={560}
-                onPieceDrop={handlePieceDrop}
-                lastMove={lastMove}
-                arePiecesDraggable={!isGameOver}
+            <button
+              type="button"
+              onClick={() => void Promise.allSettled([refetch(), loadHistory()])}
+              disabled={loading}
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+            >
+              <RefreshCw
+                className={cn("h-3.5 w-3.5", loading && "animate-spin")}
+                aria-hidden="true"
               />
-              {promotionSquare && (
-                <PromotionDialog
-                  isOpen={!!promotionSquare}
-                  color={turn === "w" ? "white" : "black"}
-                  onSelect={handlePromotion}
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-                />
-              )}
-            </div>
-
-            {/* Board Controls */}
-            <BoardControls
-              onFlipBoard={() => setOrientation((prev) => prev === "white" ? "black" : "white")}
-              onOfferDraw={() => {}}
-              onResign={() => {
-                if (!isGameOver) {
-                  const currentTurn = turn === "w" ? "white" : "black";
-                  setResigned(currentTurn);
-                  // Submit resignation on-chain if not demo mode
-                  if (client && wallet && !matchId.startsWith("demo-")) {
-                    client.resign(matchId).then(() => {
-                      toast.success("Resigned — game ended on-chain");
-                      refetch();
-                    }).catch((e: any) => {
-                      console.error("Resign transaction failed:", e);
-                      toast.error("Failed to resign on-chain");
-                    });
-                  }
-                }
-              }}
-              className="w-full max-w-[560px] mt-4 mb-2"
-            />
-
-            {/* Bottom Player */}
-            {renderPlayerHeader(orientation === "white" ? "white" : "black")}
+              Refresh
+            </button>
           </div>
+        </header>
 
-          {/* Right column: move list & predictions */}
-          <div className="flex flex-col gap-4">
-            <MoveList
-              moves={moves}
-              fen={fen}
-              currentMoveIndex={currentMoveIndex}
-              className="flex-1 min-h-[400px]"
-            />
+        <main className="mx-auto max-w-6xl px-4 py-6">
+          {loading && !match ? (
+            <div className="grid gap-6 lg:grid-cols-[1fr_320px]" aria-label="Loading match">
+              <div className="mx-auto h-[min(560px,calc(100vw-2rem))] w-full max-w-[560px] animate-pulse rounded-xl bg-card" />
+              <div className="h-64 animate-pulse rounded-xl bg-card" />
+            </div>
+          ) : !match ? (
+            <div className="glass-card mx-auto max-w-xl p-6">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="h-5 w-5" aria-hidden="true" />
+                <h1 className="font-heading text-lg font-semibold">Match unavailable</h1>
+              </div>
+              <p className="mt-3 text-sm text-muted-foreground">
+                {error?.message || "No on-chain match was found for this identifier."}
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+              <section className="flex flex-col items-center gap-3" aria-label="Chess board">
+                <PlayerRow
+                  address={orientation === "white" ? blackAddress : whiteAddress}
+                  color={orientation === "white" ? "Black" : "White"}
+                  active={
+                    isActive &&
+                    match.currentTurn ===
+                      (orientation === "white" ? "black" : "white")
+                  }
+                  connectedAddress={walletAddress}
+                />
 
-            {/* Prediction Market Panel */}
-            {match && (
-              <div className="glass-card p-4 flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-heading text-sm font-bold text-primary">Prediction Market</h3>
-                  <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">Live</span>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Predict the winner of this match. Parimutuel pool splits the total wagered amount among the winning predictors.
-                </div>
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  <button className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/50 p-2 hover:bg-card hover:border-primary/50 transition-colors">
-                    <span className="font-semibold text-sm">White</span>
-                    <span className="text-xs text-muted-foreground mt-1">
-                      Pool: {pool ? (pool.totalBetOnWhite / 1e9).toFixed(2) : 0} SOL
-                    </span>
-                  </button>
-                  <button className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/50 p-2 hover:bg-card hover:border-accent/50 transition-colors">
-                    <span className="font-semibold text-sm">Draw</span>
-                    <span className="text-xs text-muted-foreground mt-1">
-                      Pool: {pool ? (pool.totalBetOnDraw / 1e9).toFixed(2) : 0} SOL
-                    </span>
-                  </button>
-                  <button className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/50 p-2 hover:bg-card hover:border-primary/50 transition-colors">
-                    <span className="font-semibold text-sm">Black</span>
-                    <span className="text-xs text-muted-foreground mt-1">
-                      Pool: {pool ? (pool.totalBetOnBlack / 1e9).toFixed(2) : 0} SOL
-                    </span>
-                  </button>
-                </div>
-                
-                <div className="mt-4">
-                  <PredictionBars 
-                    poolWhite={pool?.totalBetOnWhite || 0}
-                    poolBlack={pool?.totalBetOnBlack || 0}
-                    poolDraw={pool?.totalBetOnDraw || 0}
+                <div className="relative">
+                  {displayFen ? (
+                    <ChessBoard
+                      fen={displayFen}
+                      orientation={orientation}
+                      boardWidth={boardWidth}
+                      arePiecesDraggable={canMove}
+                      onPieceDrop={handlePieceDrop}
+                      lastMove={lastMove}
+                    />
+                  ) : (
+                    <div className="glass-card flex h-80 w-[min(560px,calc(100vw-2rem))] items-center justify-center text-sm text-destructive">
+                      The on-chain board could not be decoded.
+                    </div>
+                  )}
+                  <PromotionDialog
+                    isOpen={pendingPromotion !== null}
+                    color={playerColor ?? "white"}
+                    onSelect={(piece) => {
+                      if (pendingPromotion) {
+                        void submitLegalMove(
+                          pendingPromotion.from,
+                          pendingPromotion.to,
+                          piece
+                        );
+                      }
+                      setPendingPromotion(null);
+                    }}
+                    className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
                   />
                 </div>
-              </div>
-            )}
-          </div>
-        </motion.div>
+
+                <PlayerRow
+                  address={orientation === "white" ? whiteAddress : blackAddress}
+                  color={orientation === "white" ? "White" : "Black"}
+                  active={
+                    isActive &&
+                    match.currentTurn ===
+                      (orientation === "white" ? "white" : "black")
+                  }
+                  connectedAddress={walletAddress}
+                />
+
+                <BoardControls
+                  onFlipBoard={() =>
+                    setOrientation((current) =>
+                      current === "white" ? "black" : "white"
+                    )
+                  }
+                  onResign={handleResign}
+                  canResign={isParticipant && isActive && !isBusy}
+                />
+              </section>
+
+              <aside className="flex min-h-0 flex-col gap-4">
+                <section className="glass-card p-4" aria-labelledby="match-heading">
+                  <div className="flex items-center justify-between gap-3">
+                    <h1 id="match-heading" className="truncate font-heading text-sm font-semibold">
+                      #{match.matchId}
+                    </h1>
+                    <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                      {statusLabel(match.gameStatus)}
+                    </span>
+                  </div>
+                  <dl className="mt-4 space-y-3 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Wager</dt>
+                      <dd className="font-mono font-medium">
+                        {formatTokenAmount(match.betAmountPlayerOne)} {solanaConfig.wagerSymbol}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Total pot</dt>
+                      <dd className="font-mono font-medium">
+                        {formatTokenAmount(match.totalPot)} {solanaConfig.wagerSymbol}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="inline-flex items-center gap-1.5 text-muted-foreground">
+                        <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+                        Move timer
+                      </dt>
+                      <dd className="font-mono font-medium tabular-nums">
+                        {remainingMilliseconds !== null
+                          ? formatRemaining(remainingMilliseconds)
+                          : timeoutMilliseconds > 0
+                            ? `${timeoutMilliseconds / 1_000}s / move`
+                            : "No timer"}
+                      </dd>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <dt className="text-muted-foreground">Runtime</dt>
+                      <dd className="inline-flex items-center gap-1.5 font-medium">
+                        <ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                        {match.isDelegated ? "MagicBlock ER" : "Solana base"}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  {isWaiting && walletAddress !== whiteAddress ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleJoin()}
+                      disabled={isBusy}
+                      className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                    >
+                      {isBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                      Join for {formatTokenAmount(match.betAmountPlayerOne)} {solanaConfig.wagerSymbol}
+                    </button>
+                  ) : null}
+
+                  {isWaiting && walletAddress === whiteAddress ? (
+                    <p className="mt-5 rounded-lg border border-border bg-card/50 p-3 text-sm text-muted-foreground">
+                      Your match is live on Solana. Share this match ID with an opponent.
+                    </p>
+                  ) : null}
+
+                  {isActive && isParticipant && !match.isDelegated ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleDelegate()}
+                      disabled={isBusy}
+                      className="mt-5 min-h-11 w-full rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                    >
+                      Enable fast play
+                    </button>
+                  ) : null}
+
+                  {canClaimTimeout ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleClaimTimeout()}
+                      className="mt-3 min-h-11 w-full rounded-lg border border-primary/40 px-4 text-sm font-semibold text-primary focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      Claim timeout win
+                    </button>
+                  ) : null}
+
+                  {isFinished && isParticipant && !match.payoutProcessed ? (
+                    <button
+                      type="button"
+                      onClick={() => void handleFinalize()}
+                      disabled={isBusy}
+                      className="mt-5 min-h-11 w-full rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                    >
+                      {match.isDelegated ? "Finalize and settle payout" : "Settle payout"}
+                    </button>
+                  ) : null}
+
+                  {isFinished && !isParticipant && !match.payoutProcessed ? (
+                    <p className="mt-4 text-xs text-muted-foreground">
+                      A match player must submit the final payout settlement.
+                    </p>
+                  ) : null}
+
+                  {match.payoutProcessed ? (
+                    <p className="mt-4 rounded-lg bg-primary/10 p-3 text-sm text-primary">
+                      Payout settled on Solana.
+                    </p>
+                  ) : null}
+
+                  {!isParticipant && !isWaiting ? (
+                    <Link
+                      href={`/play/${matchId}/spectate`}
+                      className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      Open spectator mode
+                      <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  ) : null}
+                </section>
+
+                <TransactionStatus
+                  status={txStatus}
+                  signature={txSignature}
+                  error={txError}
+                  onDismiss={resetTransaction}
+                />
+
+                <MoveList
+                  moves={moves}
+                  fen={displayFen ?? undefined}
+                  currentMoveIndex={moves.length - 1}
+                  className="min-h-56"
+                />
+                {historyUnavailable ? (
+                  <p className="text-xs text-muted-foreground">
+                    Move notation is unavailable because the read-only indexer is not configured. The board still comes directly from the authoritative on-chain account.
+                  </p>
+                ) : null}
+              </aside>
+            </div>
+          )}
+        </main>
       </div>
-    </div>
+    </AuthGate>
   );
 }

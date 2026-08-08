@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   createContext,
   useCallback,
@@ -9,11 +8,15 @@ import {
 } from "react";
 import type { FC, ReactNode } from "react";
 import type { PublicKey } from "@solana/web3.js";
-import type { AnchorWallet, Program } from "@anchor-lang/core";
+import type { Program } from "@anchor-lang/core";
 
 import type { MagicChess } from "../idl/magic_chess";
 import { MagicChessClient } from "../client";
-import type { ChessMatch, MatchInfo, MoveMadeEvent } from "../types";
+import type {
+  ChessMatch,
+  MagicChessWallet,
+  MatchInfo,
+} from "../types";
 import type { MoveResult } from "../types";
 
 // ── Context ────────────────────────────────────────────────────
@@ -31,12 +34,13 @@ const MagicChessContext = createContext<MagicChessContextValue>({
  */
 export const MagicChessProvider: FC<{
   program: Program<MagicChess>;
-  wallet?: AnchorWallet;
+  wallet?: MagicChessWallet;
+  routerEndpoint?: string;
   children: ReactNode;
-}> = ({ program, wallet, children }) => {
+}> = ({ program, wallet, routerEndpoint, children }) => {
   const client = useMemo(
-    () => new MagicChessClient(program, wallet),
-    [program, wallet]
+    () => new MagicChessClient(program, wallet, { routerEndpoint }),
+    [program, routerEndpoint, wallet]
   );
 
   return (
@@ -53,7 +57,8 @@ export const MagicChessProvider: FC<{
  */
 export function useMagicChessClient(
   program?: Program<MagicChess>,
-  wallet?: AnchorWallet
+  wallet?: MagicChessWallet,
+  routerEndpoint?: string
 ): MagicChessClient {
   const ctx = useContext(MagicChessContext);
 
@@ -67,7 +72,10 @@ export function useMagicChessClient(
     );
   }
 
-  return useMemo(() => new MagicChessClient(program, wallet), [program, wallet]);
+  return useMemo(
+    () => new MagicChessClient(program, wallet, { routerEndpoint }),
+    [program, routerEndpoint, wallet]
+  );
 }
 
 // ── Hook: useMatch ─────────────────────────────────────────────
@@ -185,66 +193,6 @@ export function usePlayerMatches(
   }, [fetch]);
 
   return { matches, loading, error };
-}
-
-// ── Hook: useMatchEvents ───────────────────────────────────────
-
-export interface MatchEventCallbacks {
-  onMoveMade?: (event: MoveMadeEvent) => void;
-  onGameEnded?: (event: {
-    matchId: string;
-    status: string;
-    winner: string | null;
-    reason: string;
-  }) => void;
-  onPlayerJoined?: (event: {
-    matchId: string;
-    playerOne: PublicKey;
-    playerTwo: PublicKey;
-  }) => void;
-}
-
-/**
- * Subscribe to real-time events for a given match via the program's event listener.
- * Returns a cleanup function to unsubscribe.
- *
- * NOTE: Event streaming depends on the Anchor provider's connection supporting
- * `onLogs` or equivalent. For production, consider using Helius webhooks or a
- * custom WebSocket relay.
- */
-export function useMatchEvents(
-  matchId: string | null,
-  callbacks: MatchEventCallbacks
-): () => void {
-  const { client } = useContext(MagicChessContext);
-
-  useEffect(() => {
-    if (!client || !matchId) return;
-
-    // Anchor v1.x Program exposes an event listener via addEventListener
-    const program = client.program as any;
-    let listenerId: number | undefined;
-
-    if (typeof program.addEventListener === "function") {
-      listenerId = program.addEventListener(
-        "moveMadeEvent",
-        (event: any) => {
-          if (event.matchId === matchId || event.data?.matchId === matchId) {
-            callbacks.onMoveMade?.(event.data ?? event);
-          }
-        }
-      );
-    }
-
-    return () => {
-      if (listenerId !== undefined) {
-        program.removeEventListener?.(listenerId);
-      }
-    };
-  }, [client, matchId, callbacks]);
-
-  // Return a no-op cleanup as a secondary escape hatch
-  return () => {};
 }
 
 // ── Re-export commonly used types ──────────────────────────────

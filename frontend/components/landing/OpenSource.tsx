@@ -13,7 +13,7 @@ const features = [
   {
     icon: Terminal,
     title: "TypeScript SDK",
-    description: "A comprehensive, fully typed `@magic-chess/sdk` providing React hooks, PDA helpers, and MagicBlock integration helpers out of the box.",
+    description: "A generated-IDL-backed `@magic-chess/sdk` provides React hooks, PDA helpers, account normalization, and authoritative MagicBlock routing.",
   },
   {
     icon: BookOpen,

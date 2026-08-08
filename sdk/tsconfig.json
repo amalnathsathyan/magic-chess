@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "resolveJsonModule": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -10,7 +11,7 @@
     "outDir": "dist",
     "rootDir": "src",
     "jsx": "react-jsx",
-    "allowSyntheticDefaultImits": true,
+    "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true
   },
   "include": ["src"],
