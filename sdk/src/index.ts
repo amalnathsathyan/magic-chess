@@ -49,3 +49,9 @@ export {
   getERConnection,
 } from "./magicblock";
 export type { DelegationStatus } from "./magicblock";
+
+// FEN utilities
+export { boardToFen, fenToBoard } from "./utils/fen";
+export type {
+  FenState,
+} from "./utils/fen";

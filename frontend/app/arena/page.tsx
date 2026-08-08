@@ -3,69 +3,19 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Filter, Plus, Search } from "lucide-react";
-import { useAtom, useAtomValue } from "jotai";
+import { useAtom, useAtomValue, useSetAtom } from "jotai";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
 import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
-import { 
-  lobbyFilterAtom, 
-  lobbyWagerFilterAtom, 
-  lobbyTimeFilterAtom, 
-  lobbySearchAtom 
+import {
+  lobbyFilterAtom,
+  lobbyWagerFilterAtom,
+  lobbyTimeFilterAtom,
+  lobbySearchAtom,
+  lobbyMatchesAtom,
+  refreshLobbyAtom,
+  lobbyLoadingAtom,
 } from "@/store/lobby";
 import { walletAddressAtom } from "@/store/wallet";
-
-// Mock match data for scaffolding
-const MOCK_MATCHES: MatchCardData[] = [
-  {
-    matchId: "match_abc123xyz",
-    whitePlayer: "7xQW...9mK2",
-    wagerAmount: 0,
-    wagerToken: "SOL",
-    timeControl: "1+0",
-    status: "open",
-    createdAt: Date.now() - 120_000,
-  },
-  {
-    matchId: "match_def456uvw",
-    whitePlayer: "3bRT...1nL8",
-    blackPlayer: "9yHJ...4pQ7",
-    wagerAmount: 0.1,
-    wagerToken: "SOL",
-    timeControl: "3+2",
-    status: "in_progress",
-    createdAt: Date.now() - 600_000,
-  },
-  {
-    matchId: "match_ghi789rst",
-    whitePlayer: "5mNP...2kF4",
-    wagerAmount: 0.5,
-    wagerToken: "SOL",
-    timeControl: "10+0",
-    status: "open",
-    createdAt: Date.now() - 60_000,
-  },
-  {
-    matchId: "match_jkl012mno",
-    whitePlayer: "8cDW...6vG3",
-    blackPlayer: "2fHJ...7tY5",
-    wagerAmount: 1.0,
-    wagerToken: "SOL",
-    timeControl: "3+2",
-    status: "in_progress",
-    createdAt: Date.now() - 1200_000,
-  },
-  {
-    matchId: "match_pqr345stu",
-    whitePlayer: "4bNX...3mL1",
-    blackPlayer: "6kTP...9wR8",
-    wagerAmount: 0,
-    wagerToken: "SOL",
-    timeControl: "10+0",
-    status: "completed",
-    createdAt: Date.now() - 3600_000,
-  },
-];
-
 import { useMatches } from "@magic-chess/sdk/react";
 
 export default function ArenaPage() {
@@ -77,8 +27,34 @@ export default function ArenaPage() {
   const [localMatches, setLocalMatches] = useState<MatchCardData[]>([]);
   const walletAddress = useAtomValue(walletAddressAtom);
 
-  const { matches: liveMatches, loading } = useMatches();
+  // Backend-indexed matches (from lobby store)
+  const lobbyMatches = useAtomValue(lobbyMatchesAtom);
+  const lobbyLoading = useAtomValue(lobbyLoadingAtom);
+  const refreshLobby = useSetAtom(refreshLobbyAtom);
 
+  // On-chain SDK matches
+  const { matches: liveMatches, loading: sdkLoading } = useMatches();
+
+  // Refresh lobby on mount
+  useEffect(() => {
+    refreshLobby();
+  }, [refreshLobby]);
+
+  // Map backend lobby matches to card data
+  const backendMatchCards: MatchCardData[] = lobbyMatches.map((m) => ({
+    matchId: m.matchId,
+    whitePlayer: m.whitePlayer,
+    blackPlayer: m.blackPlayer,
+    wagerAmount: m.wagerAmount,
+    wagerToken: m.wagerToken,
+    timeControl: m.timeControl,
+    status: m.status,
+    createdAt: m.createdAt,
+    boardFen: m.boardFen,
+    moveCount: m.moveCount,
+  }));
+
+  // Map on-chain SDK matches to card data
   const sdkMatches: MatchCardData[] = (liveMatches || []).map((m: any) => ({
     matchId: m.matchId,
     whitePlayer: m.playerOne?.toBase58() || "Unknown",
@@ -87,10 +63,14 @@ export default function ArenaPage() {
     wagerToken: "SOL",
     timeControl: m.moveTimeoutDuration ? `${m.moveTimeoutDuration / 60}+0` : "Unknown",
     status: m.state?.joinable ? "open" : (m.state?.inProgress ? "in_progress" : "completed"),
-    createdAt: Date.now(), // Fallback if no creation time
+    createdAt: Date.now(),
   }));
 
-  const allMatches = [...localMatches, ...sdkMatches];
+  // Deduplicate: SDK matches take precedence over backend matches with same ID
+  const sdkMatchIds = new Set(sdkMatches.map(m => m.matchId));
+  const uniqueBackend = backendMatchCards.filter(m => !sdkMatchIds.has(m.matchId));
+  const allMatches = [...localMatches, ...sdkMatches, ...uniqueBackend];
+  const loading = sdkLoading || lobbyLoading;
 
   const filteredMatches = allMatches.filter((m) => {
     if (filter === "open" && m.status !== "open") return false;

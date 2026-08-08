@@ -20,8 +20,13 @@ import { sounds } from "@/lib/sounds";
 // @ts-ignore
 import { useMatch, useMatchEvents, useMagicChessClient } from "@magic-chess/sdk/react";
 // @ts-ignore
+import { boardToFen } from "@magic-chess/sdk";
+// @ts-ignore
 import { PublicKey } from "@solana/web3.js";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { toast } from "sonner";
+
+const WRAPPED_SOL_MINT = new PublicKey("So11111111111111111111111111111111111111112");
 import { useChessClock } from "@/hooks/useChessClock";
 import { useAtomValue } from "jotai";
 import { shortAddressAtom } from "@/store/wallet";
@@ -29,6 +34,7 @@ import { useMagicBlock } from "@/hooks/useMagicBlock";
 import { useWallets, usePrivy } from "@privy-io/react-auth";
 import { PredictionBars } from "@/components/chess/PredictionBars";
 import { usePredictionPool } from "@/hooks/usePredictionPool";
+import { api } from "@/lib/api";
 interface PlayPageProps {
   params: Promise<{ matchId: string }>;
 }
@@ -73,12 +79,56 @@ export default function PlayPage({ params }: PlayPageProps) {
     incrementMs,
   });
 
-  // Sync with on-chain match
+  // Sync with on-chain match — convert board array to FEN
   useEffect(() => {
-    if (match) {
-      // Very basic sync - if there's a custom FEN stored we'd set it
-      // But typically we parse moves to get FEN or just rely on events
-      // For this scaffold, we'll wait for events or initial FEN if provided.
+    if (match && match.board && Array.isArray(match.board) && match.board.length === 8) {
+      try {
+        // Convert on-chain board to FEN
+        // Handle both Anchor object-enum format ({pawn:{}}) and string format ("Pawn")
+        const normalizePiece = (p: any) => {
+          if (!p) return null;
+          const pieceType = typeof p.pieceType === 'string'
+            ? p.pieceType
+            : (p.pieceType?.pawn ? 'Pawn' : p.pieceType?.knight ? 'Knight' :
+               p.pieceType?.bishop ? 'Bishop' : p.pieceType?.rook ? 'Rook' :
+               p.pieceType?.queen ? 'Queen' : p.pieceType?.king ? 'King' : null);
+          const color = typeof p.color === 'string'
+            ? p.color
+            : (p.color?.white ? 'White' : p.color?.black ? 'Black' : null);
+          if (!pieceType || !color) return null;
+          return { pieceType, color };
+        };
+
+        const board = match.board.map((row: any[]) =>
+          row.map((p: any) => normalizePiece(p))
+        );
+
+        const turn = match.currentTurn
+          ? (typeof match.currentTurn === 'string'
+              ? match.currentTurn
+              : (match.currentTurn?.white ? 'White' : 'Black'))
+          : 'White';
+
+        const castlingRights = match.castlingRights || {
+          whiteKingside: true, whiteQueenside: true,
+          blackKingside: true, blackQueenside: true,
+        };
+
+        const fen = boardToFen(
+          board,
+          turn,
+          castlingRights,
+          match.enPassantTarget || null,
+          match.halfmoveClock ?? 0,
+          match.fullmoveNumber ?? 1
+        );
+
+        if (fen && fen !== 'invalid') {
+          setFen(fen);
+        }
+      } catch (e) {
+        console.warn("Failed to sync board from chain:", e);
+      }
     }
   }, [match]);
 
@@ -128,8 +178,15 @@ export default function PlayPage({ params }: PlayPageProps) {
     try {
       setTxStatus("submitting");
       setTxSignature(undefined);
-      const dummyPubkey = new PublicKey("11111111111111111111111111111111");
-      const playerTokenAccount = wallet?.address ? new PublicKey(wallet.address) : dummyPubkey;
+      if (!wallet?.address) {
+        toast.error("No wallet found");
+        return;
+      }
+      const walletPubkey = new PublicKey(wallet.address);
+      const playerTokenAccount = getAssociatedTokenAddressSync(
+        WRAPPED_SOL_MINT,
+        walletPubkey
+      );
 
       const res = await client.joinMatch({
         matchId,
@@ -139,6 +196,14 @@ export default function PlayPage({ params }: PlayPageProps) {
       setTxSignature(res.signature);
       setTxStatus("success");
       toast.success("Joined match!");
+      // Sync to backend (fire-and-forget)
+      api.syncPlayerJoined({
+        matchId,
+        playerTwo: wallet.address,
+        betAmountPerPlayer: Number(match.betAmount ?? match.betAmountPlayerTwo ?? 0),
+        signature: res.signature,
+        slot: 0,
+      }).catch(err => console.warn("Backend sync failed:", err));
       setTimeout(() => setTxStatus("idle"), 5000);
       refetch();
     } catch (e) {
@@ -209,11 +274,31 @@ export default function PlayPage({ params }: PlayPageProps) {
           if (client && wallet && !matchId.startsWith("demo-")) {
             setTxStatus("submitting");
             setTxSignature(undefined);
+            const moveData = move; // capture for sync
+            const gameForSync = new Chess(game.fen());
             submitMove(matchId, sourceSquare, targetSquare).then(sig => {
               if (sig) {
                 setTxSignature(sig);
                 setTxStatus("success");
                 toast.success("Move submitted");
+                // Sync move to backend (fire-and-forget)
+                const color = moveData.color === "w" ? "white" : "black";
+                api.syncMoveMade({
+                  matchId,
+                  player: wallet.address,
+                  playerColor: color,
+                  algebraicMove: moveData.san,
+                  fromRow: sourceSquare.charCodeAt(0) - 97,
+                  fromCol: parseInt(sourceSquare[1]) - 1,
+                  toRow: targetSquare.charCodeAt(0) - 97,
+                  toCol: parseInt(targetSquare[1]) - 1,
+                  promotionPiece: moveData.promotion || null,
+                  isCheck: gameForSync.isCheck(),
+                  isCheckmate: gameForSync.isCheckmate(),
+                  isStalemate: gameForSync.isStalemate(),
+                  signature: sig,
+                  slot: 0,
+                }).catch(err => console.warn("Backend sync failed:", err));
                 setTimeout(() => setTxStatus("idle"), 5000);
               } else {
                 setTxStatus("error");
@@ -271,11 +356,31 @@ export default function PlayPage({ params }: PlayPageProps) {
           if (client && wallet && !matchId.startsWith("demo-")) {
              setTxStatus("submitting");
              setTxSignature(undefined);
+             const promoMoveData = promoMove; // capture for sync
+             const gameForSync = new Chess(game.fen());
              submitMove(matchId, promoMove.from, promotionSquare, piece).then(sig => {
                if (sig) {
                  setTxSignature(sig);
                  setTxStatus("success");
                  toast.success("Move submitted");
+                 // Sync move to backend (fire-and-forget)
+                 const color = promoMoveData.color === "w" ? "white" : "black";
+                 api.syncMoveMade({
+                   matchId,
+                   player: wallet.address,
+                   playerColor: color,
+                   algebraicMove: promoMoveData.san,
+                   fromRow: promoMoveData.from.charCodeAt(0) - 97,
+                   fromCol: parseInt(promoMoveData.from[1]) - 1,
+                   toRow: promotionSquare.charCodeAt(0) - 97,
+                   toCol: parseInt(promotionSquare[1]) - 1,
+                   promotionPiece: piece,
+                   isCheck: gameForSync.isCheck(),
+                   isCheckmate: gameForSync.isCheckmate(),
+                   isStalemate: gameForSync.isStalemate(),
+                   signature: sig,
+                   slot: 0,
+                 }).catch(err => console.warn("Backend sync failed:", err));
                  setTimeout(() => setTxStatus("idle"), 5000);
                } else {
                  setTxStatus("error");
@@ -353,14 +458,40 @@ export default function PlayPage({ params }: PlayPageProps) {
 
   const shortAddress = useAtomValue(shortAddressAtom);
 
-  // Build player labels: show "You (White)" / "Opponent (Black)" for local demo,
-  // or truncated pubkey if wallet is connected
+  // Build player labels from on-chain match data when available
   const getPlayerLabel = (side: "white" | "black"): string => {
-    if (side === orientation) {
-      if (shortAddress) return `${shortAddress} (${side === "white" ? "White" : "Black"})`;
-      return `You (${side === "white" ? "White" : "Black"})`;
+    const sideLabel = side === "white" ? "White" : "Black";
+    // Try to get real pubkey from match data
+    let playerPubkey: string | null = null;
+    if (match) {
+      // SDK match format: players[0] = white, players[1] = black
+      if (match.players && Array.isArray(match.players) && match.players.length === 2) {
+        const idx = side === "white" ? 0 : 1;
+        const pk = match.players[idx];
+        if (pk) {
+          playerPubkey = typeof pk === 'string' ? pk : pk.toBase58?.() ?? String(pk);
+        }
+      }
+      // Alternative: playerOne/playerTwo format
+      if (!playerPubkey && match[side === "white" ? "playerOne" : "playerTwo"]) {
+        const pk = match[side === "white" ? "playerOne" : "playerTwo"];
+        playerPubkey = typeof pk === 'string' ? pk : pk?.toBase58?.() ?? String(pk);
+      }
     }
-    return `Opponent (${side === "white" ? "White" : "Black"})`;
+
+    if (playerPubkey) {
+      const short = playerPubkey.slice(0, 4) + "..." + playerPubkey.slice(-4);
+      // Check if this is the connected wallet
+      const isYou = wallet?.address && playerPubkey === wallet.address;
+      return isYou ? `You (${sideLabel})` : `${short} (${sideLabel})`;
+    }
+
+    // Fallback for demo mode
+    if (side === orientation) {
+      if (shortAddress) return `${shortAddress} (${sideLabel})`;
+      return `You (${sideLabel})`;
+    }
+    return `Opponent (${sideLabel})`;
   };
 
   const calculateMaterialAdvantage = (side: "white" | "black") => {

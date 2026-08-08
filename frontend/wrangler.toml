@@ -1,12 +1,18 @@
 # Cloudflare Pages configuration for Magic Chess frontend
-# Cloudflare auto-detects Next.js — no custom deploy command needed.
-# If using Wrangler CLI directly: npx wrangler pages deploy .next
+# Cloudflare auto-detects Next.js framework.
+# Deploy via Cloudflare Pages Git integration (auto) or CLI:
+#   npx wrangler pages deploy .next
+#
+# IMPORTANT: In Cloudflare Pages Dashboard, set:
+#   Build command: npm run build
+#   Build output directory: .next
+#   NO custom deploy command needed (Cloudflare auto-deploys Next.js output)
 
 name = "magic-chess"
 compatibility_date = "2025-08-07"
 
-# Next.js outputs to .next/. Cloudflare Pages auto-detects this.
-# No pages_build_output_dir needed — Cloudflare natively supports Next.js.
+# Pages asset directory (standard dir is used for _routes.json generation)
+pages_build_output_dir = ".next"
 
 # Environment variables (set in Cloudflare Dashboard for secrets)
 [vars]

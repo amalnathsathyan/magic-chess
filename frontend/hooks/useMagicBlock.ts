@@ -52,8 +52,8 @@ export function useMagicBlock(): UseMagicBlockReturn {
       to: string,
       promotion?: string
     ): Promise<string | null> => {
-      // Seamless fallback to local mock move execution when disconnected or in demo mode
-      if (!isConnected || !client || !client.wallet) {
+      // Only fall back to mock when no client/wallet (demo/dev without Privy)
+      if (!client || !client.wallet) {
         setIsSubmitting(true);
         try {
           await new Promise((r) => setTimeout(r, 500));
@@ -71,7 +71,7 @@ export function useMagicBlock(): UseMagicBlockReturn {
         setIsSubmitting(false);
       }
     },
-    [isConnected, client]
+    [client]
   );
 
   return {
