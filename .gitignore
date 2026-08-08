@@ -29,7 +29,11 @@ magic-chess-program/target/
 
 # Claude Code local settings (user-specific permissions)
 .claude/settings.local.json
+.claude/skills/
 skills-lock.json
+
+# Auto-downloaded agent skills
+.agents/skills/
 
 # Marketing campaign (X posts, drafts — public-build content)
 marketing/
