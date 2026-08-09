@@ -1,52 +1,92 @@
-# Gas sponsorship
+# Privy gas sponsorship and MagicBlock routing
 
-Magic Chess has three distinct fee paths. Treating them separately avoids
-routing sponsored transactions to the wrong runtime.
+Magic Chess uses two Solana runtimes. A transaction must get its fee payer and
+fresh blockhash from the same runtime that receives it. Mixing a base-layer
+blockhash with an Ephemeral Rollup (ER) submission, or serializing before a
+blockhash is assigned, fails with `Transaction recent blockhash required` or a
+blockhash-not-found error.
 
-## Recommended rollout
+## Transaction paths
 
-1. **Base-layer transactions:** sponsor create, join, delegate, undelegate, and
-   settlement with Privy's Solana gas sponsorship. Enable **App pays**, select
-   the intended Solana cluster, and enable TEE execution in the Privy
-   dashboard. The frontend currently resolves `@privy-io/react-auth` 2.25.0;
-   using the modern `options: { sponsor: true }` flow requires a tested Privy
-   v3 migration first.
-2. **Ephemeral Rollup moves:** keep move transactions on the MagicBlock router's
-   authoritative ER endpoint. Public ERs currently advertise no base fee for
-   normal transactions. A scoped session signer can remove repeated wallet
-   prompts, but it does not replace base-layer sponsorship.
-3. **Final commit:** commit and undelegate once when the game ends. MagicBlock
-   currently includes ten sponsored commits per delegation. If the application
-   later checkpoints more often, add a delegated application payer and the
-   validator-scoped `magic_fee_vault`, then fund it from the base layer.
+| Operation | Submission endpoint | Signing and fees |
+| --- | --- | --- |
+| Create, join, delegate | MagicBlock Solana devnet RPC | Privy embedded wallet with `sponsor: true` |
+| Moves and ER state changes | Router-selected ER FQDN | Wallet/session signer; public ER execution is gas-free |
+| Commit, undelegate, settlement | Correct ER endpoint first, then base RPC after state returns | ER rules followed by Privy sponsorship on base-layer work |
 
-## Production controls
+Immediately before signing a transaction:
 
-Client-side sponsorship is suitable for a capped devnet trial. Before mainnet,
-relay sponsored base transactions through a backend or enforce Privy policies.
-Validate the authenticated user, cluster, fee payer, program ID, instruction
-discriminator, account metas, wager mint and amount, and compute/priority-fee
-limits. Simulate before signing, rate-limit per user/wallet/IP/match, and add
-idempotency, spend alerts, and a circuit breaker.
+1. Select the connection that will submit it.
+2. Fetch `recentBlockhash` and `lastValidBlockHeight` from that connection.
+3. Set `feePayer`, blockhash, and validity height before serialization.
+4. Sign and submit through that same path.
+5. Confirm using the same signature/blockhash/validity tuple.
 
-Associated-token-account creation deserves a specific cap: users can sometimes
-close accounts and reclaim rent that the sponsor paid.
+The frontend's Anchor provider now performs this preparation for base-layer
+transactions before calling Privy v3's `useSignAndSendTransaction`. The SDK's
+ER path remains separate and uses the authoritative endpoint returned by the
+MagicBlock router.
 
-## Alternatives
+## Privy dashboard checklist
 
-- A custom backend fee payer offers the most control and can co-sign a prepared
-  Solana transaction after policy validation.
-- [Kora](https://solana.com/docs/payments/send-payments/payment-processing/fee-abstraction)
-  is a self-hosted Solana fee-abstraction option, including payment of fees in
-  supported SPL tokens. It adds key custody, funding, uptime, parsing, and abuse
-  prevention responsibilities.
+Code cannot enable dashboard-controlled authentication or sponsorship. For the
+development deployment, verify all of the following:
 
-## References
+1. Enable **Google** and **Discord** under Authentication → Login methods.
+2. Add each exact web origin under App settings → Domains, including protocol
+   and localhost port but no path (for example `http://localhost:3000`). Google
+   OAuth should be tested in a normal browser, not an embedded/in-app browser.
+3. Enable embedded Solana wallets, wallet UI prompts, and TEE execution.
+4. Under Gas and assets, enable **App pays** for Solana devnet, allow
+   client-initiated sponsored transactions, and ensure the sponsor has budget.
+5. During devnet, restrict policies to the Magic Chess program
+   `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h` and the required System,
+   SPL Token, and Associated Token instructions. Cap methods and spend.
+
+The login UI is configured with the Solana-specific WalletConnect connector.
+Email login can create an embedded wallet without a SIWS popup; external-wallet
+login requires the wallet connection and sign-in approval. A social popup not
+opening while email works generally means the provider or exact redirect origin
+is missing in the Privy dashboard.
+
+## What sponsorship pays
+
+Privy sponsorship covers network fees and, subject to policy, account-creation
+rent. It does not provide the user's wager principal. New matches therefore
+default to a zero-SOL wager. A nonzero WSOL wager is rejected before signing if
+the connected wallet lacks the required SOL.
+
+Client-side sponsorship is appropriate for the capped devnet trial. Before
+mainnet, relay sponsored base transactions through a backend or enforce strict
+Privy policies. Validate the authenticated user, chain, fee payer, program ID,
+instruction discriminator, accounts, wager mint and amount, and compute fees;
+also rate-limit and alert on spend. ATA creation needs a specific cap because a
+recipient can sometimes close an account and reclaim sponsor-funded rent.
+
+MagicBlock currently includes a limited number of sponsored commits per
+delegation. If the application adds frequent checkpoints, use a scoped delegated
+application payer and validator fee vault rather than routing ER work through
+the Privy base-layer sponsor.
+
+## Reference implementations
+
+- [CapturGo](https://github.com/CapturGo/capturgo-magicblock) consumes the
+  server-selected endpoint and exact blockhash/validity tuple, then submits and
+  confirms on the same connection.
+- [Perps Games](https://github.com/EchoWebLV/perps-games) keeps explicit base
+  and ER connections and sets fee payer plus a fresh confirmed blockhash before
+  signing.
+- [Hunch](https://github.com/priyanshudotsol/Hunch-magicblock) constructs
+  transactions with fee payer, blockhash, and validity height and refreshes
+  stale blockhashes before retrying.
+
+## Documentation
 
 - [Privy gas sponsorship setup](https://docs.privy.io/wallets/gas-and-asset-management/gas/setup)
-- [Privy Solana sponsorship](https://docs.privy.io/wallets/gas-and-asset-management/gas/solana)
-- [Privy sponsorship security](https://docs.privy.io/wallets/gas-and-asset-management/gas/security)
-- [Privy Solana policy examples](https://docs.privy.io/controls/policies/example-policies/solana)
-- [MagicBlock pricing](https://docs.magicblock.gg/pages/overview/additional-information/pricing)
+- [Privy Solana getting started](https://docs.privy.io/recipes/solana/getting-started-with-privy-and-solana)
+- [Privy React v3 migration](https://docs.privy.io/basics/react/advanced/migrating-to-3.0)
+- [Privy OAuth login](https://docs.privy.io/authentication/user-authentication/login-methods/oauth)
+- [Privy allowed domains](https://docs.privy.io/recipes/dashboard/allowed-domains)
 - [MagicBlock ER quickstart](https://docs.magicblock.gg/pages/ephemeral-rollups-ers/how-to-guide/quickstart)
+- [MagicBlock router concepts](https://docs.magicblock.gg/pages/tools/router/core-concepts)
 - [MagicBlock session-key security](https://docs.magicblock.gg/pages/tools/session-keys/security)
