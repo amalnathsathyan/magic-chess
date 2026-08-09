@@ -147,10 +147,10 @@ Magic Chess isn't just a game—it's a demonstration of **Solana's future in hig
 We heavily utilized MagicBlock Ephemeral Rollups to offload state mutation limits, bypassing traditional L1 congestion entirely. The codebase is heavily documented and rigorously tested (205 tests across unit, integration, and performance benchmarking).
 
 **Explore our extensive documentation:**
-- 📜 [Detailed Specification](./docs/spec.md)
-- 🏗️ [Architecture Deep-Dive](./docs/architecture.md)
-- 🛡️ [Security Audit & Report](./docs/security-audit.md)
-- 🔌 [SDK Reference](./docs/sdk.md)
+- 📜 [Detailed Specification](https://amalnathsathyan.github.io/magic-chess/docs/spec)
+- 🏗️ [Architecture Deep-Dive](https://amalnathsathyan.github.io/magic-chess/docs/architecture)
+- 🛡️ [Security Audit & Report](https://amalnathsathyan.github.io/magic-chess/docs/security-audit)
+- 🔌 [SDK Reference](https://amalnathsathyan.github.io/magic-chess/docs/sdk)
 
 ---
 

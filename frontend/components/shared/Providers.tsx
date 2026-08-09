@@ -71,6 +71,18 @@ function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
             createOnLogin: "all-users",
           },
         },
+
+        // Solana devnet cluster — tells wallets which network to connect on.
+        // Without this, Privy defaults to mainnet-beta and external wallets
+        // (Backpack, Phantom) will fail to connect due to chain mismatch.
+        solanaClusters: [
+          {
+            name: "devnet",
+            rpcUrl:
+              process.env.NEXT_PUBLIC_RPC_ENDPOINT ??
+              "https://api.devnet.solana.com",
+          },
+        ],
       }}
     >
       {children}
