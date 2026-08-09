@@ -1,19 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { usePrivy, useSolanaWallets } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
+import { useCreateWallet, useWallets } from "@privy-io/react-auth/solana";
 import { Wallet, LogOut } from "lucide-react";
 import { toast } from "sonner";
+import { selectSolanaWallet } from "@/lib/privy-wallet";
 
 export function WalletButton() {
   const { login, logout, authenticated, ready } = usePrivy();
-  const {
-    ready: walletsReady,
-    wallets,
-    createWallet,
-  } = useSolanaWallets();
+  const { ready: walletsReady, wallets } = useWallets();
+  const { createWallet } = useCreateWallet();
   const [isCreatingWallet, setIsCreatingWallet] = useState(false);
-  const wallet = wallets[0];
+  const wallet = selectSolanaWallet(wallets);
   const shortAddress = wallet?.address
     ? `${wallet.address.slice(0, 4)}...${wallet.address.slice(-4)}`
     : null;

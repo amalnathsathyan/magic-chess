@@ -16,12 +16,14 @@ import {
   Scale,
   ExternalLink,
 } from "lucide-react";
-import { usePrivy, useSolanaWallets } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
+import { useWallets } from "@privy-io/react-auth/solana";
 import {
   api,
   type ApiMatch,
   type ApiPlayerStats,
 } from "@/lib/api";
+import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { shortenAddress } from "@/lib/chess";
 import { cn } from "@/lib/utils";
 
@@ -79,8 +81,8 @@ function ProfileSkeleton() {
 
 export default function ProfilePage() {
   const { ready, authenticated, login } = usePrivy();
-  const { ready: walletsReady, wallets } = useSolanaWallets();
-  const walletAddress = wallets[0]?.address ?? null;
+  const { ready: walletsReady, wallets } = useWallets();
+  const walletAddress = selectSolanaWallet(wallets)?.address ?? null;
   const [stats, setStats] = useState<ApiPlayerStats | null>(null);
   const [matches, setMatches] = useState<PlayerMatch[]>([]);
   const [loading, setLoading] = useState(false);

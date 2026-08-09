@@ -4,7 +4,7 @@ import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { PublicKey } from "@solana/web3.js";
 import { usePrivy } from "@privy-io/react-auth";
-import { useSolanaWallets } from "@privy-io/react-auth/solana";
+import { useWallets } from "@privy-io/react-auth/solana";
 import { Clock, Coins, Sword, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ import {
   WRAPPED_SOL_MINT,
 } from "@/lib/solana-config";
 import { prepareWagerAccount } from "@/lib/wager";
+import { selectSolanaWallet } from "@/lib/privy-wallet";
 
 interface CreateMatchFormProps {
   isOpen: boolean;
@@ -35,13 +36,13 @@ export function CreateMatchForm({
   onClose,
   className,
 }: CreateMatchFormProps) {
-  const [wagerAmount, setWagerAmount] = useState("0.01");
+  const [wagerAmount, setWagerAmount] = useState("0");
   const [timeControl, setTimeControl] = useState<
     (typeof TIME_CONTROLS)[number]
   >(TIME_CONTROLS[1]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { authenticated, login } = usePrivy();
-  const { wallets } = useSolanaWallets();
+  const { wallets } = useWallets();
   const client = useMagicChessClient();
   const router = useRouter();
 
@@ -53,7 +54,7 @@ export function CreateMatchForm({
       return;
     }
 
-    const wallet = wallets[0];
+    const wallet = selectSolanaWallet(wallets);
     if (!wallet) {
       toast.error("Your Solana wallet is still being prepared. Try again shortly.");
       return;
@@ -147,7 +148,9 @@ export function CreateMatchForm({
               />
               {solanaConfig.wagerMint === WRAPPED_SOL_MINT.toBase58() && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Native SOL is wrapped to WSOL before the match transaction.
+                  Use 0 for a free match. Sponsorship covers network fees and
+                  account rent, not the wager; funded matches wrap your SOL to
+                  WSOL.
                 </p>
               )}
             </div>

@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { Chess, type Move as ChessMove, type Square } from "chess.js";
 import { PublicKey } from "@solana/web3.js";
-import { useSolanaWallets } from "@privy-io/react-auth/solana";
+import { useWallets } from "@privy-io/react-auth/solana";
 import {
   boardToFen,
   GameStatus,
@@ -41,6 +41,7 @@ import {
 } from "@/lib/wager";
 import { useMagicBlock } from "@/hooks/useMagicBlock";
 import { cn } from "@/lib/utils";
+import { selectSolanaWallet } from "@/lib/privy-wallet";
 
 interface PlayPageProps {
   params: Promise<{ matchId: string }>;
@@ -147,8 +148,8 @@ export default function PlayPage({ params }: PlayPageProps) {
   const { matchId } = use(params);
   const client = useMagicChessClient();
   const { match, loading, error, refetch } = useMatch(matchId);
-  const { wallets } = useSolanaWallets();
-  const wallet = wallets[0];
+  const { wallets } = useWallets();
+  const wallet = selectSolanaWallet(wallets);
   const { submitMove } = useMagicBlock();
 
   const [history, setHistory] = useState<ApiMatchHistory | null>(null);

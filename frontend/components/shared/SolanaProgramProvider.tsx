@@ -1,24 +1,62 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { AnchorProvider, Program } from "@anchor-lang/core";
 import bs58 from "bs58";
 import {
   Connection,
   PublicKey,
+  type Signer,
   type Transaction,
   type VersionedTransaction,
 } from "@solana/web3.js";
-import { useSolanaWallets } from "@privy-io/react-auth/solana";
+import {
+  useSignAndSendTransaction,
+  useSignTransaction,
+  useWallets,
+} from "@privy-io/react-auth/solana";
 import {
   MAGIC_CHESS_IDL,
   type MagicChess,
 } from "@magic-chess/sdk";
 import { MagicChessProvider } from "@magic-chess/sdk/react";
+import {
+  isPrivyEmbeddedWallet,
+  selectSolanaWallet,
+} from "@/lib/privy-wallet";
 import { solanaConfig } from "@/lib/solana-config";
 
 const RPC_ENDPOINT = solanaConfig.rpcEndpoint;
 const PROGRAM_ID = solanaConfig.programId;
+const PRIVY_SOLANA_CHAIN = "solana:devnet" as const;
+
+function serializeTransaction(
+  transaction: Transaction | VersionedTransaction
+): Uint8Array {
+  if ("version" in transaction) return transaction.serialize();
+  return transaction.serialize({
+    requireAllSignatures: false,
+    verifySignatures: false,
+  });
+}
+
+function deserializeSignedTransaction<T extends Transaction | VersionedTransaction>(
+  original: T,
+  serialized: Uint8Array
+): T {
+  const constructor = original.constructor as {
+    from?: (bytes: Uint8Array) => Transaction;
+    deserialize?: (bytes: Uint8Array) => VersionedTransaction;
+  };
+
+  if ("version" in original && constructor.deserialize) {
+    return constructor.deserialize(serialized) as T;
+  }
+  if (!("version" in original) && constructor.from) {
+    return constructor.from(serialized) as T;
+  }
+  throw new Error("Unsupported Solana transaction type returned by Privy");
+}
 
 type BrowserAnchorWallet = {
   publicKey: PublicKey;
@@ -35,12 +73,10 @@ export function SolanaProgramProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const { wallets } = useSolanaWallets();
-  const solanaWallet = wallets[0];
-
-  // Keep a ref to the live wallet so the provider closure stays current
-  const walletRef = useRef(solanaWallet);
-  walletRef.current = solanaWallet;
+  const { wallets } = useWallets();
+  const { signTransaction } = useSignTransaction();
+  const { signAndSendTransaction } = useSignAndSendTransaction();
+  const solanaWallet = selectSolanaWallet(wallets);
 
   const connection = useMemo(
     () => new Connection(RPC_ENDPOINT, "confirmed"),
@@ -50,14 +86,27 @@ export function SolanaProgramProvider({
   const anchorWallet = useMemo<BrowserAnchorWallet | undefined>(() => {
     if (!solanaWallet) return undefined;
 
+    const signForAnchor = async <T extends Transaction | VersionedTransaction>(
+      transaction: T
+    ): Promise<T> => {
+      const { signedTransaction } = await signTransaction({
+        transaction: serializeTransaction(transaction),
+        wallet: solanaWallet,
+        chain: PRIVY_SOLANA_CHAIN,
+        options: {
+          uiOptions: { showWalletUIs: true },
+        },
+      });
+      return deserializeSignedTransaction(transaction, signedTransaction);
+    };
+
     return {
       publicKey: new PublicKey(solanaWallet.address),
-      signTransaction: (transaction) =>
-        solanaWallet.signTransaction(transaction),
+      signTransaction: signForAnchor,
       signAllTransactions: (transactions) =>
-        solanaWallet.signAllTransactions(transactions),
+        Promise.all(transactions.map(signForAnchor)),
     };
-  }, [solanaWallet]);
+  }, [signTransaction, solanaWallet]);
 
   const provider = useMemo(() => {
     if (!anchorWallet) return { connection };
@@ -67,30 +116,52 @@ export function SolanaProgramProvider({
       preflightCommitment: "confirmed",
     });
 
-    // Override sendAndConfirm to route through Privy's signAndSendTransaction.
-    // - Embedded wallet (social/email): Privy sponsors gas (sponsor: true)
-    // - External wallet (Phantom etc.): user pays their own gas
-    (baseProvider as any).sendAndConfirm = async (tx: Transaction) => {
-      const wallet = walletRef.current;
+    // Anchor normally prepares fee payer + blockhash inside sendAndConfirm.
+    // Because sponsored transactions must go through Privy's hook, reproduce
+    // that preparation explicitly before serialization and signing.
+    baseProvider.sendAndConfirm = async (
+      tx: Transaction | VersionedTransaction,
+      signers?: Signer[],
+      options = baseProvider.opts
+    ) => {
+      const wallet = solanaWallet;
       if (!wallet) throw new Error("No Solana wallet connected");
 
-      // Serialize the Anchor transaction for Privy
-      const serialized = tx.serialize({ requireAllSignatures: false });
+      if ("version" in tx) {
+        if (signers?.length) tx.sign(signers);
+      } else {
+        const latest = await connection.getLatestBlockhash(
+          options.preflightCommitment ?? "confirmed"
+        );
+        tx.feePayer ??= new PublicKey(wallet.address);
+        tx.recentBlockhash = latest.blockhash;
+        tx.lastValidBlockHeight = latest.lastValidBlockHeight;
+        signers?.forEach((signer) => tx.partialSign(signer));
+      }
 
-      // @ts-expect-error — Privy's SolanaChain type is strict; the runtime only needs id + name
-      const { signature } = await wallet.signAndSendTransaction({
-        transaction: serialized,
-        address: wallet.address,
-        chain: { id: 103, name: "solana-devnet" },
-        options: { sponsor: true },
+      const sponsored = isPrivyEmbeddedWallet(wallet);
+      const { signature } = await signAndSendTransaction({
+        transaction: serializeTransaction(tx),
+        wallet,
+        chain: PRIVY_SOLANA_CHAIN,
+        options: {
+          sponsor: sponsored,
+          // Privy's sponsorship service simulates with the final fee payer.
+          skipSimulation: false,
+          uiOptions: {
+            showWalletUIs: true,
+            description: sponsored
+              ? "Magic Chess is sponsoring this Solana devnet transaction."
+              : "Review this Solana devnet transaction in your wallet.",
+          },
+        },
       });
 
-      const sigBytes = signature instanceof Uint8Array ? signature : new Uint8Array(signature);
-      return bs58.encode(sigBytes);
+      return bs58.encode(signature);
     };
 
     return baseProvider;
-  }, [anchorWallet, connection]);
+  }, [anchorWallet, connection, signAndSendTransaction, solanaWallet]);
 
   const program = useMemo(() => {
     const idl = {

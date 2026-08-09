@@ -1,16 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { usePrivy, useSolanaWallets } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
+import { useCreateWallet, useWallets } from "@privy-io/react-auth/solana";
 import { LoaderCircle, LogIn, Wallet } from "lucide-react";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { ready, authenticated, login } = usePrivy();
-  const {
-    ready: walletsReady,
-    wallets,
-    createWallet,
-  } = useSolanaWallets();
+  const { ready: walletsReady, wallets } = useWallets();
+  const { createWallet } = useCreateWallet();
   const [isCreatingWallet, setIsCreatingWallet] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
 

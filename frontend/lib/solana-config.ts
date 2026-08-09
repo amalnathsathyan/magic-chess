@@ -8,6 +8,11 @@ export const WRAPPED_SOL_MINT = new PublicKey(
 export const solanaConfig = {
   rpcEndpoint:
     process.env.NEXT_PUBLIC_RPC_ENDPOINT ?? "https://rpc.magicblock.app/devnet",
+  rpcWsEndpoint:
+    process.env.NEXT_PUBLIC_RPC_WS_ENDPOINT ??
+    (process.env.NEXT_PUBLIC_RPC_ENDPOINT ?? "https://rpc.magicblock.app/devnet")
+      .replace(/^https:/, "wss:")
+      .replace(/^http:/, "ws:"),
   routerEndpoint:
     process.env.NEXT_PUBLIC_MAGICBLOCK_ROUTER ??
     "https://devnet-router.magicblock.app/",

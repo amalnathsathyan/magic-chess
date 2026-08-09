@@ -2,6 +2,11 @@
 
 import { PrivyProvider } from "@privy-io/react-auth";
 import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
+import {
+  createSolanaRpc,
+  createSolanaRpcSubscriptions,
+} from "@solana/kit";
+import { solanaConfig } from "@/lib/solana-config";
 import { SolanaProgramProvider } from "./SolanaProgramProvider";
 
 const solanaConnectors = toSolanaWalletConnectors({
@@ -56,7 +61,7 @@ function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
             "solflare",
             "backpack",
             "detected_solana_wallets",
-            "wallet_connect_qr",
+            "wallet_connect_qr_solana",
           ],
         },
 
@@ -70,19 +75,24 @@ function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
           solana: {
             createOnLogin: "all-users",
           },
+          // Make signing/transaction approval visible while this flow is
+          // being validated. This can be relaxed once session keys are live.
+          showWalletUIs: true,
         },
 
-        // Solana devnet cluster — tells wallets which network to connect on.
-        // Without this, Privy defaults to mainnet-beta and external wallets
-        // (Backpack, Phantom) will fail to connect due to chain mismatch.
-        solanaClusters: [
-          {
-            name: "devnet",
-            rpcUrl:
-              process.env.NEXT_PUBLIC_RPC_ENDPOINT ??
-              "https://api.devnet.solana.com",
+        // Privy v3 embedded-wallet signing requires Kit RPC clients keyed by
+        // the CAIP-2 Solana cluster name. `solanaClusters` was removed in v3.
+        solana: {
+          rpcs: {
+            "solana:devnet": {
+              rpc: createSolanaRpc(solanaConfig.rpcEndpoint),
+              rpcSubscriptions: createSolanaRpcSubscriptions(
+                solanaConfig.rpcWsEndpoint
+              ),
+              blockExplorerUrl: "https://explorer.solana.com/?cluster=devnet",
+            },
           },
-        ],
+        },
       }}
     >
       {children}

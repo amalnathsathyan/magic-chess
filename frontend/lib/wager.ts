@@ -3,11 +3,17 @@ import {
   createSyncNativeInstruction,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
-import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
+import {
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  type Connection,
+} from "@solana/web3.js";
 import type { MagicChessClient } from "@magic-chess/sdk";
 import { WRAPPED_SOL_MINT } from "@/lib/solana-config";
 
 type TransactionProvider = {
+  connection?: Pick<Connection, "getBalance">;
   sendAndConfirm?: (transaction: Transaction) => Promise<string>;
 };
 
@@ -24,6 +30,25 @@ export async function prepareWagerAccount(
   if (amount < 0n) throw new Error("Wager cannot be negative.");
   if (amount > BigInt(Number.MAX_SAFE_INTEGER)) {
     throw new Error("Wager amount is too large for this browser client.");
+  }
+
+  const provider = client.program.provider as TransactionProvider;
+  if (typeof provider.sendAndConfirm !== "function") {
+    throw new Error("A connected Solana wallet is required to prepare the wager.");
+  }
+
+  if (mint.equals(WRAPPED_SOL_MINT) && amount > 0n) {
+    if (!provider.connection) {
+      throw new Error("The Solana connection is unavailable. Try again shortly.");
+    }
+
+    const balance = await provider.connection.getBalance(owner, "confirmed");
+    if (BigInt(balance) < amount) {
+      const requiredSol = Number(amount) / 1_000_000_000;
+      throw new Error(
+        `This wager needs ${requiredSol} SOL in your wallet. Gas sponsorship covers network fees, not the wager. Fund the wallet or create a free match.`
+      );
+    }
   }
 
   const tokenAccount = getAssociatedTokenAddressSync(mint, owner);
@@ -47,10 +72,6 @@ export async function prepareWagerAccount(
     );
   }
 
-  const provider = client.program.provider as TransactionProvider;
-  if (typeof provider.sendAndConfirm !== "function") {
-    throw new Error("A connected Solana wallet is required to prepare the wager.");
-  }
   await provider.sendAndConfirm(transaction);
   return tokenAccount;
 }
