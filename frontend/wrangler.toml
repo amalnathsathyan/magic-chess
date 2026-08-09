@@ -7,7 +7,7 @@
 #   Root directory:  ./frontend/
 
 name = "arena"
-main = "out/_worker.js"
+main = "_worker.js"
 compatibility_date = "2026-08-08"
 compatibility_flags = ["nodejs_compat"]
 
