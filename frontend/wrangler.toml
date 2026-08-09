@@ -1,20 +1,15 @@
-# Cloudflare Workers Builds configuration for Magic Chess frontend
-# Deploys Next.js static output as Worker assets.
+# Cloudflare Pages configuration for Arena frontend
+# Static export — no worker script, no size limit
 #
 # Dashboard Settings → Build:
 #   Build command:   npm run build
-#   Deploy command:  npx wrangler deploy --assets .next
+#   Deploy command:  npx wrangler pages deploy out --branch main
 #   Root directory:  ./frontend/
+#   Build output:    out
 
 name = "arena"
-main = ".open-next/worker.js"
 compatibility_date = "2026-08-08"
-compatibility_flags = ["nodejs_compat"]
-
-# Serve Next.js static output as assets
-[assets]
-directory = ".open-next/assets"
-binding = "ASSETS"
+pages_build_output_dir = "out"
 
 # Environment variables (set in Cloudflare Dashboard for secrets)
 [vars]

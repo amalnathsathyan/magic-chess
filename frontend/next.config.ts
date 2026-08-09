@@ -6,14 +6,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const nextConfig: NextConfig = {
-  // OpenNext packages the standalone server output for Cloudflare Workers.
-  output: "standalone",
-  outputFileTracingRoot: __dirname,
+  // Static export — no SSR, everything runs client-side. Avoids Worker size limit.
+  output: "export",
 
   reactStrictMode: true,
 
   // Allow images from Solana token metadata and common CDNs
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: "https",
