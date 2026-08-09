@@ -1,15 +1,20 @@
-# Cloudflare Pages configuration for Arena frontend
-# Static export — no worker script, no size limit
+# Cloudflare Workers configuration for Arena frontend
+# Static export served via Workers static assets.
 #
 # Dashboard Settings → Build:
 #   Build command:   npm run build
-#   Deploy command:  npx wrangler pages deploy out --branch main
+#   Deploy command:  npx wrangler deploy
 #   Root directory:  ./frontend/
-#   Build output:    out
 
 name = "arena"
+main = "out/_worker.js"
 compatibility_date = "2026-08-08"
-pages_build_output_dir = "out"
+compatibility_flags = ["nodejs_compat"]
+
+# Serve Next.js static export as Worker assets
+[assets]
+directory = "out"
+binding = "ASSETS"
 
 # Environment variables (set in Cloudflare Dashboard for secrets)
 [vars]
