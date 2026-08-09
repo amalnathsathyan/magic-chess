@@ -282,7 +282,7 @@ import {
 } from "@magic-chess/sdk";
 ```
 
-See [sdk.md](./sdk.md) for the full SDK API reference.
+See [sdk.md](../04-development/sdk.md) for the full SDK API reference.
 
 ## Program Instructions (MagicBlock)
 

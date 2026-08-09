@@ -8,9 +8,9 @@ Magic Chess is an on-chain chess engine on Solana with SPL token wagering and [M
 
 | Section | Description |
 |---------|-------------|
-| [Architecture](./architecture.md) | System design, program structure, state accounts, PDA derivation, token model, and tech stack |
-| [Chess Engine](./chess-engine.md) | Deep dive into the on-chain chess logic, FIDE rules coverage, CU benchmarks, and test strategy |
-| [SDK Reference](./sdk.md) | TypeScript SDK (`@magic-chess/sdk`) — client, React hooks, PDA utilities, FEN helpers |
+| [Architecture](../02-architecture/architecture.md) | System design, program structure, state accounts, PDA derivation, token model, and tech stack |
+| [Chess Engine](../03-core-systems/chess-engine.md) | Deep dive into the on-chain chess logic, FIDE rules coverage, CU benchmarks, and test strategy |
+| [SDK Reference](../04-development/sdk.md) | TypeScript SDK (`@magic-chess/sdk`) — client, React hooks, PDA utilities, FEN helpers |
 
 ---
 
@@ -23,8 +23,8 @@ We believe in open-source gaming. Anyone can audit the code, contribute to the e
 ### Key Highlights
 
 - **Open Source**: The entire project (smart contracts, SDK, and frontend) is open-source under the MIT License. Dive into the code on [GitHub](https://github.com/amalnathsathyan/magic-chess).
-- **Architecture**: A robust, purely on-chain game state machine built with Anchor. Uses PDA-backed escrows and Zobrist hashing. Read the full [Architecture](./architecture.md) deep dive.
-- **TypeScript SDK**: A complete `@magic-chess/sdk` for easy client integration. Includes React hooks and FEN helpers. Read the [SDK Reference](./sdk.md).
+- **Architecture**: A robust, purely on-chain game state machine built with Anchor. Uses PDA-backed escrows and Zobrist hashing. Read the full [Architecture](../02-architecture/architecture.md) deep dive.
+- **TypeScript SDK**: A complete `@magic-chess/sdk` for easy client integration. Includes React hooks and FEN helpers. Read the [SDK Reference](../04-development/sdk.md).
 
 ---
 
@@ -39,10 +39,7 @@ We believe in open-source gaming. Anyone can audit the code, contribute to the e
 | Program ID | `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h` |
 | License | MIT |
 
-### Quick Links for Next Agent
-- [Current State & Handoff](current-state.md) — start here
-- [Frontend Research & UI/UX Audit](frontend-research.md) — Sections 10-11
-- [Specification](spec.md) — updated for current reality
+- [Specification](./spec.md) — full technical spec
 
 ---
 
