@@ -91,7 +91,7 @@ export function OpenSource() {
             View on GitHub
           </Link>
           <Link
-            href="https://github.com/amalnathsathyan/magic-chess/tree/main/docs"
+            href="https://amalnathsathyan.github.io/magic-chess/"
             target="_blank"
             className="group flex h-12 items-center justify-center gap-2 rounded-full border border-white/10 bg-white/5 px-6 text-sm font-semibold text-white backdrop-blur-md transition-all hover:bg-white/10"
           >

@@ -21,7 +21,7 @@ export default function HomePage() {
             <span className="text-sm text-neutral-500">© 2026</span>
           </div>
           <div className="flex items-center gap-6">
-            <a href="/docs" className="text-sm text-neutral-400 hover:text-white transition-colors">Documentation</a>
+            <a href="https://amalnathsathyan.github.io/magic-chess/" className="text-sm text-neutral-400 hover:text-white transition-colors">Documentation</a>
             <a href="https://github.com/amalnathsathyan/magic-chess" target="_blank" rel="noreferrer" className="text-sm text-neutral-400 hover:text-white transition-colors">GitHub</a>
           </div>
         </div>

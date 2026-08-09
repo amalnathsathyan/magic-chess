@@ -52,7 +52,7 @@ export function Hero() {
         
         <div className="mt-8 flex items-center justify-center gap-6">
           <Link
-            href="https://github.com/amalnathsathyan/magic-chess/tree/main/docs"
+            href="https://amalnathsathyan.github.io/magic-chess/"
             target="_blank"
             rel="noreferrer"
             className="flex min-h-10 items-center gap-2 text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black"
