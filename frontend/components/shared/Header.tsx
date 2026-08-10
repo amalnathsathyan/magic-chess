@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { WalletButton } from "./WalletButton";
 import { cn } from "@/lib/utils";
@@ -22,8 +23,19 @@ export function Header() {
       <div className="flex h-full w-full items-center justify-between px-4 md:flex-col md:px-0 md:py-6">
         {/* Top: Logo */}
         <div className="hidden md:flex items-center justify-center">
-          <Link href="/" className="group flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 font-bold border border-emerald-500/20 transition-all hover:bg-emerald-500/20 hover:shadow-[0_0_15px_rgba(0,230,118,0.3)]">
-            MC
+          <Link
+            href="/"
+            aria-label="Magic Chess home"
+            className="group flex h-11 w-11 items-center justify-center rounded-xl border border-emerald-500/20 bg-white/95 p-1.5 transition-all hover:border-emerald-400/50 hover:shadow-[0_0_15px_rgba(0,230,118,0.3)]"
+          >
+            <Image
+              src="/logo.png"
+              alt="Magic Chess"
+              width={36}
+              height={36}
+              priority
+              className="h-full w-full object-contain"
+            />
           </Link>
         </div>
 

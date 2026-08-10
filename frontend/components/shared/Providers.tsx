@@ -54,7 +54,7 @@ function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
         appearance: {
           theme: "dark",
           accentColor: "#00e676",
-          logo: "/logo.svg",
+          logo: "/logo.png",
           walletChainType: "solana-only",
           walletList: [
             "phantom",

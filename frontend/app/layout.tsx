@@ -28,11 +28,17 @@ export const metadata: Metadata = {
   description:
     "Play wagered chess with program-enforced escrow on Solana and low-latency moves powered by MagicBlock Ephemeral Rollups.",
   keywords: ["chess", "solana", "magicblock", "on-chain", "wagering", "crypto"],
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
   openGraph: {
     title: "Magic Chess",
     description: "On-chain chess with wagering on Solana",
     siteName: "Magic Chess",
     type: "website",
+    images: [{ url: "/logo.png", width: 1254, height: 1254, alt: "Magic Chess" }],
   },
 };
 

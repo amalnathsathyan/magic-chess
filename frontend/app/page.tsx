@@ -4,6 +4,7 @@ import { GameModes } from "@/components/landing/GameModes";
 import { WhyMagicBlock } from "@/components/landing/WhyMagicBlock";
 import { Security } from "@/components/landing/Security";
 import { OpenSource } from "@/components/landing/OpenSource";
+import Image from "next/image";
 
 export default function HomePage() {
   return (
@@ -17,6 +18,9 @@ export default function HomePage() {
       <footer className="border-t border-white/10 bg-black py-12">
         <div className="mx-auto max-w-5xl px-4 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white p-1">
+              <Image src="/logo.png" alt="" width={30} height={30} />
+            </span>
             <span className="font-heading font-bold text-lg text-white">Magic Chess</span>
             <span className="text-sm text-neutral-500">© 2026</span>
           </div>
