@@ -821,6 +821,12 @@ export default function PlayPage({ params }: PlayPageProps) {
                   moves={moves}
                   fen={displayFen ?? undefined}
                   currentMoveIndex={moves.length - 1}
+                  result={
+                    match?.gameStatus === GameStatus.WhiteWins ? "1-0"
+                    : match?.gameStatus === GameStatus.BlackWins ? "0-1"
+                    : match?.gameStatus === GameStatus.Draw ? "1/2-1/2"
+                    : undefined
+                  }
                   className="min-h-56"
                 />
                 {historyUnavailable ? (

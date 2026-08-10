@@ -2,13 +2,14 @@
 
 import { useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import { Copy } from "lucide-react";
+import { Copy, Download } from "lucide-react";
 import { toast } from "sonner";
 
 interface MoveListProps {
   moves: string[];
   fen?: string;
   currentMoveIndex?: number;
+  result?: string; // "1-0" | "0-1" | "1/2-1/2" | undefined
   className?: string;
 }
 
@@ -38,12 +39,29 @@ export function MoveList({
     }
   };
 
-  const copyPGN = () => {
-    const pgn = moves.reduce((acc, move, i) => {
+  const buildPgn = (): string => {
+    let pgn = moves.reduce((acc, move, i) => {
       if (i % 2 === 0) return `${acc} ${Math.floor(i / 2) + 1}. ${move}`;
       return `${acc} ${move}`;
     }, "").trim();
-    void copyText(pgn, "PGN");
+    if (result) pgn += ` ${result}`;
+    return pgn;
+  };
+
+  const copyPGN = () => {
+    void copyText(buildPgn(), "PGN");
+  };
+
+  const downloadPGN = () => {
+    const pgn = buildPgn();
+    const blob = new Blob([pgn], { type: "application/x-chess-pgn" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `game-${moves.length}-moves.pgn`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("PGN downloaded");
   };
 
   const copyFEN = () => {
@@ -91,22 +109,30 @@ export function MoveList({
     >
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-heading text-sm font-semibold text-foreground">
-          Moves
+          Moves · {moves.length}
         </h3>
-        <div className="flex gap-2">
+        <div className="flex gap-1">
           <button
             type="button"
             onClick={copyPGN}
-            className="flex min-h-10 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors duration-100 hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+            className="flex min-h-9 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors duration-100 hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
             title="Copy PGN"
           >
-            <Copy className="h-3.5 w-3.5" aria-hidden="true" /> PGN
+            <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={downloadPGN}
+            className="flex min-h-9 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors duration-100 hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+            title="Download PGN"
+          >
+            <Download className="h-3.5 w-3.5" aria-hidden="true" />
           </button>
           {fen && (
             <button
               type="button"
               onClick={copyFEN}
-              className="flex min-h-10 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors duration-100 hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+              className="flex min-h-9 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground transition-colors duration-100 hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
               title="Copy FEN"
             >
               <Copy className="h-3.5 w-3.5" aria-hidden="true" /> FEN
@@ -155,6 +181,11 @@ export function MoveList({
             })}
           </tbody>
         </table>
+        {result && (
+          <div className="mt-2 rounded-lg bg-primary/10 px-3 py-2 text-center font-mono text-sm font-bold text-primary">
+            {result}
+          </div>
+        )}
       </div>
     </div>
   );
