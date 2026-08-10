@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertCircle, Filter, Plus, Search } from "lucide-react";
+import { AlertCircle, Filter, Plus, RefreshCw, Search, Swords } from "lucide-react";
 import { PublicKey } from "@solana/web3.js";
 import { useMatches } from "@magic-chess/sdk/react";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
@@ -14,11 +14,33 @@ import {
 
 const APP_MATCH_ID = /^mc-[0-9a-f]{20}$/;
 const SUPPORTED_MOVE_TIMEOUTS = new Set([60, 180, 600]);
+const AUTO_REFRESH_MS = 15_000;
 
 export default function ArenaPage() {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const { matches, loading, error } = useMatches();
+  const { matches, loading, error, refetch } = useMatches();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      await refetch();
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [refetch]);
+
+  // Auto-refresh every 15 seconds
+  useEffect(() => {
+    intervalRef.current = setInterval(() => {
+      refetch();
+    }, AUTO_REFRESH_MS);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [refetch]);
 
   const matchCards = useMemo<MatchCardData[]>(() => {
     const query = search.trim().toLowerCase();
@@ -73,13 +95,35 @@ export default function ArenaPage() {
             Join an open on-chain match or create your own.
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-        >
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          Create match
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            aria-label="Refresh match list"
+            className="relative inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+              aria-hidden="true"
+            />
+            <span className="hidden sm:inline">Refresh</span>
+            {/* Pulsing dot indicator while fetching */}
+            {(loading || isRefreshing) && (
+              <span className="absolute -right-1 -top-1 flex h-3 w-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-primary" />
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setShowCreate(true)}
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            Create match
+          </button>
+        </div>
       </motion.div>
 
       <div className="mb-6">
@@ -107,7 +151,7 @@ export default function ArenaPage() {
         onClose={() => setShowCreate(false)}
       />
 
-      {loading ? (
+      {loading && matchCards.length === 0 ? (
         <div className="grid gap-4" aria-label="Loading open matches">
           {[0, 1, 2].map((index) => (
             <div
@@ -117,8 +161,8 @@ export default function ArenaPage() {
           ))}
         </div>
       ) : error ? (
-        <div className="glass-card flex flex-col items-center py-14 text-center">
-          <AlertCircle className="mb-3 h-9 w-9 text-destructive" aria-hidden="true" />
+        <div className="glass-card flex flex-col items-center py-16 text-center">
+          <AlertCircle className="mb-3 h-10 w-10 text-destructive" aria-hidden="true" />
           <h2 className="font-heading text-lg font-semibold">
             Couldn&apos;t load on-chain matches
           </h2>
@@ -126,32 +170,43 @@ export default function ArenaPage() {
             {error.message}
           </p>
           <button
-            onClick={() => window.location.reload()}
-            className="mt-5 min-h-10 rounded-lg border border-border px-4 text-sm font-medium hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
+            onClick={handleRefresh}
+            className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-medium hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
           >
+            <RefreshCw className="h-4 w-4" aria-hidden="true" />
             Retry
           </button>
         </div>
       ) : matchCards.length === 0 ? (
-        <div className="glass-card flex flex-col items-center justify-center py-16 text-center">
-          <Filter className="mb-3 h-10 w-10 text-muted-foreground" aria-hidden="true" />
-          <h2 className="font-heading text-lg font-semibold">
-            {search ? "No matching lobbies" : "No open matches"}
-          </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {search
-              ? "Try another player address or match ID."
-              : "Create the first on-chain match and invite an opponent."}
-          </p>
-          {!search && (
+        // Empty state — different for search vs no matches
+        search ? (
+          <div className="glass-card flex flex-col items-center justify-center py-16 text-center">
+            <Search className="mb-3 h-10 w-10 text-muted-foreground" aria-hidden="true" />
+            <h2 className="font-heading text-lg font-semibold">
+              No matches found
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Try another player address or match ID.
+            </p>
+          </div>
+        ) : (
+          <div className="glass-card flex flex-col items-center justify-center py-16 text-center">
+            <Swords className="mb-3 h-10 w-10 text-muted-foreground" aria-hidden="true" />
+            <h2 className="font-heading text-lg font-semibold">
+              No open matches
+            </h2>
+            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+              The arena is quiet. Create the first on-chain match and invite an opponent.
+            </p>
             <button
               onClick={() => setShowCreate(true)}
-              className="mt-5 min-h-10 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary"
+              className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary"
             >
+              <Plus className="h-4 w-4" aria-hidden="true" />
               Create match
             </button>
-          )}
-        </div>
+          </div>
+        )
       ) : (
         <div className="grid gap-4">
           {matchCards.map((match) => (

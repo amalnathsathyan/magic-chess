@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { Clock, Coins, User, Zap } from "lucide-react";
+import { useMemo } from "react";
+import { Castle, Clock, Coins, Crown, Swords, User, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface MatchCardData {
@@ -10,7 +11,7 @@ export interface MatchCardData {
   blackPlayer?: string;
   wagerAmount: string;
   wagerToken: string; // "SOL" or SPL mint
-  timeControl: string; // e.g. "5+3", "10+0"
+  timeControl: string; // e.g. "60s / move", "180s / move", "600s / move"
   status: "open" | "in_progress" | "completed";
   createdAt: number;
 }
@@ -24,9 +25,56 @@ function shortenAddress(addr: string): string {
   return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
 }
 
+/** Map time control label to a chess piece icon. */
+function getTimeControlIcon(timeControl: string) {
+  const seconds = timeControl.match(/^(\d+)/)?.[1];
+  switch (seconds) {
+    case "60":
+      return Swords; // Bullet — fast, aggressive
+    case "180":
+      return Castle; // Blitz — classic
+    case "600":
+      return Crown; // Rapid — thoughtful, kingly
+    default:
+      return Clock;
+  }
+}
+
+/**
+ * Format a timestamp as a relative time string like "2m ago", "1h ago", etc.
+ * Accepts a unix-millis timestamp.
+ */
+function relativeTime(timestampMs: number): string {
+  const diffMs = Date.now() - timestampMs;
+  if (diffMs < 0) return "just now";
+
+  const seconds = Math.floor(diffMs / 1_000);
+  if (seconds < 60) return "just now";
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+
+  const weeks = Math.floor(days / 7);
+  return `${weeks}w ago`;
+}
+
 export function MatchCard({ match, className }: MatchCardProps) {
   const isOpen = match.status === "open";
   const isInProgress = match.status === "in_progress";
+  const TimeIcon = useMemo(
+    () => getTimeControlIcon(match.timeControl),
+    [match.timeControl]
+  );
+  const relativeCreatedAt = useMemo(
+    () => relativeTime(match.createdAt),
+    [match.createdAt]
+  );
 
   return (
     <Link
@@ -42,7 +90,14 @@ export function MatchCard({ match, className }: MatchCardProps) {
     >
       {/* Header row */}
       <div className="flex items-center justify-between">
-        <span className="font-mono text-xs text-muted">#{match.matchId.slice(0, 8)}</span>
+        <div className="flex items-center gap-2">
+          <span className="font-mono text-xs text-muted">
+            #{match.matchId.slice(0, 8)}
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            {relativeCreatedAt}
+          </span>
+        </div>
         <span
           className={cn(
             "rounded-full px-2.5 py-0.5 text-xs font-medium",
@@ -87,25 +142,34 @@ export function MatchCard({ match, className }: MatchCardProps) {
       </div>
 
       {/* Match details */}
-      <div className="mt-4 flex items-center justify-between">
+      <div className="mt-4 flex items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <Coins className="h-4 w-4 text-accent" />
-            <span className="font-mono text-sm font-semibold">
-              {match.wagerAmount} {match.wagerToken}
+          {/* Wager — more prominent */}
+          <div className="flex items-center gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-1.5">
+            <Coins className="h-4 w-4 text-accent" aria-hidden="true" />
+            <span className="font-mono text-base font-bold text-accent">
+              {match.wagerAmount}
+            </span>
+            <span className="text-xs font-medium text-accent/70">
+              {match.wagerToken}
             </span>
           </div>
+          {/* Time control with piece icon */}
           <div className="flex items-center gap-1.5">
-            <Clock className="h-4 w-4 text-muted" />
-            <span className="font-mono text-sm">{match.timeControl}</span>
+            <TimeIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <span className="font-mono text-sm text-muted-foreground">
+              {match.timeControl}
+            </span>
           </div>
+          {/* On-chain badge */}
           <div className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5">
             <Zap className="h-3 w-3 text-primary" aria-hidden="true" />
             <span className="font-mono text-xs text-primary/90">On-chain</span>
           </div>
         </div>
 
-        <div>
+        {/* Action button */}
+        <div className="shrink-0">
           {match.status === "open" ? (
             <span className="inline-flex items-center justify-center rounded-lg bg-primary/20 px-3 py-1.5 text-xs font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
               Join Match

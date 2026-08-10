@@ -123,6 +123,7 @@ export interface UseMatchesResult {
   matches: MatchInfo[];
   loading: boolean;
   error: Error | null;
+  refetch: () => Promise<void>;
 }
 
 /**
@@ -152,7 +153,7 @@ export function useMatches(filters?: { mint?: PublicKey }): UseMatchesResult {
     fetch();
   }, [fetch]);
 
-  return { matches, loading, error };
+  return { matches, loading, error, refetch: fetch };
 }
 
 // ── Hook: usePlayerMatches ─────────────────────────────────────
