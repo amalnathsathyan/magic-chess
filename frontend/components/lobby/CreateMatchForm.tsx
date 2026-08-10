@@ -5,7 +5,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { PublicKey } from "@solana/web3.js";
 import { usePrivy } from "@privy-io/react-auth";
 import { useWallets } from "@privy-io/react-auth/solana";
-import { Clock, Coins, Sword, X } from "lucide-react";
+import { Check, ChevronDown, Clock, Coins, Plus, Sword, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useMagicChessClient } from "@magic-chess/sdk/react";
@@ -31,6 +31,24 @@ const TIME_CONTROLS = [
   { label: "Rapid", minutes: 10 },
 ] as const;
 
+// Known betting tokens on devnet. Add more as needed.
+const BETTING_TOKENS = [
+  {
+    label: "WSOL",
+    mint: "So11111111111111111111111111111111111111112",
+    decimals: 9,
+    symbol: "WSOL",
+  },
+  {
+    label: "MAGIC (test)",
+    mint: "EvhpnrnGEggWfi7whd6TH87bcZZLWJtUAPjmBAFNwDQy",
+    decimals: 9,
+    symbol: "MAGIC",
+  },
+] as const;
+
+const CUSTOM_TOKEN = { label: "Custom", mint: "", decimals: 9, symbol: "" } as const;
+
 export function CreateMatchForm({
   isOpen,
   onClose,
@@ -40,11 +58,28 @@ export function CreateMatchForm({
   const [timeControl, setTimeControl] = useState<
     (typeof TIME_CONTROLS)[number]
   >(TIME_CONTROLS[1]);
+  const [selectedTokenIndex, setSelectedTokenIndex] = useState(0);
+  const [customMint, setCustomMint] = useState("");
+  const [tokenDropdownOpen, setTokenDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { authenticated, login } = usePrivy();
   const { wallets } = useWallets();
   const client = useMagicChessClient();
   const router = useRouter();
+
+  const isCustom = selectedTokenIndex === BETTING_TOKENS.length;
+  const selectedToken = isCustom
+    ? { ...CUSTOM_TOKEN, mint: customMint }
+    : BETTING_TOKENS[selectedTokenIndex];
+  const isFree = wagerAmount === "0" || wagerAmount === "";
+
+  const resolveMint = (): PublicKey => {
+    if (isCustom) {
+      if (!customMint) throw new Error("Enter a token mint address.");
+      return new PublicKey(customMint);
+    }
+    return new PublicKey(selectedToken.mint);
+  };
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -62,13 +97,12 @@ export function CreateMatchForm({
 
     setIsSubmitting(true);
     try {
-      const rawWager = parseTokenAmount(
-        wagerAmount,
-        solanaConfig.wagerDecimals
-      );
+      const mint = resolveMint();
+      const decimals = selectedToken.decimals;
+      const rawWager = parseTokenAmount(wagerAmount || "0", decimals);
       const player = new PublicKey(wallet.address);
-      const mint = new PublicKey(solanaConfig.wagerMint);
       const platformFeeWallet = getPlatformFeeWallet();
+
       const playerTokenAccount = await prepareWagerAccount(
         client,
         player,
@@ -130,13 +164,97 @@ export function CreateMatchForm({
           </Dialog.Description>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* ── Token selector ── */}
+            <div className="relative">
+              <label className="mb-2 flex items-center gap-2 text-sm font-medium">
+                <Coins className="h-4 w-4" aria-hidden="true" />
+                Betting token
+              </label>
+              <button
+                type="button"
+                onClick={() => setTokenDropdownOpen((prev) => !prev)}
+                className="flex h-11 w-full items-center justify-between rounded-lg border border-border bg-card px-3 text-sm transition-colors hover:bg-card-hover focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <span className={cn(isCustom && !customMint && "text-muted-foreground")}>
+                  {isCustom && customMint
+                    ? `${customMint.slice(0, 6)}…${customMint.slice(-4)}`
+                    : selectedToken.label}
+                </span>
+                <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", tokenDropdownOpen && "rotate-180")} />
+              </button>
+              {tokenDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-lg border border-border bg-card p-1 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+                  {BETTING_TOKENS.map((token, index) => (
+                    <button
+                      key={token.mint}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTokenIndex(index);
+                        setTokenDropdownOpen(false);
+                      }}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                        selectedTokenIndex === index
+                          ? "bg-primary/10 text-primary"
+                          : "hover:bg-white/5"
+                      )}
+                    >
+                      <span className="flex-1 text-left">{token.label}</span>
+                      <span className="text-xs text-muted-foreground">{token.symbol}</span>
+                      {selectedTokenIndex === index && (
+                        <Check className="h-4 w-4 text-primary" />
+                      )}
+                    </button>
+                  ))}
+                  <div className="my-1 h-px bg-border" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedTokenIndex(BETTING_TOKENS.length);
+                      setTokenDropdownOpen(false);
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                      isCustom ? "bg-primary/10 text-primary" : "hover:bg-white/5"
+                    )}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Custom token
+                    {isCustom && <Check className="ml-auto h-4 w-4 text-primary" />}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* ── Custom mint input ── */}
+            {isCustom && (
+              <div>
+                <label
+                  htmlFor="custom-mint"
+                  className="mb-2 flex items-center gap-2 text-sm font-medium"
+                >
+                  Token mint address
+                </label>
+                <input
+                  id="custom-mint"
+                  type="text"
+                  value={customMint}
+                  onChange={(event) => setCustomMint(event.target.value)}
+                  placeholder="Enter SPL token mint address…"
+                  autoComplete="off"
+                  className="h-11 w-full rounded-lg border border-border bg-card px-3 font-mono text-xs text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary"
+                />
+              </div>
+            )}
+
+            {/* ── Wager ── */}
             <div>
               <label
                 htmlFor="wager-amount"
                 className="mb-2 flex items-center gap-2 text-sm font-medium"
               >
                 <Coins className="h-4 w-4" aria-hidden="true" />
-                Wager ({solanaConfig.wagerSymbol})
+                Wager ({isCustom ? "tokens" : selectedToken.symbol})
               </label>
               <input
                 id="wager-amount"
@@ -147,13 +265,12 @@ export function CreateMatchForm({
                 autoComplete="off"
                 className="h-11 w-full rounded-lg border border-border bg-card px-3 font-mono text-sm text-foreground focus-visible:ring-2 focus-visible:ring-primary"
               />
-              {solanaConfig.wagerMint === WRAPPED_SOL_MINT.toBase58() && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Use 0 for a free match. Sponsorship covers network fees and
-                  account rent, not the wager; funded matches wrap your SOL to
-                  WSOL.
-                </p>
-              )}
+              <p className="mt-2 text-xs text-muted-foreground">
+                Use <button type="button" onClick={() => setWagerAmount("0")} className="underline hover:text-foreground">0</button> for a free match.
+                {selectedToken.mint === WRAPPED_SOL_MINT.toBase58()
+                  ? " Sponsorship covers network fees and account rent, not the wager."
+                  : ""}
+              </p>
             </div>
 
             <fieldset>
