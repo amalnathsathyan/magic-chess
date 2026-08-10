@@ -4,7 +4,7 @@ project: Magic Chess
 stack: Next.js, Privy embedded Solana wallets, Anchor, MagicBlock Ephemeral Rollups
 
 debug:
-  last_session: 2026-08-09
+  last_session: 2026-08-10
   issues_resolved:
     - error: Transaction recent blockhash required
       cause: The custom Anchor provider serialized the transaction before assigning a recent blockhash and fee payer.
@@ -12,4 +12,7 @@ debug:
     - error: Social and external-wallet authentication prompts did not open reliably.
       cause: The frontend used Privy v2 hooks/configuration with a v3 sponsorship API and the generic WalletConnect connector.
       fix: Migrate to Privy v3 Solana hooks/RPC configuration and the Solana-specific WalletConnect connector; dashboard providers and exact origins remain required.
-  routing_invariant: Base transactions use the base RPC and Privy sponsor; ER transactions use the router-selected ER endpoint and its blockhash.
+    - error: PrivyApiError — Gas sponsorship is not enabled.
+      cause: The frontend requested Privy's dashboard-managed sponsor on Solana devnet, but sponsorship was not enabled for the app.
+      fix: Route embedded-wallet base transactions through an authenticated custom backend fee payer; verify access tokens with the official Privy Node SDK, validate/simulate before co-signing, and use a separate Anchor rent payer.
+  routing_invariant: Base transactions use the base RPC and backend sponsor; ER transactions use the router-selected ER endpoint and its blockhash.

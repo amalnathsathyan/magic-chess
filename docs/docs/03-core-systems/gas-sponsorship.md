@@ -10,9 +10,9 @@ blockhash-not-found error.
 
 | Operation | Submission endpoint | Signing and fees |
 | --- | --- | --- |
-| Create, join, delegate | MagicBlock Solana devnet RPC | Privy embedded wallet with `sponsor: true` |
+| Create, join, delegate | MagicBlock Solana devnet RPC | Privy embedded wallet signs; authenticated backend fee payer validates, co-signs, simulates, and broadcasts |
 | Moves and ER state changes | Router-selected ER FQDN | Wallet/session signer; public ER execution is gas-free |
-| Commit, undelegate, settlement | Correct ER endpoint first, then base RPC after state returns | ER rules followed by Privy sponsorship on base-layer work |
+| Commit, undelegate, settlement | Correct ER endpoint first, then base RPC after state returns | ER rules followed by backend sponsorship on base-layer work |
 
 Immediately before signing a transaction:
 
@@ -22,10 +22,13 @@ Immediately before signing a transaction:
 4. Sign and submit through that same path.
 5. Confirm using the same signature/blockhash/validity tuple.
 
-The frontend's Anchor provider now performs this preparation for base-layer
-transactions before calling Privy v3's `useSignAndSendTransaction`. The SDK's
-ER path remains separate and uses the authoritative endpoint returned by the
-MagicBlock router.
+The frontend's Anchor provider performs this preparation for base-layer
+transactions, obtains the embedded-wallet signature through Privy v3, and sends
+the partial transaction with the Privy access token to
+`POST /api/transactions/sponsor`. The backend verifies the token with Privy's
+official Node SDK, enforces its transaction policy, adds the fee-payer signature,
+simulates, broadcasts, and confirms. The SDK's ER path remains separate and uses
+the authoritative endpoint returned by the MagicBlock router.
 
 ## Privy dashboard checklist
 
@@ -37,11 +40,10 @@ development deployment, verify all of the following:
    and localhost port but no path (for example `http://localhost:3000`). Google
    OAuth should be tested in a normal browser, not an embedded/in-app browser.
 3. Enable embedded Solana wallets, wallet UI prompts, and TEE execution.
-4. Under Gas and assets, enable **App pays** for Solana devnet, allow
-   client-initiated sponsored transactions, and ensure the sponsor has budget.
-5. During devnet, restrict policies to the Magic Chess program
-   `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h` and the required System,
-   SPL Token, and Associated Token instructions. Cap methods and spend.
+4. Copy the access-token verification key from Configuration → App settings →
+   Basics → **Verify with key instead** into the backend secret store.
+5. Keep the Solana fee-payer secret key only in the backend secret store. The
+   browser receives only its public address.
 
 The login UI is configured with the Solana-specific WalletConnect connector.
 Email login can create an embedded wallet without a SIWS popup; external-wallet
@@ -51,17 +53,25 @@ is missing in the Privy dashboard.
 
 ## What sponsorship pays
 
-Privy sponsorship covers network fees and, subject to policy, account-creation
-rent. It does not provide the user's wager principal. New matches therefore
-default to a zero-SOL wager. A nonzero WSOL wager is rejected before signing if
-the connected wallet lacks the required SOL.
+The custom fee payer covers network fees, sponsored ATA rent, and the match PDA
+and escrow rent through the program's separate `rent_payer` signer. It does not
+provide the user's wager principal. New matches therefore default to a zero-SOL
+wager. A nonzero WSOL wager is rejected before signing if the connected wallet
+lacks the required SOL.
 
-Client-side sponsorship is appropriate for the capped devnet trial. Before
-mainnet, relay sponsored base transactions through a backend or enforce strict
-Privy policies. Validate the authenticated user, chain, fee payer, program ID,
-instruction discriminator, accounts, wager mint and amount, and compute fees;
-also rate-limit and alert on spend. ATA creation needs a specific cap because a
-recipient can sometimes close an account and reclaim sponsor-funded rent.
+The backend validates the authenticated user signature, fee payer, allowed
+programs, `initialize_match` discriminator and account order, wager mint,
+System transfers, idempotent ATA construction, instruction count, serialized
+size, and blockhash. It rate-limits before signing and rejects any System
+transfer sourced from the sponsor. ATA rent remains capped because an account
+owner can later close an ATA and reclaim its rent.
+
+Required backend variables are `SOLANA_FEE_PAYER_PRIVATE_KEY`,
+`SOLANA_FEE_PAYER_ADDRESS`, `PRIVY_APP_ID`,
+`PRIVY_JWT_VERIFICATION_KEY`, `WAGER_MINT`, and
+`PLATFORM_FEE_WALLET`. Required browser variables are
+`NEXT_PUBLIC_SOLANA_SPONSOR_MODE=backend` and the public
+`NEXT_PUBLIC_SOLANA_FEE_PAYER_ADDRESS`.
 
 MagicBlock currently includes a limited number of sponsored commits per
 delegation. If the application adds frequent checkpoints, use a scoped delegated
@@ -82,7 +92,8 @@ the Privy base-layer sponsor.
 
 ## Documentation
 
-- [Privy gas sponsorship setup](https://docs.privy.io/wallets/gas-and-asset-management/gas/setup)
+- [Privy custom Solana sponsorship](https://docs.privy.io/wallets/gas-and-asset-management/gas/solana)
+- [Privy access-token verification](https://docs.privy.io/authentication/user-authentication/access-tokens)
 - [Privy Solana getting started](https://docs.privy.io/recipes/solana/getting-started-with-privy-and-solana)
 - [Privy React v3 migration](https://docs.privy.io/basics/react/advanced/migrating-to-3.0)
 - [Privy OAuth login](https://docs.privy.io/authentication/user-authentication/login-methods/oauth)
