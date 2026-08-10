@@ -4,10 +4,13 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const isProductionBuild = process.env.NODE_ENV === "production";
 
 const nextConfig: NextConfig = {
-  // Static export — no SSR, everything runs client-side. Avoids Worker size limit.
-  output: "export",
+  // Cloudflare serves the production build as static assets. Keeping export
+  // mode out of `next dev` allows arbitrary on-chain match IDs to resolve
+  // locally instead of requiring every ID in generateStaticParams().
+  output: isProductionBuild ? "export" : undefined,
 
   reactStrictMode: true,
 
