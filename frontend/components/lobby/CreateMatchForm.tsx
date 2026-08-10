@@ -153,6 +153,9 @@ export function CreateMatchForm({
       ).blockhash;
       transaction.feePayer = payer;
 
+      if (typeof provider.sendAndConfirm !== "function") {
+        throw new Error("Wallet provider is not ready. Try again shortly.");
+      }
       const signature = await provider.sendAndConfirm(transaction);
 
       toast.success("Match created on Solana", {

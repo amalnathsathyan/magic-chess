@@ -97,9 +97,16 @@ function statusLabel(status: GameStatus): string {
   return labels[status];
 }
 
-function formatRemaining(milliseconds: number): string {
+function formatRemaining(milliseconds: number): { text: string; isLow: boolean } {
   const seconds = Math.max(0, Math.ceil(milliseconds / 1_000));
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return {
+    text: mins > 0
+      ? `${mins}:${String(secs).padStart(2, "0")}`
+      : `${secs}s`,
+    isLow: seconds <= 10,
+  };
 }
 
 function isSquare(value: string): value is Square {
@@ -211,6 +218,12 @@ export default function PlayPage({ params }: PlayPageProps) {
   useEffect(() => {
     const intervalId = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(intervalId);
+  }, []);
+
+  // Unlock audio on first user gesture (browser autoplay policy)
+  useEffect(() => {
+    const cleanup = sounds.bindUnlock();
+    return cleanup;
   }, []);
 
   useEffect(() => {
@@ -666,9 +679,12 @@ export default function PlayPage({ params }: PlayPageProps) {
                         <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
                         Move timer
                       </dt>
-                      <dd className="font-mono font-medium tabular-nums">
+                      <dd className={cn(
+                        "font-mono font-bold tabular-nums",
+                        remainingMilliseconds !== null && formatRemaining(remainingMilliseconds).isLow && "animate-pulse text-red-400"
+                      )}>
                         {remainingMilliseconds !== null
-                          ? formatRemaining(remainingMilliseconds)
+                          ? formatRemaining(remainingMilliseconds).text
                           : timeoutMilliseconds > 0
                             ? `${timeoutMilliseconds / 1_000}s / move`
                             : "No timer"}

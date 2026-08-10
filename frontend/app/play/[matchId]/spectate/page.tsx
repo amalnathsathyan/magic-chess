@@ -47,11 +47,16 @@ function formatReason(reason: string | null): string | null {
     .replace(/^./, (character) => character.toUpperCase());
 }
 
-function formatRemaining(milliseconds: number): string {
+function formatRemaining(milliseconds: number): { text: string; isLow: boolean } {
   const totalSeconds = Math.max(0, Math.ceil(milliseconds / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return {
+    text: mins > 0
+      ? `${mins}:${String(secs).padStart(2, "0")}`
+      : `${secs}s`,
+    isLow: totalSeconds <= 10,
+  };
 }
 
 function normalizeBoardPiece(piece: Piece | null): {
@@ -353,9 +358,12 @@ export default function SpectatePage({ params }: SpectatePageProps) {
                       <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
                       Move timer
                     </dt>
-                    <dd className="font-mono font-medium tabular-nums">
+                    <dd className={cn(
+                      "font-mono font-bold tabular-nums",
+                      remainingMilliseconds !== null && formatRemaining(remainingMilliseconds).isLow && "animate-pulse text-red-400"
+                    )}>
                       {remainingMilliseconds !== null
-                        ? formatRemaining(remainingMilliseconds)
+                        ? formatRemaining(remainingMilliseconds).text
                         : timeoutMilliseconds > 0
                           ? `${Math.round(timeoutMilliseconds / 1_000)}s per move`
                           : "No timer"}
