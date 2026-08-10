@@ -6,7 +6,7 @@
 #   Deploy command:  npx wrangler deploy
 #   Root directory:  ./frontend/
 
-name = "arena"
+name = "arena-dev"
 main = "_worker.js"
 compatibility_date = "2026-08-08"
 compatibility_flags = ["nodejs_compat"]

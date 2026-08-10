@@ -16,7 +16,7 @@ import {
   solanaConfig,
   WRAPPED_SOL_MINT,
 } from "@/lib/solana-config";
-import { prepareWagerAccount } from "@/lib/wager";
+import { getTransactionPayer, prepareWagerAccount } from "@/lib/wager";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
 
 interface CreateMatchFormProps {
@@ -85,6 +85,7 @@ export function CreateMatchForm({
         platformFeeWallet,
         bettingTokenMint: mint,
         playerTokenAccount,
+        rentPayer: getTransactionPayer(client, player),
         predictionEnabled: false,
       });
 

@@ -2,10 +2,12 @@
 
 import { useMemo } from "react";
 import { AnchorProvider, Program } from "@anchor-lang/core";
+import { getAccessToken } from "@privy-io/react-auth";
 import bs58 from "bs58";
 import {
   Connection,
   PublicKey,
+  TransactionInstruction,
   type Signer,
   type Transaction,
   type VersionedTransaction,
@@ -24,11 +26,15 @@ import {
   isPrivyEmbeddedWallet,
   selectSolanaWallet,
 } from "@/lib/privy-wallet";
-import { solanaConfig } from "@/lib/solana-config";
+import { getBackendFeePayer, solanaConfig } from "@/lib/solana-config";
 
 const RPC_ENDPOINT = solanaConfig.rpcEndpoint;
 const PROGRAM_ID = solanaConfig.programId;
 const PRIVY_SOLANA_CHAIN = "solana:devnet" as const;
+const MEMO_PROGRAM_ID = new PublicKey(
+  "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
+);
+const SPONSOR_AUTHORIZATION_MEMO = "magic-chess:sponsor";
 
 function serializeTransaction(
   transaction: Transaction | VersionedTransaction
@@ -67,6 +73,53 @@ type BrowserAnchorWallet = {
     transactions: T[]
   ): Promise<T[]>;
 };
+
+export type SponsorAwareProvider = AnchorProvider & {
+  sponsorPayer?: PublicKey;
+};
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 1) {
+    binary += String.fromCharCode(bytes[index]);
+  }
+  return window.btoa(binary);
+}
+
+async function relaySponsoredTransaction(input: {
+  transaction: Uint8Array;
+  walletAddress: string;
+  lastValidBlockHeight: number;
+}): Promise<string> {
+  if (!solanaConfig.apiUrl) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured for sponsorship.");
+  }
+  const accessToken = await getAccessToken();
+  if (!accessToken) throw new Error("Your Privy session expired. Sign in again.");
+
+  const response = await fetch(
+    `${solanaConfig.apiUrl.replace(/\/$/, "")}/api/transactions/sponsor`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        transaction: toBase64(input.transaction),
+        walletAddress: input.walletAddress,
+        lastValidBlockHeight: input.lastValidBlockHeight,
+      }),
+    }
+  );
+  const body = (await response.json().catch(() => null)) as
+    | { signature?: string; error?: string }
+    | null;
+  if (!response.ok || !body?.signature) {
+    throw new Error(body?.error ?? `Sponsor rejected the transaction (${response.status}).`);
+  }
+  return body.signature;
+}
 
 export function SolanaProgramProvider({
   children,
@@ -114,7 +167,14 @@ export function SolanaProgramProvider({
     const baseProvider = new AnchorProvider(connection, anchorWallet, {
       commitment: "confirmed",
       preflightCommitment: "confirmed",
-    });
+    }) as SponsorAwareProvider;
+
+    const embeddedWallet = solanaWallet
+      ? isPrivyEmbeddedWallet(solanaWallet)
+      : false;
+    const backendSponsored =
+      embeddedWallet && solanaConfig.sponsorMode === "backend";
+    if (backendSponsored) baseProvider.sponsorPayer = getBackendFeePayer();
 
     // Anchor normally prepares fee payer + blockhash inside sendAndConfirm.
     // Because sponsored transactions must go through Privy's hook, reproduce
@@ -127,19 +187,63 @@ export function SolanaProgramProvider({
       const wallet = solanaWallet;
       if (!wallet) throw new Error("No Solana wallet connected");
 
+      let lastValidBlockHeight: number | undefined;
+
       if ("version" in tx) {
+        if (backendSponsored) {
+          throw new Error("Backend sponsorship currently requires a legacy Solana transaction.");
+        }
         if (signers?.length) tx.sign(signers);
       } else {
+        if (
+          backendSponsored &&
+          !tx.instructions.some((instruction) =>
+            instruction.keys.some(
+              (key) => key.isSigner && key.pubkey.equals(anchorWallet.publicKey)
+            )
+          )
+        ) {
+          tx.add(
+            new TransactionInstruction({
+              programId: MEMO_PROGRAM_ID,
+              keys: [
+                {
+                  pubkey: anchorWallet.publicKey,
+                  isSigner: true,
+                  isWritable: false,
+                },
+              ],
+              data: new TextEncoder().encode(
+                SPONSOR_AUTHORIZATION_MEMO
+              ) as Buffer,
+            })
+          );
+        }
         const latest = await connection.getLatestBlockhash(
           options.preflightCommitment ?? "confirmed"
         );
-        tx.feePayer ??= new PublicKey(wallet.address);
+        tx.feePayer = backendSponsored
+          ? getBackendFeePayer()
+          : new PublicKey(wallet.address);
         tx.recentBlockhash = latest.blockhash;
         tx.lastValidBlockHeight = latest.lastValidBlockHeight;
+        lastValidBlockHeight = latest.lastValidBlockHeight;
         signers?.forEach((signer) => tx.partialSign(signer));
       }
 
-      const sponsored = isPrivyEmbeddedWallet(wallet);
+      if (backendSponsored) {
+        if (!("version" in tx) && lastValidBlockHeight) {
+          const signed = await anchorWallet.signTransaction(tx);
+          return relaySponsoredTransaction({
+            transaction: serializeTransaction(signed),
+            walletAddress: wallet.address,
+            lastValidBlockHeight,
+          });
+        }
+        throw new Error("Unable to prepare the sponsored Solana transaction.");
+      }
+
+      const sponsored = embeddedWallet;
       const { signature } = await signAndSendTransaction({
         transaction: serializeTransaction(tx),
         wallet,

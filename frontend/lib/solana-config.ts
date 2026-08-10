@@ -6,6 +6,7 @@ export const WRAPPED_SOL_MINT = new PublicKey(
 );
 
 export const solanaConfig = {
+  apiUrl: process.env.NEXT_PUBLIC_API_URL ?? "",
   rpcEndpoint:
     process.env.NEXT_PUBLIC_RPC_ENDPOINT ?? "https://rpc.magicblock.app/devnet",
   rpcWsEndpoint:
@@ -24,7 +25,25 @@ export const solanaConfig = {
   wagerDecimals: Number(process.env.NEXT_PUBLIC_WAGER_DECIMALS ?? "9"),
   platformFeeWallet: process.env.NEXT_PUBLIC_PLATFORM_FEE_WALLET ?? "",
   platformFeeBps: Number(process.env.NEXT_PUBLIC_PLATFORM_FEE_BPS ?? "100"),
+  sponsorMode:
+    process.env.NEXT_PUBLIC_SOLANA_SPONSOR_MODE === "backend"
+      ? "backend"
+      : "privy",
+  feePayerAddress:
+    process.env.NEXT_PUBLIC_SOLANA_FEE_PAYER_ADDRESS ?? "",
 } as const;
+
+export function getBackendFeePayer(): PublicKey {
+  if (solanaConfig.sponsorMode !== "backend") {
+    throw new Error("Backend Solana sponsorship is not enabled.");
+  }
+  if (!solanaConfig.feePayerAddress) {
+    throw new Error(
+      "NEXT_PUBLIC_SOLANA_FEE_PAYER_ADDRESS is not configured for this deployment."
+    );
+  }
+  return new PublicKey(solanaConfig.feePayerAddress);
+}
 
 export function getPlatformFeeWallet(): PublicKey {
   if (!solanaConfig.platformFeeWallet) {

@@ -15,7 +15,16 @@ import { WRAPPED_SOL_MINT } from "@/lib/solana-config";
 type TransactionProvider = {
   connection?: Pick<Connection, "getBalance">;
   sendAndConfirm?: (transaction: Transaction) => Promise<string>;
+  sponsorPayer?: PublicKey;
 };
+
+export function getTransactionPayer(
+  client: MagicChessClient,
+  wallet: PublicKey
+): PublicKey {
+  const provider = client.program.provider as TransactionProvider;
+  return provider.sponsorPayer ?? wallet;
+}
 
 /**
  * Create the wager ATA and, for the configured native-SOL mint, wrap exactly
@@ -52,9 +61,10 @@ export async function prepareWagerAccount(
   }
 
   const tokenAccount = getAssociatedTokenAddressSync(mint, owner);
+  const payer = provider.sponsorPayer ?? owner;
   const transaction = new Transaction().add(
     createAssociatedTokenAccountIdempotentInstruction(
-      owner,
+      payer,
       tokenAccount,
       owner,
       mint
@@ -87,10 +97,12 @@ export async function prepareSettlementAccounts(
     getAssociatedTokenAddressSync(mint, owner)
   ) as [PublicKey, PublicKey, PublicKey];
   const transaction = new Transaction();
+  const provider = client.program.provider as TransactionProvider;
+  const transactionPayer = provider.sponsorPayer ?? payer;
   accounts.forEach((account, index) => {
     transaction.add(
       createAssociatedTokenAccountIdempotentInstruction(
-        payer,
+        transactionPayer,
         account,
         owners[index],
         mint
@@ -98,7 +110,6 @@ export async function prepareSettlementAccounts(
     );
   });
 
-  const provider = client.program.provider as TransactionProvider;
   if (typeof provider.sendAndConfirm !== "function") {
     throw new Error("A connected Solana wallet is required to prepare settlement.");
   }
