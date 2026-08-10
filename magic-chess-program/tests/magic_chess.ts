@@ -190,6 +190,7 @@ async function createAndJoinMatch(
     .accounts({
       chessMatch: chessMatchPda,
       playerSigner: player1.publicKey,
+      rentPayer: player1.publicKey,
       bettingTokenMintAccount: mint,
       playerTokenAccount: player1Ata,
       matchEscrowTokenAccount: escrowPda,
@@ -418,6 +419,7 @@ describe("Magic Chess — Standard Integration Tests", () => {
       .accounts({
         chessMatch: chessMatchPda,
         playerSigner: player1.publicKey,
+        rentPayer: player1.publicKey,
         bettingTokenMintAccount: mint,
         playerTokenAccount: player1Ata,
         matchEscrowTokenAccount: escrowPda,
@@ -475,6 +477,7 @@ describe("Magic Chess — Standard Integration Tests", () => {
       .accounts({
         chessMatch: chessMatchPda,
         playerSigner: player1.publicKey,
+        rentPayer: player1.publicKey,
         bettingTokenMintAccount: mint,
         playerTokenAccount: player1Ata,
         matchEscrowTokenAccount: escrowPda,
@@ -718,6 +721,7 @@ describe("Magic Chess — Standard Integration Tests", () => {
       .accounts({
         chessMatch: chessMatchPda,
         playerSigner: player1.publicKey,
+        rentPayer: player1.publicKey,
         bettingTokenMintAccount: mint,
         playerTokenAccount: player1Ata,
         matchEscrowTokenAccount: escrowPda,
@@ -878,6 +882,7 @@ describe("Magic Chess — Standard Integration Tests", () => {
       .accounts({
         chessMatch: chessMatchPda,
         playerSigner: player1.publicKey,
+        rentPayer: player1.publicKey,
         bettingTokenMintAccount: mint,
         playerTokenAccount: player1Ata,
         matchEscrowTokenAccount: escrowPda,

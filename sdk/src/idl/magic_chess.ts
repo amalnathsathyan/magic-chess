@@ -860,6 +860,16 @@ export type MagicChess = {
           "signer": true
         },
         {
+          "name": "rentPayer",
+          "docs": [
+            "Separate signer that funds account rent. In self-paid transactions this",
+            "may be the player; sponsored transactions set it to the backend fee",
+            "payer without granting that payer authority over the player's tokens."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
           "name": "bettingTokenMintAccount",
           "docs": [
             "The SPL token mint used for betting — any SPL token is accepted"

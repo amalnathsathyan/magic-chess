@@ -635,6 +635,7 @@ fn bench_06_initialize_match() {
     let account_metas = vec![
         AccountMeta::new(match_pda, false),
         AccountMeta::new(player_pubkey, true),
+        AccountMeta::new(player_pubkey, true),
         AccountMeta::new_readonly(mint, false),
         AccountMeta::new(player_ata_address, false),
         AccountMeta::new(escrow_pda, false),
@@ -796,6 +797,7 @@ fn bench_07_initialize_match_with_token() {
 
     let account_metas = vec![
         AccountMeta::new(match_pda, false),
+        AccountMeta::new(player_pubkey, true),
         AccountMeta::new(player_pubkey, true),
         AccountMeta::new_readonly(mint, false),
         AccountMeta::new(player_ata_address, false),

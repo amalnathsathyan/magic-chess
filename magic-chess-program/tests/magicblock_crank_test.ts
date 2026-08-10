@@ -271,6 +271,7 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
       .accounts({
         chessMatch: chessMatchPda,
         playerSigner: payer.publicKey,
+        rentPayer: payer.publicKey,
         bettingTokenMintAccount: bettingMint,
         playerTokenAccount: payerAta,
         matchEscrowTokenAccount: escrowPda,

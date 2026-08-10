@@ -20,7 +20,7 @@ use crate::utils::*;
 pub struct InitializeMatch<'info> {
     #[account(
         init,
-        payer = player_signer,
+        payer = rent_payer,
         space = ANCHOR_DISCRIMINATOR + ChessMatch::INIT_SPACE,
         seeds = [CHESS_MATCH_SEED, match_id_arg.as_bytes()],
         bump
@@ -29,6 +29,12 @@ pub struct InitializeMatch<'info> {
 
     #[account(mut)]
     pub player_signer: Signer<'info>,
+
+    /// Separate signer that funds account rent. In self-paid transactions this
+    /// may be the player; sponsored transactions set it to the backend fee
+    /// payer without granting that payer authority over the player's tokens.
+    #[account(mut)]
+    pub rent_payer: Signer<'info>,
 
     /// The SPL token mint used for betting — any SPL token is accepted
     pub betting_token_mint_account: Account<'info, Mint>,
@@ -42,7 +48,7 @@ pub struct InitializeMatch<'info> {
 
     #[account(
         init,
-        payer = player_signer,
+        payer = rent_payer,
         seeds = [MATCH_ESCROW_SEED, match_id_arg.as_bytes()],
         bump,
         token::mint = betting_token_mint_account,

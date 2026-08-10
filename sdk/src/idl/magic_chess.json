@@ -854,6 +854,16 @@
           "signer": true
         },
         {
+          "name": "rent_payer",
+          "docs": [
+            "Separate signer that funds account rent. In self-paid transactions this",
+            "may be the player; sponsored transactions set it to the backend fee",
+            "payer without granting that payer authority over the player's tokens."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
           "name": "betting_token_mint_account",
           "docs": [
             "The SPL token mint used for betting — any SPL token is accepted"

@@ -280,6 +280,7 @@ describe("MagicBlock Session Key — Authorization Flow", () => {
       .accounts({
         chessMatch: chessMatchPda,
         playerSigner: whitePlayer.publicKey,
+        rentPayer: whitePlayer.publicKey,
         bettingTokenMintAccount: bettingMint,
         playerTokenAccount: whiteAta,
         matchEscrowTokenAccount: escrowPda,

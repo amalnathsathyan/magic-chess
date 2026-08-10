@@ -237,6 +237,7 @@ fn ix_init(
     d.push(prediction_enabled as u8);
     Instruction { program_id: program_id(), accounts: vec![
         AccountMeta::new(*cm, false), AccountMeta::new(*p, true),
+        AccountMeta::new(*p, true),
         AccountMeta::new_readonly(*mint, false), AccountMeta::new(*ata, false),
         AccountMeta::new(*epda, false), AccountMeta::new_readonly(token_program_id(), false),
         AccountMeta::new_readonly(system_program_id(), false),

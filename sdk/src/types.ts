@@ -149,6 +149,11 @@ export interface CreateMatchParams {
   bettingTokenMint: PublicKey;
   /** Player 1's associated token account for the betting mint */
   playerTokenAccount: PublicKey;
+  /**
+   * Signer that funds the match and escrow account rent. Defaults to the
+   * connected wallet for self-paid transactions.
+   */
+  rentPayer?: PublicKey;
   /** Enable the spectator prediction pool for this match. Defaults to false. */
   predictionEnabled?: boolean;
 }

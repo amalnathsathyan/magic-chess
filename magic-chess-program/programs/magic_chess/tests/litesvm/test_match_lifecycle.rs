@@ -60,6 +60,45 @@ fn test_initialize_match() {
     assert_eq!(player_balance, 1_000_000 - bet_amount);
 }
 
+#[test]
+fn test_initialize_match_with_separate_rent_payer() {
+    let mut svm = TestSvm::new();
+    let player = Keypair::new();
+    let sponsor = svm.create_funded_account(1_000_000_000);
+
+    let mint = svm.create_mint(9);
+    let player_ata = svm.create_ata(&mint, &player.pubkey());
+    svm.mint_tokens(&mint, &player_ata, 1_000_000);
+
+    let match_id = "sponsored-init-001";
+    let (chess_match_pda, _) = find_chess_match_pda(match_id);
+    let (escrow_pda, _) = find_escrow_pda(match_id);
+    let platform_fee_wallet = Keypair::new().pubkey();
+
+    let ix = initialize_match_ix_with_rent_payer(
+        &chess_match_pda,
+        &player.pubkey(),
+        &sponsor.pubkey(),
+        &mint,
+        &player_ata,
+        &escrow_pda,
+        match_id,
+        100_000,
+        0,
+        200,
+        &platform_fee_wallet,
+        false,
+    );
+    svm.send_ix(ix, &[&player, &sponsor]);
+
+    let chess_match = svm.get_chess_match(&chess_match_pda);
+    assert!(pk_eq(
+        &player.pubkey().to_bytes(),
+        &chess_match.players[0].to_bytes()
+    ));
+    assert_eq!(svm.get_token_balance(&escrow_pda), 100_000);
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // 2. Join match — verify P2 joined, pot doubled
 // ─────────────────────────────────────────────────────────────────────────

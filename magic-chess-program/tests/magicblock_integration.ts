@@ -288,6 +288,7 @@ describe("MagicBlock Ephemeral Rollup — Full Lifecycle", () => {
       .accounts({
         chessMatch: chessMatchPda,
         playerSigner: payer.publicKey,
+        rentPayer: payer.publicKey,
         bettingTokenMintAccount: bettingMint,
         playerTokenAccount: payerAta,
         matchEscrowTokenAccount: escrowPda,

@@ -297,6 +297,36 @@ pub fn initialize_match_ix(
     platform_fee_wallet: &Pubkey,
     prediction_enabled: bool,
 ) -> Instruction {
+    initialize_match_ix_with_rent_payer(
+        chess_match_pda,
+        player,
+        player,
+        betting_token_mint,
+        player_token_account,
+        match_escrow,
+        match_id,
+        bet_amount,
+        move_timeout_duration,
+        platform_fee_bps,
+        platform_fee_wallet,
+        prediction_enabled,
+    )
+}
+
+pub fn initialize_match_ix_with_rent_payer(
+    chess_match_pda: &Pubkey,
+    player: &Pubkey,
+    rent_payer: &Pubkey,
+    betting_token_mint: &Pubkey,
+    player_token_account: &Pubkey,
+    match_escrow: &Pubkey,
+    match_id: &str,
+    bet_amount: u64,
+    move_timeout_duration: i64,
+    platform_fee_bps: u16,
+    platform_fee_wallet: &Pubkey,
+    prediction_enabled: bool,
+) -> Instruction {
     let mut data = Vec::new();
     data.extend_from_slice(&discriminator("initialize_match"));
 
@@ -314,6 +344,7 @@ pub fn initialize_match_ix(
         accounts: vec![
             AccountMeta::new(*chess_match_pda, false),
             AccountMeta::new(*player, true),
+            AccountMeta::new(*rent_payer, true),
             AccountMeta::new_readonly(*betting_token_mint, false),
             AccountMeta::new(*player_token_account, false),
             AccountMeta::new(*match_escrow, false),

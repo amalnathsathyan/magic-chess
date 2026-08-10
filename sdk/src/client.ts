@@ -151,6 +151,8 @@ export class MagicChessClient {
       .accountsPartial({
         chessMatch: chessMatchPda,
         playerSigner: this.requireWallet("createMatch").publicKey,
+        rentPayer:
+          params.rentPayer ?? this.requireWallet("createMatch").publicKey,
         bettingTokenMintAccount: params.bettingTokenMint,
         playerTokenAccount: params.playerTokenAccount,
         matchEscrowTokenAccount: matchEscrowPda,
