@@ -1,0 +1,14 @@
+{
+  "$schema": "../../../frontend/node_modules/wrangler/config-schema.json",
+  "name": "pitch",
+  "main": "_worker.mjs",
+  "compatibility_date": "2026-08-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    }
+  }
+}
