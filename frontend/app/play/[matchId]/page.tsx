@@ -12,6 +12,7 @@ import {
   LoaderCircle,
   RefreshCw,
   ShieldCheck,
+  Sword,
   User,
 } from "lucide-react";
 import { Chess, type Move as ChessMove, type Square } from "chess.js";
@@ -793,9 +794,18 @@ export default function PlayPage({ params }: PlayPageProps) {
                   ) : null}
 
                   {match.payoutProcessed ? (
-                    <p className="mt-4 rounded-lg bg-primary/10 p-3 text-sm text-primary">
-                      Payout settled on Solana.
-                    </p>
+                    <div className="mt-4 space-y-2">
+                      <p className="rounded-lg bg-primary/10 p-3 text-sm text-primary">
+                        Payout settled on Solana.
+                      </p>
+                      <Link
+                        href="/arena"
+                        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-primary/40 px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        <Sword className="h-4 w-4" aria-hidden="true" />
+                        New match
+                      </Link>
+                    </div>
                   ) : null}
 
                   {!isParticipant && !isWaiting ? (
