@@ -17,6 +17,7 @@ export function MoveList({
   moves,
   fen,
   currentMoveIndex = -1,
+  result,
   className,
 }: MoveListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
