@@ -1,8 +1,8 @@
 // Minimal worker — serves static assets with SPA fallback.
 // Dynamic routes (e.g. /play/<matchId>) map to their static placeholder files.
 const DYNAMIC_ROUTES = [
-  { pattern: /^\/play\/[^/]+$/, asset: "/play/[matchId].html" },
-  { pattern: /^\/play\/[^/]+\/spectate$/, asset: "/play/[matchId]/spectate.html" },
+  { pattern: /^\/play\/[^/]+$/, asset: "/play/placeholder.html" },
+  { pattern: /^\/play\/[^/]+\/spectate$/, asset: "/play/placeholder/spectate.html" },
 ];
 
 function dynamicAsset(pathname) {
