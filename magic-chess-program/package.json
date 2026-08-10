@@ -5,7 +5,8 @@
   "scripts": {
     "test": "anchor test",
     "build": "anchor build",
-    "deploy:devnet": "anchor deploy --provider.cluster devnet"
+    "deploy:devnet": "anchor deploy --provider.cluster devnet",
+    "verify:session-devnet": "tsx scripts/verify-session-v2-devnet.ts"
   },
   "dependencies": {
     "@anchor-lang/core": "^1.1.2",
