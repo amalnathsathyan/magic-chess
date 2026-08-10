@@ -11,6 +11,7 @@ import { sql } from "./db/pool.js";
 import { realtimeRoutes } from "./routes/realtime.js";
 import { MatchRealtimeHub } from "./services/matchRealtime.js";
 import { loadMatchRealtimeSnapshot } from "./services/matchSnapshot.js";
+import { transactionRoutes } from "./routes/transactions.js";
 
 async function main(): Promise<void> {
   const app = Fastify({
@@ -54,6 +55,7 @@ async function main(): Promise<void> {
   playerRoutes(app);
   leaderboardRoutes(app);
   syncRoutes(app, realtime);
+  transactionRoutes(app);
 
   app.addHook("onClose", async () => realtime.close());
 

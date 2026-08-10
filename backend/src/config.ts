@@ -51,6 +51,22 @@ export const config = {
     routerEndpoint:
       process.env.MAGICBLOCK_ROUTER ||
       "https://devnet-router.magicblock.app/",
+    wagerMint:
+      process.env.WAGER_MINT ||
+      "So11111111111111111111111111111111111111112",
+    platformFeeWallet: process.env.PLATFORM_FEE_WALLET || "",
+  },
+
+  sponsor: {
+    feePayerAddress: process.env.SOLANA_FEE_PAYER_ADDRESS || "",
+    feePayerPrivateKey: process.env.SOLANA_FEE_PAYER_PRIVATE_KEY || "",
+    privyAppId: process.env.PRIVY_APP_ID || "",
+    privyJwtVerificationKey:
+      process.env.PRIVY_JWT_VERIFICATION_KEY?.replace(/\\n/g, "\n") || "",
+    requestsPerMinute: Number(process.env.SPONSOR_REQUESTS_PER_MINUTE || "10"),
+    maxWagerLamports: BigInt(
+      process.env.SPONSOR_MAX_WAGER_LAMPORTS || "1000000000"
+    ),
   },
 
   // Shared secret for sync endpoint auth
