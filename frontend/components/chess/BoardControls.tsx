@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { FlipVertical, Flag, Volume2, VolumeX, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { sounds } from "@/lib/sounds";
