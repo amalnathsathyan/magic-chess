@@ -20,10 +20,39 @@ import type {
 function requireApiKey(request: { headers: Record<string, string | string[] | undefined> }): void {
   const raw = request.headers["x-api-key"];
   const key = Array.isArray(raw) ? raw[0] : raw;
-  if (!key || key !== config.apiKey) {
+  if (!key || !timingSafeEqual(Buffer.from(key), Buffer.from(config.apiKey))) {
     throw { statusCode: 401, message: "Unauthorized — invalid or missing X-API-Key" };
   }
 }
+
+// ── Rate limiter (per-IP, sliding window) ──
+const syncRateLimits = new Map<string, { windowStart: number; count: number }>();
+const MAX_SYNC_RATE_LIMIT_ENTRIES = 4096;
+
+function enforceSyncRateLimit(ip: string): void {
+  const now = Date.now();
+  const current = syncRateLimits.get(ip);
+  if (!current || now - current.windowStart >= 60_000) {
+    syncRateLimits.set(ip, { windowStart: now, count: 1 });
+    return;
+  }
+  current.count += 1;
+  if (current.count > 60) {
+    throw { statusCode: 429, message: "Sync rate limit exceeded" };
+  }
+}
+
+// Periodic cleanup of expired rate limit entries
+setInterval(() => {
+  const cutoff = Date.now() - 60_000;
+  for (const [key, entry] of syncRateLimits) {
+    if (entry.windowStart < cutoff) syncRateLimits.delete(key);
+  }
+  // Hard cap: if still too large, clear all
+  if (syncRateLimits.size > MAX_SYNC_RATE_LIMIT_ENTRIES) {
+    syncRateLimits.clear();
+  }
+}, 60_000).unref();
 
 interface SyncRequest {
   matchId: string;
@@ -138,6 +167,7 @@ export function syncRoutes(
     { schema: { body: syncBodySchema } },
     async (request, reply) => {
       requireApiKey(request);
+      enforceSyncRateLimit(request.ip);
       const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
       assertMatchId(matchId);
       const verified = await verifyProgramEvent({
@@ -201,6 +231,7 @@ export function syncRoutes(
     { schema: { body: syncBodySchema } },
     async (request, reply) => {
       requireApiKey(request);
+      enforceSyncRateLimit(request.ip);
       const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
       assertMatchId(matchId);
       const verified = await verifyProgramEvent({
@@ -335,6 +366,7 @@ export function syncRoutes(
     { schema: { body: syncBodySchema } },
     async (request, reply) => {
       requireApiKey(request);
+      enforceSyncRateLimit(request.ip);
       const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
       assertMatchId(matchId);
       const verified = await verifyProgramEvent({
@@ -471,6 +503,7 @@ export function syncRoutes(
     { schema: { body: syncBodySchema } },
     async (request, reply) => {
       requireApiKey(request);
+      enforceSyncRateLimit(request.ip);
       const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
       assertMatchId(matchId);
       const verified = await verifyProgramEvent({
@@ -554,6 +587,7 @@ export function syncRoutes(
     { schema: { body: syncBodySchema } },
     async (request, reply) => {
       requireApiKey(request);
+      enforceSyncRateLimit(request.ip);
       const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
       assertMatchId(matchId);
       const verified = await verifyProgramEvent({
