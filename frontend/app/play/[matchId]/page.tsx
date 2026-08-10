@@ -36,12 +36,15 @@ import { shortenAddress } from "@/lib/chess";
 import { sounds } from "@/lib/sounds";
 import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
 import {
+  getTransactionPayer,
   prepareSettlementAccounts,
   prepareWagerAccount,
 } from "@/lib/wager";
 import { useMagicBlock } from "@/hooks/useMagicBlock";
 import { cn } from "@/lib/utils";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
+import { magicBlockTxUrl, solanaDevnetTxUrl } from "@/lib/explorer";
+import { useMoveTransactionNotifications } from "@/hooks/useMoveTransactionNotifications";
 
 interface PlayPageProps {
   params: Promise<{ matchId: string }>;
@@ -150,7 +153,12 @@ export default function PlayPage({ params }: PlayPageProps) {
   const { match, loading, error, refetch } = useMatch(matchId);
   const { wallets } = useWallets();
   const wallet = selectSolanaWallet(wallets);
-  const { submitMove } = useMagicBlock();
+  const {
+    submitMove,
+    sessionStatus,
+    sessionError,
+    enableFastPlay,
+  } = useMagicBlock();
 
   const [history, setHistory] = useState<ApiMatchHistory | null>(null);
   const [historyUnavailable, setHistoryUnavailable] = useState(false);
@@ -165,6 +173,7 @@ export default function PlayPage({ params }: PlayPageProps) {
   } | null>(null);
   const [txStatus, setTxStatus] = useState<TxStatus>("idle");
   const [txSignature, setTxSignature] = useState<string>();
+  const [txExplorerHref, setTxExplorerHref] = useState<string>();
   const [txError, setTxError] = useState<string>();
 
   const loadHistory = useCallback(async () => {
@@ -175,6 +184,16 @@ export default function PlayPage({ params }: PlayPageProps) {
       setHistoryUnavailable(true);
     }
   }, [matchId]);
+
+  const refreshAfterMove = useCallback(() => {
+    void Promise.allSettled([refetch(), loadHistory()]);
+  }, [loadHistory, refetch]);
+
+  useMoveTransactionNotifications({
+    matchId,
+    enabled: Boolean(match?.isDelegated),
+    onMove: refreshAfterMove,
+  });
 
   useEffect(() => {
     void loadHistory();
@@ -278,11 +297,12 @@ export default function PlayPage({ params }: PlayPageProps) {
   const resetTransaction = () => {
     setTxStatus("idle");
     setTxSignature(undefined);
+    setTxExplorerHref(undefined);
     setTxError(undefined);
   };
 
   const runTransaction = async (
-    action: () => Promise<{ signature: string }>,
+    action: () => Promise<{ signature: string; rpcEndpoint?: string }>,
     successMessage: string
   ) => {
     resetTransaction();
@@ -291,6 +311,11 @@ export default function PlayPage({ params }: PlayPageProps) {
       const result = await action();
       setTxStatus("confirming");
       setTxSignature(result.signature);
+      setTxExplorerHref(
+        result.rpcEndpoint
+          ? magicBlockTxUrl(result.signature, result.rpcEndpoint)
+          : solanaDevnetTxUrl(result.signature)
+      );
       await Promise.allSettled([refetch(), loadHistory()]);
       setTxStatus("success");
       toast.success(successMessage);
@@ -330,7 +355,11 @@ export default function PlayPage({ params }: PlayPageProps) {
       );
       joined = true;
       await runTransaction(
-        () => client.delegateMatch(matchId),
+        () =>
+          client.delegateMatch(
+            matchId,
+            getTransactionPayer(client, owner)
+          ),
         "Fast on-chain play is ready"
       );
     } catch {
@@ -345,9 +374,15 @@ export default function PlayPage({ params }: PlayPageProps) {
   };
 
   const handleDelegate = async () => {
+    if (!wallet) return;
     try {
+      const player = new PublicKey(wallet.address);
       await runTransaction(
-        () => client.delegateMatch(matchId),
+        () =>
+          client.delegateMatch(
+            matchId,
+            getTransactionPayer(client, player)
+          ),
         "Fast on-chain play is ready"
       );
     } catch {
@@ -370,8 +405,11 @@ export default function PlayPage({ params }: PlayPageProps) {
     resetTransaction();
     setTxStatus("submitting");
     try {
-      const signature = await submitMove(matchId, source, target, promotion);
-      setTxSignature(signature);
+      const submission = await submitMove(matchId, source, target, promotion);
+      setTxSignature(submission.signature);
+      setTxExplorerHref(
+        magicBlockTxUrl(submission.signature, submission.rpcEndpoint)
+      );
       setTxStatus("confirming");
       await Promise.all([refetch(), loadHistory()]);
       setTxStatus("success");
@@ -674,6 +712,43 @@ export default function PlayPage({ params }: PlayPageProps) {
                     </button>
                   ) : null}
 
+                  {isActive && isParticipant && match.isDelegated ? (
+                    <div className="mt-4 rounded-lg border border-primary/25 bg-primary/5 p-3">
+                      <p className="text-sm font-medium text-foreground">
+                        {sessionStatus === "ready"
+                          ? "Instant moves enabled"
+                          : sessionStatus === "authorizing"
+                            ? "Authorizing instant moves…"
+                            : "Enable instant moves"}
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Approve once. Moves use a short-lived MagicBlock session key with no wallet popups.
+                      </p>
+                      {sessionError ? (
+                        <p className="mt-2 text-xs text-destructive">{sessionError}</p>
+                      ) : null}
+                      {sessionStatus !== "ready" ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void enableFastPlay()
+                              .then(() => toast.success("Instant moves enabled"))
+                              .catch((cause: unknown) =>
+                                toast.error("Could not enable instant moves", {
+                                  description:
+                                    cause instanceof Error ? cause.message : String(cause),
+                                })
+                              );
+                          }}
+                          disabled={sessionStatus === "authorizing" || isBusy}
+                          className="mt-3 min-h-10 w-full rounded-md border border-primary/40 px-3 text-xs font-semibold text-primary disabled:opacity-60"
+                        >
+                          {sessionStatus === "authorizing" ? "Approve in wallet…" : "Enable with one approval"}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+
                   {canClaimTimeout ? (
                     <button
                       type="button"
@@ -721,6 +796,7 @@ export default function PlayPage({ params }: PlayPageProps) {
                 <TransactionStatus
                   status={txStatus}
                   signature={txSignature}
+                  explorerHref={txExplorerHref}
                   error={txError}
                   onDismiss={resetTransaction}
                 />

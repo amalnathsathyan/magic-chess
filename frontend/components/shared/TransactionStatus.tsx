@@ -9,6 +9,7 @@ type TxStatus = "idle" | "submitting" | "confirming" | "success" | "error";
 interface TransactionStatusProps {
   status: TxStatus;
   signature?: string;
+  explorerHref?: string;
   error?: string;
   onDismiss?: () => void;
   className?: string;
@@ -17,6 +18,7 @@ interface TransactionStatusProps {
 export function TransactionStatus({
   status,
   signature,
+  explorerHref,
   error,
   onDismiss,
   className,
@@ -49,16 +51,16 @@ export function TransactionStatus({
         <div className="flex-1">
           <p className="text-sm font-semibold text-foreground">
             {status === "submitting" && "Submitting transaction..."}
-            {status === "confirming" && "Confirming on Solana..."}
+            {status === "confirming" && "Confirming transaction..."}
             {status === "success" && "Transaction Confirmed"}
             {status === "error" && "Transaction Failed"}
           </p>
           {error && (
             <p className="text-xs text-destructive/90 mt-1">{error}</p>
           )}
-          {signature && (
+          {signature && explorerHref && (
             <a
-              href={`https://explorer.solana.com/tx/${signature}?cluster=devnet`}
+              href={explorerHref}
               target="_blank"
               rel="noopener noreferrer"
               className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-1 text-xs font-mono font-medium text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"

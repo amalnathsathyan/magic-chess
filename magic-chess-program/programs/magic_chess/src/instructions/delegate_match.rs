@@ -9,8 +9,14 @@ use ephemeral_rollups_sdk::cpi::DelegateConfig;
 #[delegate]
 #[derive(Accounts)]
 pub struct DelegateMatch<'info> {
+    /// Funds MagicBlock's delegation record and metadata accounts. For
+    /// sponsored transactions this is the backend fee-payer wallet.
     #[account(mut)]
     pub payer: Signer<'info>,
+
+    /// Match participant authorizing delegation. Kept separate from `payer`
+    /// so embedded wallets do not need SOL for delegation rent.
+    pub player: Signer<'info>,
 
     /// CHECK: After delegation CPI, ownership transfers to the delegation
     /// program. UncheckedAccount with `del` avoids Anchor exit serialization
@@ -54,10 +60,11 @@ pub fn handle_delegate_match(ctx: Context<DelegateMatch>) -> Result<()> {
             canonical_bump,
             crate::errors::ChessError::InvalidMatchId
         );
-        // Authorization: only match players can delegate
-        let payer = ctx.accounts.payer.key();
+        // Authorization: only match players can delegate. The rent payer is
+        // deliberately not used as the authority in sponsored transactions.
+        let player = ctx.accounts.player.key();
         require!(
-            payer == chess_match.players[0] || payer == chess_match.players[1],
+            player == chess_match.players[0] || player == chess_match.players[1],
             crate::errors::ChessError::UnauthorizedSigner
         );
 

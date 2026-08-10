@@ -1,8 +1,16 @@
 import type {
   PublicKey,
+  Signer,
   Transaction,
   VersionedTransaction,
 } from "@solana/web3.js";
+
+/** Short-lived signer authorized by a MagicBlock SessionTokenV2 account. */
+export interface MagicChessSession {
+  signer: Signer;
+  token: PublicKey;
+  expiresAt: number;
+}
 
 /** Browser-compatible signing surface used by Anchor and Privy wallets. */
 export interface MagicChessWallet {

@@ -19,6 +19,7 @@ import type {
   MoveResult,
   IntegerInput,
   MagicChessWallet,
+  MagicChessSession,
   WagerInfo,
 } from "./types";
 import { PieceType } from "./types";
@@ -102,6 +103,44 @@ export class MagicChessClient {
     if (confirmation.value.err) {
       throw new Error(
         `Transaction ${signature} failed: ${JSON.stringify(confirmation.value.err)}`
+      );
+    }
+    return signature;
+  }
+
+  private async sendInstructionWithSession(
+    connection: Connection,
+    instruction: TransactionInstruction,
+    session: MagicChessSession
+  ): Promise<TransactionSignature> {
+    if (session.expiresAt <= Math.floor(Date.now() / 1000)) {
+      throw new Error("Fast-play session expired. Renew it before moving.");
+    }
+    const latest = await connection.getLatestBlockhash("confirmed");
+    const transaction = new Transaction({
+      feePayer: session.signer.publicKey,
+      recentBlockhash: latest.blockhash,
+    }).add(instruction);
+    transaction.partialSign(session.signer);
+    const simulation = await connection.simulateTransaction(transaction);
+    if (simulation.value.err) {
+      const logs = simulation.value.logs?.slice(-8).join("\n") ?? "No logs returned";
+      throw new Error(
+        `Fast-play transaction simulation failed: ${JSON.stringify(simulation.value.err)}\n${logs}`
+      );
+    }
+    const signature = await connection.sendRawTransaction(transaction.serialize(), {
+      skipPreflight: false,
+      preflightCommitment: "confirmed",
+      maxRetries: 3,
+    });
+    const confirmation = await connection.confirmTransaction(
+      { signature, ...latest },
+      "confirmed"
+    );
+    if (confirmation.value.err) {
+      throw new Error(
+        `Fast-play transaction ${signature} failed: ${JSON.stringify(confirmation.value.err)}`
       );
     }
     return signature;
@@ -241,8 +280,13 @@ export class MagicChessClient {
    */
   async makeMove(
     matchId: string,
-    move: Move
-  ): Promise<{ result: MoveResult; signature: TransactionSignature }> {
+    move: Move,
+    session?: MagicChessSession
+  ): Promise<{
+    result: MoveResult;
+    signature: TransactionSignature;
+    rpcEndpoint: string;
+  }> {
     const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
 
     const ix = await this.program.methods
@@ -257,23 +301,32 @@ export class MagicChessClient {
       })
       .accountsPartial({
         chessMatch: chessMatchPda,
-        player: this.requireWallet("makeMove").publicKey,
-      })
+        player: session?.signer.publicKey ?? this.requireWallet("makeMove").publicKey,
+        sessionToken: session?.token ?? null,
+      } as never)
       .instruction();
     const runtime = await this.runtimeForMatch(matchId);
-    const sig = await this.sendInstruction(runtime.connection, ix);
+    if (session && runtime.runtime !== "ephemeral") {
+      throw new Error("Fast-play sessions can only submit moves to a delegated match.");
+    }
+    const sig = session
+      ? await this.sendInstructionWithSession(runtime.connection, ix, session)
+      : await this.sendInstruction(runtime.connection, ix);
 
     // After the transaction, fetch the updated match to determine result
     const match = await this.getMatch(matchId);
     const result = determineMoveResult(match);
 
-    return { result, signature: sig };
+    return { result, signature: sig, rpcEndpoint: runtime.connection.rpcEndpoint };
   }
 
   /**
    * Resign from the current game. Opponent wins.
    */
-  async resign(matchId: string): Promise<{ signature: TransactionSignature }> {
+  async resign(matchId: string): Promise<{
+    signature: TransactionSignature;
+    rpcEndpoint: string;
+  }> {
     const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
 
     const ix = await this.program.methods
@@ -286,7 +339,7 @@ export class MagicChessClient {
     const runtime = await this.runtimeForMatch(matchId);
     const sig = await this.sendInstruction(runtime.connection, ix);
 
-    return { signature: sig };
+    return { signature: sig, rpcEndpoint: runtime.connection.rpcEndpoint };
   }
 
   /**
@@ -294,7 +347,7 @@ export class MagicChessClient {
    */
   async claimTimeout(
     matchId: string
-  ): Promise<{ signature: TransactionSignature }> {
+  ): Promise<{ signature: TransactionSignature; rpcEndpoint: string }> {
     const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
 
     const ix = await this.program.methods
@@ -307,7 +360,7 @@ export class MagicChessClient {
     const runtime = await this.runtimeForMatch(matchId);
     const sig = await this.sendInstruction(runtime.connection, ix);
 
-    return { signature: sig };
+    return { signature: sig, rpcEndpoint: runtime.connection.rpcEndpoint };
   }
 
   // ── Settlement ───────────────────────────────────────────────
@@ -354,9 +407,11 @@ export class MagicChessClient {
    * @param matchId - The match to delegate. Used as the delegation uid.
    */
   async delegateMatch(
-    matchId: string
+    matchId: string,
+    rentPayer?: PublicKey
   ): Promise<{ signature: TransactionSignature; ephemeralRpcEndpoint: string }> {
     await this.requireBaseMatch(matchId);
+    const player = this.requireWallet("delegateMatch").publicKey;
     const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
 
     const [bufferChessMatch] = PublicKey.findProgramAddressSync(
@@ -375,7 +430,8 @@ export class MagicChessClient {
     const sig = await this.program.methods
       .delegateMatch()
       .accountsStrict({
-        payer: this.requireWallet("delegateMatch").publicKey,
+        payer: rentPayer ?? player,
+        player,
         bufferChessMatch,
         delegationRecordChessMatch,
         delegationMetadataChessMatch,
@@ -411,6 +467,7 @@ export class MagicChessClient {
   ): Promise<{
     signature: TransactionSignature;
     baseCommitmentSignature: TransactionSignature;
+    rpcEndpoint: string;
   }> {
     const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
 
@@ -439,7 +496,11 @@ export class MagicChessClient {
       sig
     );
 
-    return { signature: sig, baseCommitmentSignature };
+    return {
+      signature: sig,
+      baseCommitmentSignature,
+      rpcEndpoint: runtime.connection.rpcEndpoint,
+    };
   }
 
   /**
@@ -456,6 +517,7 @@ export class MagicChessClient {
   ): Promise<{
     signature: TransactionSignature;
     baseCommitmentSignature: TransactionSignature;
+    rpcEndpoint: string;
   }> {
     const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
 
@@ -490,7 +552,11 @@ export class MagicChessClient {
       this.routerEndpoint
     );
 
-    return { signature: sig, baseCommitmentSignature };
+    return {
+      signature: sig,
+      baseCommitmentSignature,
+      rpcEndpoint: runtime.connection.rpcEndpoint,
+    };
   }
 
   /** Register a real session signer on the authoritative runtime. */

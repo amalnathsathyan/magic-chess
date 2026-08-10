@@ -650,7 +650,19 @@
       "accounts": [
         {
           "name": "payer",
+          "docs": [
+            "Funds MagicBlock's delegation record and metadata accounts. For",
+            "sponsored transactions this is the backend fee-payer wallet."
+          ],
           "writable": true,
+          "signer": true
+        },
+        {
+          "name": "player",
+          "docs": [
+            "Match participant authorizing delegation. Kept separate from `payer`",
+            "so embedded wallets do not need SOL for delegation rent."
+          ],
           "signer": true
         },
         {
@@ -1229,6 +1241,10 @@
           "name": "player",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "session_token",
+          "optional": true
         }
       ],
       "args": [
@@ -3175,6 +3191,34 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SessionTokenV2",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "target_program",
+            "type": "pubkey"
+          },
+          {
+            "name": "session_signer",
+            "type": "pubkey"
+          },
+          {
+            "name": "fee_payer",
+            "type": "pubkey"
+          },
+          {
+            "name": "valid_until",
+            "type": "i64"
           }
         ]
       }

@@ -348,6 +348,7 @@ describe("MagicBlock Crank — Timeout & Settlement Chain", () => {
       .delegateMatch()
       .accountsStrict({
         payer: payer.publicKey,
+        player: payer.publicKey,
         chessMatch: chessMatchPda,
         bufferChessMatch: bufferChessMatch,
         delegationRecordChessMatch: delegationRecordChessMatch,

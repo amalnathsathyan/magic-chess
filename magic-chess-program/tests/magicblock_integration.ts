@@ -345,6 +345,7 @@ describe("MagicBlock Ephemeral Rollup — Full Lifecycle", () => {
       .delegateMatch()
       .accountsStrict({
         payer: payer.publicKey,
+        player: payer.publicKey,
         chessMatch: chessMatchPda,
         bufferChessMatch: bufferChessMatch,
         delegationRecordChessMatch: delegationRecordChessMatch,

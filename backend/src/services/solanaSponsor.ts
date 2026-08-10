@@ -19,11 +19,20 @@ const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey(
 const MEMO_PROGRAM_ID = new PublicKey(
   "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
 );
+const DELEGATION_PROGRAM_ID = new PublicKey(
+  "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+);
+const SESSION_PROGRAM_ID = new PublicKey(
+  "KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5"
+);
 const SPONSOR_AUTHORIZATION_MEMO = Buffer.from("magic-chess:sponsor");
 const SYNC_NATIVE_INSTRUCTION = 17;
 const CREATE_IDEMPOTENT_ATA_INSTRUCTION = 1;
 const MAX_TRANSACTION_BYTES = 1_232;
 const MAX_INSTRUCTIONS = 8;
+const SESSION_TOKEN_V2_SEED = Buffer.from("session_token_v2");
+const SESSION_TOP_UP_LAMPORTS = 2_000_000n;
+const MAX_SESSION_DURATION_SECONDS = 60 * 60;
 
 export class SponsorError extends Error {
   constructor(
@@ -70,6 +79,12 @@ export function loadFeePayer(secret: string, expectedAddress: string): Keypair {
 // Anchor IDL discriminator for `initialize_match`.
 const INITIALIZE_MATCH_DISCRIMINATOR = Buffer.from([
   156, 133, 52, 179, 176, 29, 64, 124,
+]);
+const DELEGATE_MATCH_DISCRIMINATOR = Buffer.from([
+  30, 116, 9, 69, 147, 61, 133, 238,
+]);
+const CREATE_SESSION_V2_DISCRIMINATOR = Buffer.from([
+  223, 233, 108, 7, 65, 194, 235, 38,
 ]);
 
 export interface SponsorPolicy {
@@ -155,7 +170,127 @@ function validateMagicChessInstruction(
     ) {
       throw new SponsorError("initialize_match accounts violate sponsor policy", 403);
     }
+    return;
   }
+
+  if (instruction.data.subarray(0, 8).equals(DELEGATE_MATCH_DISCRIMINATOR)) {
+    if (instruction.keys.length !== 9) {
+      throw new SponsorError("delegate_match account count violates sponsor policy", 403);
+    }
+    const [
+      payer,
+      player,
+      buffer,
+      delegationRecord,
+      delegationMetadata,
+      chessMatch,
+      ownerProgram,
+      delegationProgram,
+      systemProgram,
+    ] = instruction.keys;
+    const [expectedBuffer] = PublicKey.findProgramAddressSync(
+      [Buffer.from("buffer"), chessMatch.pubkey.toBuffer()],
+      policy.programId
+    );
+    const [expectedRecord] = PublicKey.findProgramAddressSync(
+      [Buffer.from("delegation"), chessMatch.pubkey.toBuffer()],
+      DELEGATION_PROGRAM_ID
+    );
+    const [expectedMetadata] = PublicKey.findProgramAddressSync(
+      [Buffer.from("delegation-metadata"), chessMatch.pubkey.toBuffer()],
+      DELEGATION_PROGRAM_ID
+    );
+    if (
+      !payer.pubkey.equals(policy.feePayer) ||
+      !payer.isSigner ||
+      !payer.isWritable ||
+      !player.pubkey.equals(policy.player) ||
+      !player.isSigner ||
+      !buffer.pubkey.equals(expectedBuffer) ||
+      !delegationRecord.pubkey.equals(expectedRecord) ||
+      !delegationMetadata.pubkey.equals(expectedMetadata) ||
+      !chessMatch.isWritable ||
+      !ownerProgram.pubkey.equals(policy.programId) ||
+      !delegationProgram.pubkey.equals(DELEGATION_PROGRAM_ID) ||
+      !systemProgram.pubkey.equals(SystemProgram.programId)
+    ) {
+      throw new SponsorError("delegate_match accounts violate sponsor policy", 403);
+    }
+  }
+}
+
+function readRequiredOption(
+  data: Buffer,
+  offset: number,
+  byteLength: number,
+  field: string
+): Buffer {
+  if (data[offset] !== 1 || offset + 1 + byteLength > data.length) {
+    throw new SponsorError(`Session ${field} must be explicitly configured`, 403);
+  }
+  return data.subarray(offset + 1, offset + 1 + byteLength);
+}
+
+function validateSessionInstruction(
+  instruction: TransactionInstruction,
+  policy: SponsorPolicy
+): PublicKey {
+  if (
+    instruction.keys.length !== 6 ||
+    instruction.data.length !== 28 ||
+    !instruction.data.subarray(0, 8).equals(CREATE_SESSION_V2_DISCRIMINATOR)
+  ) {
+    throw new SponsorError("Only canonical create_session_v2 is sponsored", 403);
+  }
+
+  const [sessionToken, sessionSigner, feePayer, authority, targetProgram, systemProgram] =
+    instruction.keys;
+  const [expectedToken] = PublicKey.findProgramAddressSync(
+    [
+      SESSION_TOKEN_V2_SEED,
+      policy.programId.toBuffer(),
+      sessionSigner.pubkey.toBuffer(),
+      policy.player.toBuffer(),
+    ],
+    SESSION_PROGRAM_ID
+  );
+
+  if (
+    !sessionToken.pubkey.equals(expectedToken) ||
+    sessionToken.isSigner ||
+    !sessionToken.isWritable ||
+    !sessionSigner.isSigner ||
+    !sessionSigner.isWritable ||
+    !feePayer.pubkey.equals(policy.feePayer) ||
+    !feePayer.isSigner ||
+    !feePayer.isWritable ||
+    !authority.pubkey.equals(policy.player) ||
+    !authority.isSigner ||
+    authority.isWritable ||
+    !targetProgram.pubkey.equals(policy.programId) ||
+    targetProgram.isSigner ||
+    targetProgram.isWritable ||
+    !systemProgram.pubkey.equals(SystemProgram.programId) ||
+    systemProgram.isSigner ||
+    systemProgram.isWritable
+  ) {
+    throw new SponsorError("create_session_v2 accounts violate sponsor policy", 403);
+  }
+
+  const topUp = readRequiredOption(instruction.data, 8, 1, "top-up");
+  const validUntil = readRequiredOption(instruction.data, 10, 8, "expiry").readBigInt64LE();
+  const lamports = readRequiredOption(instruction.data, 19, 8, "lamports").readBigUInt64LE();
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  if (topUp[0] !== 1) {
+    throw new SponsorError("Session signer top-up is required", 403);
+  }
+  if (lamports !== SESSION_TOP_UP_LAMPORTS) {
+    throw new SponsorError("Session signer top-up violates sponsor policy", 403);
+  }
+  if (validUntil <= now || validUntil > now + BigInt(MAX_SESSION_DURATION_SECONDS)) {
+    throw new SponsorError("Session expiry violates sponsor policy", 403);
+  }
+  return sessionSigner.pubkey;
 }
 
 export function validateSponsoredTransaction(
@@ -190,17 +325,29 @@ export function validateSponsoredTransaction(
   }
 
   let hasAppInstruction = false;
+  let hasSessionInstruction = false;
+  let sessionSignerKey: PublicKey | null = null;
+  let operationInstructionCount = 0;
   for (const instruction of transaction.instructions) {
     const programId = instruction.programId;
     if (programId.equals(policy.programId)) {
+      operationInstructionCount += 1;
       hasAppInstruction = true;
       validateMagicChessInstruction(instruction, policy);
+    } else if (programId.equals(SESSION_PROGRAM_ID)) {
+      operationInstructionCount += 1;
+      hasAppInstruction = true;
+      hasSessionInstruction = true;
+      sessionSignerKey = validateSessionInstruction(instruction, policy);
     } else if (programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID)) {
+      operationInstructionCount += 1;
       hasAppInstruction = true;
       validateAtaInstruction(instruction, policy);
     } else if (programId.equals(SystemProgram.programId)) {
+      operationInstructionCount += 1;
       rejectSponsorSystemDebit(instruction, policy);
     } else if (programId.equals(TOKEN_PROGRAM_ID)) {
+      operationInstructionCount += 1;
       if (instruction.data.length !== 1 || instruction.data[0] !== SYNC_NATIVE_INSTRUCTION) {
         throw new SponsorError("Token instruction is not sponsored", 403);
       }
@@ -219,6 +366,18 @@ export function validateSponsoredTransaction(
   }
   if (!hasAppInstruction) {
     throw new SponsorError("Transaction contains no Magic Chess operation", 403);
+  }
+  if (hasSessionInstruction && operationInstructionCount !== 1) {
+    throw new SponsorError("Session creation cannot be combined with other operations", 403);
+  }
+  if (
+    sessionSignerKey &&
+    !transaction.signatures.some(
+      ({ publicKey, signature }) =>
+        publicKey.equals(sessionSignerKey!) && signature !== null
+    )
+  ) {
+    throw new SponsorError("Session signer signature is missing", 403);
   }
   return transaction;
 }

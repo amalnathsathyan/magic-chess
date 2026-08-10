@@ -28,17 +28,73 @@ const MEMO_PROGRAM = new PublicKey(
 const INITIALIZE_MATCH_DISCRIMINATOR = Buffer.from([
   156, 133, 52, 179, 176, 29, 64, 124,
 ]);
+const DELEGATE_MATCH_DISCRIMINATOR = Buffer.from([
+  30, 116, 9, 69, 147, 61, 133, 238,
+]);
+const DELEGATION_PROGRAM = new PublicKey(
+  "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
+);
+const SESSION_PROGRAM = new PublicKey(
+  "KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5"
+);
+const CREATE_SESSION_V2_DISCRIMINATOR = Buffer.from([
+  223, 233, 108, 7, 65, 194, 235, 38,
+]);
 
 function serializePartiallySigned(
   transaction: Transaction,
-  player: Keypair
+  player: Keypair,
+  additionalSigners: Keypair[] = []
 ): Buffer {
   transaction.feePayer ??= Keypair.generate().publicKey;
   transaction.recentBlockhash = Keypair.generate().publicKey.toBase58();
-  transaction.partialSign(player);
+  transaction.partialSign(player, ...additionalSigners);
   return transaction.serialize({
     requireAllSignatures: false,
     verifySignatures: false,
+  });
+}
+
+function createSessionInstruction(input: {
+  sponsor: PublicKey;
+  player: PublicKey;
+  sessionSigner: PublicKey;
+  targetProgram?: PublicKey;
+  validUntil?: bigint;
+  lamports?: bigint;
+}): TransactionInstruction {
+  const targetProgram = input.targetProgram ?? MAGIC_CHESS_PROGRAM;
+  const [sessionToken] = PublicKey.findProgramAddressSync(
+    [
+      Buffer.from("session_token_v2"),
+      targetProgram.toBuffer(),
+      input.sessionSigner.toBuffer(),
+      input.player.toBuffer(),
+    ],
+    SESSION_PROGRAM
+  );
+  const data = Buffer.alloc(28);
+  CREATE_SESSION_V2_DISCRIMINATOR.copy(data, 0);
+  data[8] = 1;
+  data[9] = 1;
+  data[10] = 1;
+  data.writeBigInt64LE(
+    input.validUntil ?? BigInt(Math.floor(Date.now() / 1000) + 3_000),
+    11
+  );
+  data[19] = 1;
+  data.writeBigUInt64LE(input.lamports ?? 2_000_000n, 20);
+  return new TransactionInstruction({
+    programId: SESSION_PROGRAM,
+    keys: [
+      { pubkey: sessionToken, isSigner: false, isWritable: true },
+      { pubkey: input.sessionSigner, isSigner: true, isWritable: true },
+      { pubkey: input.sponsor, isSigner: true, isWritable: true },
+      { pubkey: input.player, isSigner: true, isWritable: false },
+      { pubkey: targetProgram, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data,
   });
 }
 
@@ -87,6 +143,40 @@ function policy(
   };
 }
 
+function delegateInstruction(
+  sponsor: PublicKey,
+  player: PublicKey,
+  chessMatch = Keypair.generate().publicKey
+): TransactionInstruction {
+  const [buffer] = PublicKey.findProgramAddressSync(
+    [Buffer.from("buffer"), chessMatch.toBuffer()],
+    MAGIC_CHESS_PROGRAM
+  );
+  const [record] = PublicKey.findProgramAddressSync(
+    [Buffer.from("delegation"), chessMatch.toBuffer()],
+    DELEGATION_PROGRAM
+  );
+  const [metadata] = PublicKey.findProgramAddressSync(
+    [Buffer.from("delegation-metadata"), chessMatch.toBuffer()],
+    DELEGATION_PROGRAM
+  );
+  return new TransactionInstruction({
+    programId: MAGIC_CHESS_PROGRAM,
+    keys: [
+      { pubkey: sponsor, isSigner: true, isWritable: true },
+      { pubkey: player, isSigner: true, isWritable: false },
+      { pubkey: buffer, isSigner: false, isWritable: true },
+      { pubkey: record, isSigner: false, isWritable: true },
+      { pubkey: metadata, isSigner: false, isWritable: true },
+      { pubkey: chessMatch, isSigner: false, isWritable: true },
+      { pubkey: MAGIC_CHESS_PROGRAM, isSigner: false, isWritable: false },
+      { pubkey: DELEGATION_PROGRAM, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data: DELEGATE_MATCH_DISCRIMINATOR,
+  });
+}
+
 test("accepts an authenticated idempotent ATA preparation", () => {
   const sponsor = Keypair.generate();
   const player = Keypair.generate();
@@ -124,6 +214,128 @@ test("accepts initialize_match only when the configured sponsor is rent payer", 
   const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(initialize);
 
   assert.doesNotThrow(() =>
+    validateSponsoredTransaction(
+      serializePartiallySigned(transaction, player),
+      policy(sponsor.publicKey, player.publicKey, mint)
+    )
+  );
+});
+
+test("accepts delegate_match with separate sponsor payer and player authority", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    delegateInstruction(sponsor.publicKey, player.publicKey)
+  );
+
+  assert.doesNotThrow(() =>
+    validateSponsoredTransaction(
+      serializePartiallySigned(transaction, player),
+      policy(sponsor.publicKey, player.publicKey, mint)
+    )
+  );
+});
+
+test("accepts canonical SessionTokenV2 creation signed by player and session key", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const sessionSigner = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    createSessionInstruction({
+      sponsor: sponsor.publicKey,
+      player: player.publicKey,
+      sessionSigner: sessionSigner.publicKey,
+    })
+  );
+
+  assert.doesNotThrow(() =>
+    validateSponsoredTransaction(
+      serializePartiallySigned(transaction, player, [sessionSigner]),
+      policy(sponsor.publicKey, player.publicKey, mint)
+    )
+  );
+});
+
+test("rejects a session token without the temporary signer's signature", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const sessionSigner = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    createSessionInstruction({
+      sponsor: sponsor.publicKey,
+      player: player.publicKey,
+      sessionSigner: sessionSigner.publicKey,
+    })
+  );
+
+  assert.throws(() =>
+    validateSponsoredTransaction(
+      serializePartiallySigned(transaction, player),
+      policy(sponsor.publicKey, player.publicKey, mint)
+    )
+  );
+});
+
+test("rejects excessive session signer top-ups", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const sessionSigner = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    createSessionInstruction({
+      sponsor: sponsor.publicKey,
+      player: player.publicKey,
+      sessionSigner: sessionSigner.publicKey,
+      lamports: 20_000_000n,
+    })
+  );
+
+  assert.throws(
+    () =>
+      validateSponsoredTransaction(
+        serializePartiallySigned(transaction, player, [sessionSigner]),
+        policy(sponsor.publicKey, player.publicKey, mint)
+      ),
+    /top-up violates sponsor policy/
+  );
+});
+
+test("rejects sessions targeting another program", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const sessionSigner = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    createSessionInstruction({
+      sponsor: sponsor.publicKey,
+      player: player.publicKey,
+      sessionSigner: sessionSigner.publicKey,
+      targetProgram: Keypair.generate().publicKey,
+    })
+  );
+
+  assert.throws(() =>
+    validateSponsoredTransaction(
+      serializePartiallySigned(transaction, player, [sessionSigner]),
+      policy(sponsor.publicKey, player.publicKey, mint)
+    )
+  );
+});
+
+test("rejects delegate_match when an unrelated wallet is the authority", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const attacker = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    delegateInstruction(sponsor.publicKey, attacker.publicKey),
+    memo(player.publicKey)
+  );
+
+  assert.throws(() =>
     validateSponsoredTransaction(
       serializePartiallySigned(transaction, player),
       policy(sponsor.publicKey, player.publicKey, mint)

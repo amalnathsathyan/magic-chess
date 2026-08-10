@@ -20,6 +20,7 @@ import { shortenAddress } from "@/lib/chess";
 import { cn } from "@/lib/utils";
 import { boardToFen, type Piece } from "@magic-chess/sdk";
 import { useMatch } from "@magic-chess/sdk/react";
+import { useMoveTransactionNotifications } from "@/hooks/useMoveTransactionNotifications";
 
 interface SpectatePageProps {
   params: Promise<{ matchId: string }>;
@@ -133,6 +134,16 @@ export default function SpectatePage({ params }: SpectatePageProps) {
     },
     [matchId]
   );
+
+  const refreshAfterMove = useCallback(() => {
+    void Promise.allSettled([refetch(), loadHistory(false)]);
+  }, [loadHistory, refetch]);
+
+  useMoveTransactionNotifications({
+    matchId,
+    enabled: Boolean(match?.isDelegated),
+    onMove: refreshAfterMove,
+  });
 
   useEffect(() => {
     void loadHistory();

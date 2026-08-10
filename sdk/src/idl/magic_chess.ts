@@ -656,7 +656,19 @@ export type MagicChess = {
       "accounts": [
         {
           "name": "payer",
+          "docs": [
+            "Funds MagicBlock's delegation record and metadata accounts. For",
+            "sponsored transactions this is the backend fee-payer wallet."
+          ],
           "writable": true,
+          "signer": true
+        },
+        {
+          "name": "player",
+          "docs": [
+            "Match participant authorizing delegation. Kept separate from `payer`",
+            "so embedded wallets do not need SOL for delegation rent."
+          ],
           "signer": true
         },
         {
@@ -1235,6 +1247,10 @@ export type MagicChess = {
           "name": "player",
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "sessionToken",
+          "optional": true
         }
       ],
       "args": [
@@ -3181,6 +3197,34 @@ export type MagicChess = {
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "sessionTokenV2",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "targetProgram",
+            "type": "pubkey"
+          },
+          {
+            "name": "sessionSigner",
+            "type": "pubkey"
+          },
+          {
+            "name": "feePayer",
+            "type": "pubkey"
+          },
+          {
+            "name": "validUntil",
+            "type": "i64"
           }
         ]
       }

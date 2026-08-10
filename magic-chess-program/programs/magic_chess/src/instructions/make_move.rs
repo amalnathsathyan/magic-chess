@@ -1,5 +1,6 @@
 // src/instructions/make_move.rs
 use anchor_lang::prelude::*;
+use session_keys::{session_auth_or, Session, SessionError, SessionTokenV2};
 
 use crate::constants::*;
 use crate::errors::ChessError;
@@ -9,7 +10,7 @@ use crate::utils::chess_logic;
 
 use super::schedule_timeout;
 
-#[derive(Accounts)]
+#[derive(Accounts, Session)]
 #[instruction(args: MakeMoveArgs)]
 pub struct MakeMove<'info> {
     #[account(
@@ -21,6 +22,12 @@ pub struct MakeMove<'info> {
 
     #[account(mut)]
     pub player: Signer<'info>,
+
+    #[session(
+        signer = player,
+        authority = chess_match.current_player_key()
+    )]
+    pub session_token: Option<Account<'info, SessionTokenV2>>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
@@ -32,10 +39,13 @@ pub struct MakeMoveArgs {
     pub promotion: Option<PieceType>, // Ensure PieceType is correctly imported/namespaced
 }
 
+#[session_auth_or(
+    ctx.accounts.chess_match.current_player_key() == ctx.accounts.player.key(),
+    ChessError::UnauthorizedSigner
+)]
 pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()> {
     let chess_match_key = ctx.accounts.chess_match.key();
     let chess_match = &mut ctx.accounts.chess_match;
-    let player_key = ctx.accounts.player.key();
     let clock = Clock::get()?;
     let now = clock.unix_timestamp;
 
@@ -45,31 +55,10 @@ pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()
         ChessError::GameNotActive
     );
 
-    // 2. Determine current player and verify signer (wallet or session key)
-    let expected_player_key_for_turn = if chess_match.current_turn == PlayerColor::White {
-        chess_match.players[0] // Assuming players[0] is White
-    } else {
-        chess_match.players[1] // Assuming players[1] is Black
-    };
-
-    // Authorization: signer must be the actual player OR a valid per-player session key.
-    // Session keys are per-color — white's session can only move for white, black's for black.
-    let is_authorized_player = player_key == expected_player_key_for_turn;
-    let is_valid_session = if chess_match.current_turn == PlayerColor::White {
-        chess_match.white_session_signer != Pubkey::default()
-            && player_key == chess_match.white_session_signer
-            && now < chess_match.white_session_expires_at
-    } else {
-        chess_match.black_session_signer != Pubkey::default()
-            && player_key == chess_match.black_session_signer
-            && now < chess_match.black_session_expires_at
-    };
-
-    require!(
-        is_authorized_player || is_valid_session,
-        ChessError::UnauthorizedSigner
-    );
-
+    // 2. Wallet/session authorization is enforced by `session_auth_or` above.
+    // A valid SessionTokenV2 is bound to the wallet whose turn it is, this
+    // program, the temporary signer, and an expiry timestamp.
+    let player_authority = chess_match.current_player_key();
     let player_color_making_move = chess_match.current_turn; // Color of the player making the move
 
     // 3. Check move timeout (if move_timeout_duration is set > 0)
@@ -198,7 +187,8 @@ pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()
 
     emit!(MoveMadeEvent {
         match_id: chess_match.match_id.clone(), // Assuming String
-        player: player_key,
+        // Attribute the move to the player's wallet, never the temporary key.
+        player: player_authority,
         player_color: player_color_making_move, // The color that just moved
         algebraic_move: algebraic_move_string,
         from_row: args.from_row,

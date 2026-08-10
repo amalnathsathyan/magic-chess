@@ -4,7 +4,11 @@
  * These functions wrap the @magic-chess/sdk for move submission.
  */
 
-import { MagicChessClient, PieceType } from "@magic-chess/sdk";
+import {
+  MagicChessClient,
+  PieceType,
+  type MagicChessSession,
+} from "@magic-chess/sdk";
 
 /**
  * Submit a chess move. The SDK resolves the authoritative base/ER runtime.
@@ -14,8 +18,9 @@ export async function submitMoveTx(
   matchId: string,
   from: string,
   to: string,
-  promotion?: string
-): Promise<string> {
+  promotion?: string,
+  session?: MagicChessSession
+): Promise<{ signature: string; rpcEndpoint: string }> {
   if (!client.wallet) throw new Error("Connect a wallet before submitting a move");
   if (!/^[a-h][1-8]$/.test(from) || !/^[a-h][1-8]$/.test(to)) {
     throw new Error("Move squares must use algebraic coordinates such as e2 and e4");
@@ -34,8 +39,8 @@ export async function submitMoveTx(
     promotion: promotion ? parsePromotion(promotion) : undefined,
   };
 
-  const { signature } = await client.makeMove(matchId, move);
-  return signature;
+  const { signature, rpcEndpoint } = await client.makeMove(matchId, move, session);
+  return { signature, rpcEndpoint };
 }
 
 function parsePromotion(value: string): PieceType {

@@ -332,6 +332,7 @@ describe("MagicBlock Session Key — Authorization Flow", () => {
       .delegateMatch()
       .accountsStrict({
         payer: whitePlayer.publicKey,
+        player: whitePlayer.publicKey,
         chessMatch: chessMatchPda,
         bufferChessMatch: bufferChessMatch,
         delegationRecordChessMatch: delegationRecordChessMatch,

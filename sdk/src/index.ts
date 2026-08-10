@@ -14,6 +14,7 @@ export {
 } from "./types";
 export type {
   MagicChessWallet,
+  MagicChessSession,
   Piece,
   CastlingRights,
   EnPassantSquare,

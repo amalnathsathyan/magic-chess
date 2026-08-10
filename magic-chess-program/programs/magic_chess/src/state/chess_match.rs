@@ -52,3 +52,16 @@ pub struct ChessMatch {
     pub bump: u8,
     pub match_escrow_bump: u8,          // Bump for the escrow token account PDA
 }
+
+impl ChessMatch {
+    /// Wallet authority for the side whose turn it is.
+    ///
+    /// Derive this from `current_turn`; `current_player_idx` is retained for
+    /// account-layout compatibility and must not be trusted for authorization.
+    pub fn current_player_key(&self) -> Pubkey {
+        match self.current_turn {
+            PlayerColor::White => self.players[0],
+            PlayerColor::Black => self.players[1],
+        }
+    }
+}

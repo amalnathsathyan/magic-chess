@@ -15,6 +15,7 @@
     "@anchor-lang/core": "^1.1.2",
     "@magic-chess/sdk": "file:../sdk",
     "@magicblock-labs/ephemeral-rollups-kit": "^0.16.2",
+    "@magicblock-labs/gum-sdk": "3.0.10",
     "@privy-io/react-auth": "^3.37.0",
     "@radix-ui/react-dialog": "^1.1.4",
     "@radix-ui/react-label": "^2.1.1",

@@ -27,6 +27,7 @@ import {
   selectSolanaWallet,
 } from "@/lib/privy-wallet";
 import { getBackendFeePayer, solanaConfig } from "@/lib/solana-config";
+import { MagicSessionProvider } from "@/components/shared/MagicSessionProvider";
 
 const RPC_ENDPOINT = solanaConfig.rpcEndpoint;
 const PROGRAM_ID = solanaConfig.programId;
@@ -282,7 +283,7 @@ export function SolanaProgramProvider({
       wallet={anchorWallet}
       routerEndpoint={solanaConfig.routerEndpoint}
     >
-      {children}
+      <MagicSessionProvider>{children}</MagicSessionProvider>
     </MagicChessProvider>
   );
 }
