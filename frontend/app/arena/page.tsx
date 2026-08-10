@@ -7,11 +7,13 @@ import { PublicKey } from "@solana/web3.js";
 import { useMatches } from "@magic-chess/sdk/react";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
 import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
-import { api, type ApiMatch } from "@/lib/api";
 import {
   formatTokenAmount,
   solanaConfig,
 } from "@/lib/solana-config";
+
+const APP_MATCH_ID = /^mc-[0-9a-f]{20}$/;
+const SUPPORTED_MOVE_TIMEOUTS = new Set([60, 180, 600]);
 
 export default function ArenaPage() {
   const [search, setSearch] = useState("");
@@ -21,6 +23,16 @@ export default function ArenaPage() {
   const matchCards = useMemo<MatchCardData[]>(() => {
     const query = search.trim().toLowerCase();
     return matches
+      .filter((match) => {
+        const moveTimeout = Number(match.moveTimeoutDuration);
+        return (
+          APP_MATCH_ID.test(match.matchId) &&
+          !match.players[0].equals(PublicKey.default) &&
+          match.players[1].equals(PublicKey.default) &&
+          match.bettingTokenMint.toBase58() === solanaConfig.wagerMint &&
+          SUPPORTED_MOVE_TIMEOUTS.has(moveTimeout)
+        );
+      })
       .map((match) => {
         const white = match.players[0].toBase58();
         const black = match.players[1].equals(PublicKey.default)
@@ -37,6 +49,7 @@ export default function ArenaPage() {
           createdAt: Number(match.lastMoveTimestamp) * 1_000,
         };
       })
+      .sort((left, right) => right.createdAt - left.createdAt)
       .filter((match) => {
         if (!query) return true;
         return [match.matchId, match.whitePlayer, match.blackPlayer]
