@@ -1,3 +1,5 @@
+export const dynamicParams = true;
+
 export function generateStaticParams() {
   return [{ matchId: "placeholder" }];
 }

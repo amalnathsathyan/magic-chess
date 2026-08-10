@@ -19,13 +19,13 @@ export default {
     // SPA fallback for dynamic routes
     const dynAsset = dynamicAsset(url.pathname);
     if (dynAsset) {
-      const asset = await env.ASSETS.fetch(new Request(new URL(dynAsset, request.url), request));
+      const asset = await env.ASSETS.fetch(new URL(dynAsset, request.url).toString());
       if (asset.ok) return asset;
     }
 
     // Non-file paths → index.html (catch-all SPA fallback)
     if (!url.pathname.includes(".")) {
-      const asset = await env.ASSETS.fetch(new Request(new URL("/index.html", request.url), request));
+      const asset = await env.ASSETS.fetch(new URL("/index.html", request.url).toString());
       if (asset.ok) return asset;
     }
 
