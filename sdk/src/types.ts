@@ -191,6 +191,7 @@ export interface MatchInfo {
   totalPot: bigint;
   moveTimeoutDuration: bigint;
   lastMoveTimestamp: bigint;
+  fullmoveNumber: number;
   /** Derived exclusively from the on-chain per-player wager. */
   isFree: boolean;
 }

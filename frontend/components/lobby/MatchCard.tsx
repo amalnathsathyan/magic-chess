@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { Castle, Clock, Coins, Crown, Swords, User, Zap } from "lucide-react";
+import { Castle, Clock, Coins, Crown, Swords, User, Zap, Target } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface MatchCardData {
@@ -14,6 +14,10 @@ export interface MatchCardData {
   timeControl: string; // e.g. "60s / move", "180s / move", "600s / move"
   status: "open" | "in_progress" | "completed";
   createdAt: number;
+  /** Human-readable result label, e.g. "White Wins", "Draw". Only for completed matches. */
+  result?: string;
+  /** Number of full moves played. Only for in-progress or completed matches. */
+  moveCount?: number;
 }
 
 interface MatchCardProps {
@@ -67,6 +71,7 @@ function relativeTime(timestampMs: number): string {
 export function MatchCard({ match, className }: MatchCardProps) {
   const isOpen = match.status === "open";
   const isInProgress = match.status === "in_progress";
+  const isCompleted = match.status === "completed";
   const TimeIcon = useMemo(
     () => getTimeControlIcon(match.timeControl),
     [match.timeControl]
@@ -79,9 +84,9 @@ export function MatchCard({ match, className }: MatchCardProps) {
   return (
     <Link
       href={
-        isInProgress
-          ? `/play/${match.matchId}/spectate`
-          : `/play/${match.matchId}`
+        isOpen
+          ? `/play/${match.matchId}`
+          : `/play/${match.matchId}/spectate`
       }
       className={cn(
         "group glass-card block p-5 transition-all hover:border-border-hover hover:shadow-glow",
@@ -97,20 +102,30 @@ export function MatchCard({ match, className }: MatchCardProps) {
           <span className="text-[11px] text-muted-foreground">
             {relativeCreatedAt}
           </span>
+          {isCompleted && match.moveCount != null && (
+            <span className="text-[11px] text-muted-foreground">
+              &middot; {match.moveCount} moves
+            </span>
+          )}
+          {isInProgress && match.moveCount != null && (
+            <span className="text-[11px] text-muted-foreground">
+              &middot; move {match.moveCount}
+            </span>
+          )}
         </div>
         <span
           className={cn(
             "rounded-full px-2.5 py-0.5 text-xs font-medium",
             isOpen && "bg-primary/10 text-primary",
             isInProgress && "bg-accent/10 text-accent",
-            match.status === "completed" && "bg-muted/10 text-muted-foreground"
+            isCompleted && "bg-muted/10 text-muted-foreground"
           )}
         >
-          {match.status === "open"
+          {isOpen
             ? "Open"
-            : match.status === "in_progress"
+            : isInProgress
               ? "Live"
-              : "Completed"}
+              : match.result ?? "Completed"}
         </span>
       </div>
 
@@ -170,15 +185,19 @@ export function MatchCard({ match, className }: MatchCardProps) {
 
         {/* Action button */}
         <div className="shrink-0">
-          {match.status === "open" ? (
+          {isOpen ? (
             <span className="inline-flex items-center justify-center rounded-lg bg-primary/20 px-3 py-1.5 text-xs font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
               Join Match
             </span>
-          ) : match.status === "in_progress" ? (
+          ) : isInProgress ? (
             <span className="inline-flex items-center justify-center rounded-lg bg-accent/20 px-3 py-1.5 text-xs font-semibold text-accent transition-colors group-hover:bg-accent group-hover:text-accent-foreground">
               Spectate
             </span>
-          ) : null}
+          ) : (
+            <span className="inline-flex items-center justify-center rounded-lg bg-muted/20 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors group-hover:bg-muted group-hover:text-foreground">
+              Review
+            </span>
+          )}
         </div>
       </div>
     </Link>

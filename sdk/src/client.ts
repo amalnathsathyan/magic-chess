@@ -931,6 +931,7 @@ function toMatchInfo(account: ChessMatch): MatchInfo {
     totalPot: account.totalPot,
     moveTimeoutDuration: account.moveTimeoutDuration,
     lastMoveTimestamp: account.lastMoveTimestamp,
+    fullmoveNumber: account.fullmoveNumber,
     isFree: isFreeWager(account.betAmountPlayerOne),
   };
 }
