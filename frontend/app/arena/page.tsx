@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertCircle, Filter, History, Plus, RefreshCw, Search, Swords } from "lucide-react";
+import { AlertCircle, ChevronDown, Filter, History, Plus, RefreshCw, Search, Swords, Activity } from "lucide-react";
 import { PublicKey } from "@solana/web3.js";
 import { useWallets } from "@privy-io/react-auth/solana";
 import { useMatches, usePlayerMatches } from "@magic-chess/sdk/react";
@@ -19,6 +19,22 @@ const APP_MATCH_ID = /^mc-[0-9a-f]{20}$/;
 const SUPPORTED_MOVE_TIMEOUTS = new Set([60, 180, 600]);
 const AUTO_REFRESH_MS = 15_000;
 
+/** Map a GameStatus enum value to a human-readable result label. */
+function gameStatusToResult(status: GameStatus): string | undefined {
+  switch (status) {
+    case GameStatus.WhiteWins:
+      return "White Wins";
+    case GameStatus.BlackWins:
+      return "Black Wins";
+    case GameStatus.Draw:
+      return "Draw";
+    case GameStatus.Aborted:
+      return "Aborted";
+    default:
+      return undefined;
+  }
+}
+
 export default function ArenaPage() {
   const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
@@ -27,8 +43,8 @@ export default function ArenaPage() {
   const { wallets } = useWallets();
   const walletAddress = selectSolanaWallet(wallets)?.address ?? null;
   const player = walletAddress ? new PublicKey(walletAddress) : null;
-  const { matches: pastMatches, loading: pastLoading } = usePlayerMatches(player);
-  const [showPast, setShowPast] = useState(false);
+  const { matches: playerMatches, loading: playerMatchesLoading, error: playerMatchesError } = usePlayerMatches(player);
+  const [activeTab, setActiveTab] = useState<"past" | "live" | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleRefresh = useCallback(async () => {
@@ -223,58 +239,136 @@ export default function ArenaPage() {
         </div>
       )}
 
-      {/* ── Past Matches ── */}
+      {/* ── Your Matches (Live + Past) ── */}
       {walletAddress && (
         <section className="mt-10">
-          <button
-            type="button"
-            onClick={() => setShowPast(!showPast)}
-            className="mb-4 flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 transition-colors hover:bg-card"
-          >
-            <span className="flex items-center gap-2 text-sm font-semibold">
-              <History className="h-4 w-4" aria-hidden="true" />
-              Your past matches
-              {!pastLoading && (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
-                  {pastMatches.filter((m) => m.gameStatus !== GameStatus.WaitingForOpponent && m.gameStatus !== GameStatus.Active).length}
+          {/* Tab bar */}
+          <div className="mb-4 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab(activeTab === "live" ? null : "live")}
+              className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors ${
+                activeTab === "live"
+                  ? "border-accent bg-accent/10 text-accent"
+                  : "border-border hover:bg-card"
+              }`}
+            >
+              <Activity className="h-4 w-4" aria-hidden="true" />
+              Live matches
+              {!playerMatchesLoading && (
+                <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
+                  {playerMatches.filter((m) => m.gameStatus === GameStatus.Active).length}
                 </span>
               )}
-            </span>
-            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showPast ? "rotate-180" : ""}`} aria-hidden="true" />
-          </button>
-          {showPast && (
-            pastLoading ? (
-              <div className="space-y-3">
-                {[0, 1].map((i) => (
-                  <div key={i} className="h-20 animate-pulse rounded-xl border border-border bg-card/60" />
-                ))}
-              </div>
-            ) : (
-              <div className="grid gap-3">
-                {pastMatches
-                  .filter((m) => m.gameStatus !== GameStatus.WaitingForOpponent && m.gameStatus !== GameStatus.Active)
-                  .slice(0, 20)
-                  .map((m) => (
-                    <MatchCard
-                      key={m.matchId}
-                      match={{
-                        matchId: m.matchId,
-                        whitePlayer: m.players[0].toBase58(),
-                        blackPlayer: m.players[1]?.equals(PublicKey.default) ? null : m.players[1]?.toBase58() ?? null,
-                        gameStatus: GameStatus[m.gameStatus] as string,
-                        totalPot: formatTokenAmount(m.betAmountPlayerOne),
-                        wagerSymbol: solanaConfig.wagerSymbol,
-                        moveTimeoutSeconds: Number(m.moveTimeoutDuration),
-                        createdAt: new Date(Number(m.createdAt) * 1000).toISOString(),
-                        bettingTokenMint: m.bettingTokenMint.toBase58(),
-                      }}
-                    />
-                  ))}
-                {pastMatches.filter((m) => m.gameStatus !== GameStatus.WaitingForOpponent && m.gameStatus !== GameStatus.Active).length === 0 && (
-                  <p className="py-6 text-center text-sm text-muted-foreground">No completed matches yet.</p>
-                )}
-              </div>
-            )
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab(activeTab === "past" ? null : "past")}
+              className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors ${
+                activeTab === "past"
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border hover:bg-card"
+              }`}
+            >
+              <History className="h-4 w-4" aria-hidden="true" />
+              Your past matches
+              {!playerMatchesLoading && (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                  {playerMatches.filter((m) => m.gameStatus !== GameStatus.WaitingForOpponent && m.gameStatus !== GameStatus.Active).length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Live matches tab */}
+          {activeTab === "live" && (
+            <div className="grid gap-3">
+              {playerMatchesLoading ? (
+                [0, 1].map((i) => (
+                  <div key={i} className="h-24 animate-pulse rounded-xl border border-border bg-card/60" />
+                ))
+              ) : playerMatchesError ? (
+                <div className="flex flex-col items-center py-10 text-center">
+                  <AlertCircle className="mb-2 h-8 w-8 text-destructive" aria-hidden="true" />
+                  <p className="text-sm text-muted-foreground">{playerMatchesError.message}</p>
+                </div>
+              ) : (() => {
+                const live = playerMatches.filter((m) => m.gameStatus === GameStatus.Active);
+                if (live.length === 0) {
+                  return (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      No live matches right now.
+                    </p>
+                  );
+                }
+                return live.slice(0, 20).map((m) => (
+                  <MatchCard
+                    key={m.matchId}
+                    match={{
+                      matchId: m.matchId,
+                      whitePlayer: m.players[0].toBase58(),
+                      blackPlayer: m.players[1].equals(PublicKey.default)
+                        ? undefined
+                        : m.players[1].toBase58(),
+                      wagerAmount: formatTokenAmount(m.betAmountPlayerOne),
+                      wagerToken: solanaConfig.wagerSymbol,
+                      timeControl: `${Number(m.moveTimeoutDuration)}s / move`,
+                      status: "in_progress",
+                      createdAt: Number(m.lastMoveTimestamp) * 1_000,
+                      moveCount: m.fullmoveNumber,
+                    }}
+                  />
+                ));
+              })()}
+            </div>
+          )}
+
+          {/* Past matches tab */}
+          {activeTab === "past" && (
+            <div className="grid gap-3">
+              {playerMatchesLoading ? (
+                [0, 1].map((i) => (
+                  <div key={i} className="h-24 animate-pulse rounded-xl border border-border bg-card/60" />
+                ))
+              ) : playerMatchesError ? (
+                <div className="flex flex-col items-center py-10 text-center">
+                  <AlertCircle className="mb-2 h-8 w-8 text-destructive" aria-hidden="true" />
+                  <p className="text-sm text-muted-foreground">{playerMatchesError.message}</p>
+                </div>
+              ) : (() => {
+                const past = playerMatches.filter(
+                  (m) =>
+                    m.gameStatus !== GameStatus.WaitingForOpponent &&
+                    m.gameStatus !== GameStatus.Active
+                );
+                if (past.length === 0) {
+                  return (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      No completed matches yet.
+                    </p>
+                  );
+                }
+                return past.slice(0, 20).map((m) => (
+                  <MatchCard
+                    key={m.matchId}
+                    match={{
+                      matchId: m.matchId,
+                      whitePlayer: m.players[0].toBase58(),
+                      blackPlayer: m.players[1].equals(PublicKey.default)
+                        ? undefined
+                        : m.players[1].toBase58(),
+                      wagerAmount: formatTokenAmount(m.betAmountPlayerOne),
+                      wagerToken: solanaConfig.wagerSymbol,
+                      timeControl: `${Number(m.moveTimeoutDuration)}s / move`,
+                      status: "completed",
+                      createdAt: Number(m.lastMoveTimestamp) * 1_000,
+                      result: gameStatusToResult(m.gameStatus),
+                      moveCount: m.fullmoveNumber,
+                    }}
+                  />
+                ));
+              })()}
+            </div>
           )}
         </section>
       )}
