@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertCircle, ChevronDown, Filter, History, Plus, RefreshCw, Search, Swords, Activity } from "lucide-react";
+import { AlertCircle, History, Plus, RefreshCw, Search, Swords, Activity } from "lucide-react";
 import { PublicKey } from "@solana/web3.js";
 import { useWallets } from "@privy-io/react-auth/solana";
 import { useMatches, usePlayerMatches } from "@magic-chess/sdk/react";

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { Castle, Clock, Coins, Crown, Swords, User, Zap, Target } from "lucide-react";
+import { Castle, Clock, Coins, Crown, Swords, User, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface MatchCardData {
