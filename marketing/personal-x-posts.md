@@ -59,6 +59,8 @@ Session keys fix this for gameplay — one approval per session, not per move. T
 
 ---
 
+<!-- Checked 2026-08-11 23:00 UTC: no new developments -->
+
 ### Aug 11 — Night [DRAFT]
 **Built a custom Solana fee sponsorship relay. The backend now validates, co-signs, and broadcasts user transactions. Privy's built-in toggle wasn't enough.**
 

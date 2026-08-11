@@ -58,6 +58,8 @@ Try it on devnet or run the smoke test yourself: `npx tsx magic-chess-program/sc
 
 ---
 
+<!-- Checked 2026-08-11 23:00 UTC: no new developments -->
+
 ### Aug 11 — Night [DRAFT]
 **Custom Solana gas sponsorship relay is live. Every L1 transaction is now validated, co-signed, simulated, and broadcast by a secure backend fee payer.**
 
