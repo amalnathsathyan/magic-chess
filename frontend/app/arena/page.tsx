@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { AlertCircle, Filter, Plus, RefreshCw, Search, Swords } from "lucide-react";
+import { AlertCircle, Filter, History, Plus, RefreshCw, Search, Swords } from "lucide-react";
 import { PublicKey } from "@solana/web3.js";
-import { useMatches } from "@magic-chess/sdk/react";
+import { useWallets } from "@privy-io/react-auth/solana";
+import { useMatches, usePlayerMatches } from "@magic-chess/sdk/react";
+import { GameStatus } from "@magic-chess/sdk";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
 import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
+import { selectSolanaWallet } from "@/lib/privy-wallet";
 import {
   formatTokenAmount,
   solanaConfig,
@@ -21,6 +24,11 @@ export default function ArenaPage() {
   const [showCreate, setShowCreate] = useState(false);
   const { matches, loading, error, refetch } = useMatches();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const { wallets } = useWallets();
+  const walletAddress = selectSolanaWallet(wallets)?.address ?? null;
+  const player = walletAddress ? new PublicKey(walletAddress) : null;
+  const { matches: pastMatches, loading: pastLoading } = usePlayerMatches(player);
+  const [showPast, setShowPast] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleRefresh = useCallback(async () => {
@@ -213,6 +221,62 @@ export default function ArenaPage() {
             <MatchCard key={match.matchId} match={match} />
           ))}
         </div>
+      )}
+
+      {/* ── Past Matches ── */}
+      {walletAddress && (
+        <section className="mt-10">
+          <button
+            type="button"
+            onClick={() => setShowPast(!showPast)}
+            className="mb-4 flex w-full items-center justify-between rounded-lg border border-border px-4 py-3 transition-colors hover:bg-card"
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold">
+              <History className="h-4 w-4" aria-hidden="true" />
+              Your past matches
+              {!pastLoading && (
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                  {pastMatches.filter((m) => m.gameStatus !== GameStatus.WaitingForOpponent && m.gameStatus !== GameStatus.Active).length}
+                </span>
+              )}
+            </span>
+            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showPast ? "rotate-180" : ""}`} aria-hidden="true" />
+          </button>
+          {showPast && (
+            pastLoading ? (
+              <div className="space-y-3">
+                {[0, 1].map((i) => (
+                  <div key={i} className="h-20 animate-pulse rounded-xl border border-border bg-card/60" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {pastMatches
+                  .filter((m) => m.gameStatus !== GameStatus.WaitingForOpponent && m.gameStatus !== GameStatus.Active)
+                  .slice(0, 20)
+                  .map((m) => (
+                    <MatchCard
+                      key={m.matchId}
+                      match={{
+                        matchId: m.matchId,
+                        whitePlayer: m.players[0].toBase58(),
+                        blackPlayer: m.players[1]?.equals(PublicKey.default) ? null : m.players[1]?.toBase58() ?? null,
+                        gameStatus: GameStatus[m.gameStatus] as string,
+                        totalPot: formatTokenAmount(m.betAmountPlayerOne),
+                        wagerSymbol: solanaConfig.wagerSymbol,
+                        moveTimeoutSeconds: Number(m.moveTimeoutDuration),
+                        createdAt: new Date(Number(m.createdAt) * 1000).toISOString(),
+                        bettingTokenMint: m.bettingTokenMint.toBase58(),
+                      }}
+                    />
+                  ))}
+                {pastMatches.filter((m) => m.gameStatus !== GameStatus.WaitingForOpponent && m.gameStatus !== GameStatus.Active).length === 0 && (
+                  <p className="py-6 text-center text-sm text-muted-foreground">No completed matches yet.</p>
+                )}
+              </div>
+            )
+          )}
+        </section>
       )}
     </div>
   );

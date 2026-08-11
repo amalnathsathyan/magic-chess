@@ -16,11 +16,17 @@ import {
   User,
 } from "lucide-react";
 import { Chess, type Move as ChessMove, type Square } from "chess.js";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, SystemProgram, Transaction, type Connection } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { BN } from "@anchor-lang/core";
 import { useWallets } from "@privy-io/react-auth/solana";
 import {
   boardToFen,
+  DELEGATION_PROGRAM_ID,
+  findChessMatchPda,
+  findMatchEscrowPda,
   GameStatus,
+  waitForDelegation,
   type ChessMatch,
   type Piece,
 } from "@magic-chess/sdk";
@@ -37,9 +43,9 @@ import { shortenAddress } from "@/lib/chess";
 import { sounds } from "@/lib/sounds";
 import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
 import {
+  buildWagerInstruction,
   getTransactionPayer,
   prepareSettlementAccounts,
-  prepareWagerAccount,
 } from "@/lib/wager";
 import { useMagicBlock } from "@/hooks/useMagicBlock";
 import { cn } from "@/lib/utils";

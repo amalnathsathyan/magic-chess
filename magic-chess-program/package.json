@@ -11,7 +11,8 @@
   "dependencies": {
     "@anchor-lang/core": "^1.1.2",
     "@magicblock-labs/ephemeral-rollups-kit": "^0.6.0",
-    "@solana/web3.js": "^1.95.0"
+    "@solana/web3.js": "^1.95.0",
+    "chess.js": "^1.4.0"
   },
   "devDependencies": {
     "@anchor-lang/cli": "^1.1.2",
