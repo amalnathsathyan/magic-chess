@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
+import { useMemo, useState } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { PublicKey } from "@solana/web3.js";
 import { usePrivy } from "@privy-io/react-auth";
 import { useWallets } from "@privy-io/react-auth/solana";
-import { Check, ChevronDown, Clock, Coins, Plus, Sword, X } from "lucide-react";
+import { Check, ChevronDown, Clock, Coins, LoaderCircle, Plus, Sword, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useMagicChessClient } from "@magic-chess/sdk/react";
@@ -18,6 +20,7 @@ import {
 } from "@/lib/solana-config";
 import { getTransactionPayer, prepareWagerAccount } from "@/lib/wager";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
+import { useTokenBalances, type TokenBalance } from "@/lib/token-balances";
 
 interface CreateMatchFormProps {
   isOpen: boolean;
@@ -30,24 +33,6 @@ const TIME_CONTROLS = [
   { label: "Blitz", minutes: 3 },
   { label: "Rapid", minutes: 10 },
 ] as const;
-
-// Known betting tokens on devnet. Add more as needed.
-const BETTING_TOKENS = [
-  {
-    label: "WSOL",
-    mint: "So11111111111111111111111111111111111111112",
-    decimals: 9,
-    symbol: "WSOL",
-  },
-  {
-    label: "MAGIC (test)",
-    mint: "EvhpnrnGEggWfi7whd6TH87bcZZLWJtUAPjmBAFNwDQy",
-    decimals: 9,
-    symbol: "MAGIC",
-  },
-] as const;
-
-const CUSTOM_TOKEN = { label: "Custom", mint: "", decimals: 9, symbol: "" } as const;
 
 export function CreateMatchForm({
   isOpen,
@@ -67,10 +52,37 @@ export function CreateMatchForm({
   const client = useMagicChessClient();
   const router = useRouter();
 
-  const isCustom = selectedTokenIndex === BETTING_TOKENS.length;
+  const wallet = selectSolanaWallet(wallets);
+  const { balances, loading: balancesLoading } = useTokenBalances(wallet?.address);
+
+  // Always include WSOL as default, plus user's tokens, plus custom option
+  const tokenList = useMemo(() => {
+    const seen = new Set<string>();
+    const list: TokenBalance[] = [];
+    // WSOL is always available (idempotent ATA creation)
+    list.push({
+      mint: WRAPPED_SOL_MINT.toBase58(),
+      symbol: "SOL",
+      name: "Solana",
+      amount: 0n,
+      decimals: 9,
+      uiAmount: 0,
+    });
+    seen.add(WRAPPED_SOL_MINT.toBase58());
+    // Add user's actual token balances
+    for (const b of balances) {
+      if (!seen.has(b.mint)) {
+        seen.add(b.mint);
+        list.push(b);
+      }
+    }
+    return list;
+  }, [balances]);
+
+  const isCustom = selectedTokenIndex === tokenList.length;
   const selectedToken = isCustom
-    ? { ...CUSTOM_TOKEN, mint: customMint }
-    : BETTING_TOKENS[selectedTokenIndex];
+    ? { mint: customMint, symbol: "", decimals: 9 }
+    : (tokenList[selectedTokenIndex] ?? tokenList[0]);
   const isFree = wagerAmount === "0" || wagerAmount === "";
 
   const resolveMint = (): PublicKey => {
@@ -183,8 +195,14 @@ export function CreateMatchForm({
                 <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", tokenDropdownOpen && "rotate-180")} />
               </button>
               {tokenDropdownOpen && (
-                <div className="absolute left-0 right-0 top-full z-10 mt-1 rounded-lg border border-border bg-card p-1 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
-                  {BETTING_TOKENS.map((token, index) => (
+                <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-64 overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+                  {balancesLoading && tokenList.length <= 1 && (
+                    <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
+                      <LoaderCircle className="h-3 w-3 animate-spin" />
+                      Loading tokens…
+                    </div>
+                  )}
+                  {tokenList.map((token, index) => (
                     <button
                       key={token.mint}
                       type="button"
@@ -199,8 +217,14 @@ export function CreateMatchForm({
                           : "hover:bg-white/5"
                       )}
                     >
-                      <span className="flex-1 text-left">{token.label}</span>
-                      <span className="text-xs text-muted-foreground">{token.symbol}</span>
+                      <span className="flex-1 text-left">{token.symbol}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {token.uiAmount > 0
+                          ? token.uiAmount < 0.001
+                            ? "<0.001"
+                            : token.uiAmount.toFixed(token.uiAmount < 1 ? 3 : 1)
+                          : ""}
+                      </span>
                       {selectedTokenIndex === index && (
                         <Check className="h-4 w-4 text-primary" />
                       )}
@@ -210,7 +234,7 @@ export function CreateMatchForm({
                   <button
                     type="button"
                     onClick={() => {
-                      setSelectedTokenIndex(BETTING_TOKENS.length);
+                      setSelectedTokenIndex(tokenList.length);
                       setTokenDropdownOpen(false);
                     }}
                     className={cn(

@@ -97,7 +97,42 @@ interface MoveApplyArgs {
 
 // ── Cache ──
 
-const boardCache = new Map<string, ChessPosition>();
+interface CacheEntry {
+  position: ChessPosition;
+  createdAt: number; // Date.now()
+}
+
+interface SweepStats {
+  lastSweepAt: number | null;
+  lastSweepBefore: number;
+  lastSweepAfter: number;
+}
+
+const boardCache = new Map<string, CacheEntry>();
+const TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+const sweepStats: SweepStats = {
+  lastSweepAt: null,
+  lastSweepBefore: 0,
+  lastSweepAfter: 0,
+};
+
+function sweepStaleEntries(): void {
+  const now = Date.now();
+  const before = boardCache.size;
+  for (const [matchId, entry] of boardCache) {
+    if (now - entry.createdAt > TTL_MS) {
+      boardCache.delete(matchId);
+    }
+  }
+  sweepStats.lastSweepAt = now;
+  sweepStats.lastSweepBefore = before;
+  sweepStats.lastSweepAfter = boardCache.size;
+}
+
+const sweepTimer = setInterval(sweepStaleEntries, SWEEP_INTERVAL_MS);
+sweepTimer.unref();
 
 // ── Board initialization ──
 
@@ -274,7 +309,7 @@ export function applyMoveToBoard(
 
 export function initMatch(matchId: string): string {
   const pos = defaultPosition();
-  boardCache.set(matchId, pos);
+  boardCache.set(matchId, { position: pos, createdAt: Date.now() });
   return boardToFen(
     pos.board,
     pos.currentTurn,
@@ -289,11 +324,11 @@ export function applyMove(
   matchId: string,
   args: MoveApplyArgs
 ): string | null {
-  let pos = boardCache.get(matchId);
-  if (!pos) return null; // Cache miss — caller should rebuild from DB
+  const entry = boardCache.get(matchId);
+  if (!entry) return null; // Cache miss — caller should rebuild from DB
 
-  pos = applyMoveToBoard(pos, args);
-  boardCache.set(matchId, pos);
+  const pos = applyMoveToBoard(entry.position, args);
+  boardCache.set(matchId, { position: pos, createdAt: entry.createdAt });
 
   return boardToFen(
     pos.board,
@@ -306,9 +341,10 @@ export function applyMove(
 }
 
 export function getFen(matchId: string): string | null {
-  const pos = boardCache.get(matchId);
-  if (!pos) return null;
+  const entry = boardCache.get(matchId);
+  if (!entry) return null;
 
+  const pos = entry.position;
   return boardToFen(
     pos.board,
     pos.currentTurn,
@@ -322,8 +358,8 @@ export function getFen(matchId: string): string | null {
 export function getCurrentTurn(
   matchId: string
 ): "white" | "black" | null {
-  const pos = boardCache.get(matchId);
-  return pos?.currentTurn ?? null;
+  const entry = boardCache.get(matchId);
+  return entry?.position.currentTurn ?? null;
 }
 
 export function removeMatch(matchId: string): void {
@@ -332,6 +368,10 @@ export function removeMatch(matchId: string): void {
 
 export function getCacheSize(): number {
   return boardCache.size;
+}
+
+export function getSweepStats(): SweepStats {
+  return { ...sweepStats };
 }
 
 /**
@@ -366,7 +406,7 @@ export async function rebuildBoardState(
 
   // Apply the new move
   pos = applyMoveToBoard(pos, nextMove);
-  boardCache.set(matchId, pos);
+  boardCache.set(matchId, { position: pos, createdAt: Date.now() });
 
   return boardToFen(
     pos.board,
