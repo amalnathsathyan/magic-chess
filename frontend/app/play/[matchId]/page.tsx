@@ -233,6 +233,40 @@ export default function PlayPage({ params }: PlayPageProps) {
     return cleanup;
   }, []);
 
+  // ── Debug hooks for cross-browser automated play ──
+  useEffect(() => {
+    const debug: Record<string, unknown> = {
+      getState: () => ({
+        matchId,
+        fen: authoritativeFen,
+        currentTurn: match?.currentTurn,
+        isMyTurn,
+        isActive,
+        isDelegated: match?.isDelegated,
+        gameStatus: match?.gameStatus,
+        playerColor,
+        canMove,
+        sessionStatus,
+        txStatus,
+      }),
+      makeMove: (from: string, to: string, promotion?: PromotionPiece) => {
+        if (!canMove) return { ok: false, error: "Cannot move now" };
+        submitLegalMove(from as Square, to as Square, promotion).catch(() => {});
+        return { ok: true, from, to };
+      },
+      enableSession: () => {
+        enableFastPlay()
+          .then(() => toast.success("Session enabled"))
+          .catch((e: unknown) => toast.error("Session failed", { description: String(e) }));
+      },
+      refresh: () => { void Promise.allSettled([refetch(), loadHistory()]); },
+      getFen: () => authoritativeFen,
+      getMoves: () => moves,
+    };
+    (window as unknown as Record<string, unknown>).__magicChess = debug;
+    return () => { delete (window as unknown as Record<string, unknown>).__magicChess; };
+  }, [matchId, authoritativeFen, match, isMyTurn, isActive, canMove, playerColor, sessionStatus, txStatus, moves, submitLegalMove, enableFastPlay, refetch, loadHistory]);
+
   useEffect(() => {
     const resize = () =>
       setBoardWidth(Math.min(560, Math.max(280, window.innerWidth - 32)));
