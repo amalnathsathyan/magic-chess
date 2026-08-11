@@ -2,24 +2,21 @@
 
 import { useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
-import { PublicKey, Transaction, SystemProgram } from "@solana/web3.js";
-import { getAssociatedTokenAddressSync, createAssociatedTokenAccountIdempotentInstruction } from "@solana/spl-token";
+import { PublicKey } from "@solana/web3.js";
 import { usePrivy } from "@privy-io/react-auth";
 import { useWallets } from "@privy-io/react-auth/solana";
 import { Check, ChevronDown, Clock, Coins, Plus, Sword, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useMagicChessClient } from "@magic-chess/sdk/react";
-import { findChessMatchPda, findMatchEscrowPda } from "@magic-chess/sdk";
 import { cn } from "@/lib/utils";
 import {
-  getBackendFeePayer,
   getPlatformFeeWallet,
   parseTokenAmount,
   solanaConfig,
   WRAPPED_SOL_MINT,
 } from "@/lib/solana-config";
-import { getTransactionPayer } from "@/lib/wager";
+import { getTransactionPayer, prepareWagerAccount } from "@/lib/wager";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
 
 interface CreateMatchFormProps {
@@ -107,56 +104,24 @@ export function CreateMatchForm({
       const platformFeeWallet = getPlatformFeeWallet();
       const matchId = `mc-${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`;
 
-      // Build a single transaction: [ATA idempotent create] + [initialize_match]
-      const provider = client.program.provider;
-      const transaction = new Transaction();
-      const payer = getTransactionPayer(client, player);
-      const playerTokenAccount = getAssociatedTokenAddressSync(mint, player);
-
-      // 1. Idempotent ATA creation (so the escrow can transfer tokens)
-      transaction.add(
-        createAssociatedTokenAccountIdempotentInstruction(
-          payer,
-          playerTokenAccount,
-          player,
-          mint
-        )
+      const playerTokenAccount = await prepareWagerAccount(
+        client,
+        player,
+        mint,
+        rawWager
       );
 
-      // 2. Build initialize_match instruction
-      const [chessMatchPda] = findChessMatchPda(matchId, client.programId);
-      const [matchEscrowPda] = findMatchEscrowPda(matchId, client.programId);
-      const initIx = await client.program.methods
-        .initializeMatch(
-          matchId,
-          rawWager,
-          BigInt(timeControl.minutes * 60),
-          solanaConfig.platformFeeBps,
-          platformFeeWallet,
-          false // predictionEnabled
-        )
-        .accountsPartial({
-          chessMatch: chessMatchPda,
-          playerSigner: player,
-          rentPayer: payer,
-          bettingTokenMintAccount: mint,
-          playerTokenAccount,
-          matchEscrowTokenAccount: matchEscrowPda,
-          tokenProgram: new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),
-          systemProgram: SystemProgram.programId,
-        })
-        .instruction();
-
-      transaction.add(initIx);
-      transaction.recentBlockhash = (
-        await provider.connection.getLatestBlockhash("confirmed")
-      ).blockhash;
-      transaction.feePayer = payer;
-
-      if (typeof provider.sendAndConfirm !== "function") {
-        throw new Error("Wallet provider is not ready. Try again shortly.");
-      }
-      const signature = await provider.sendAndConfirm(transaction);
+      const { signature } = await client.createMatch({
+        matchId,
+        betAmount: rawWager,
+        moveTimeoutDuration: BigInt(timeControl.minutes * 60),
+        platformFeeBasisPoints: solanaConfig.platformFeeBps,
+        platformFeeWallet,
+        bettingTokenMint: mint,
+        playerTokenAccount,
+        rentPayer: getTransactionPayer(client, player),
+        predictionEnabled: false,
+      });
 
       toast.success("Match created on Solana", {
         description: `${signature.slice(0, 8)}…${signature.slice(-8)}`,
