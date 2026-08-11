@@ -354,40 +354,96 @@ export default function PlayPage({ params }: PlayPageProps) {
 
   const handleJoin = async () => {
     if (!match || !wallet || !isWaiting) return;
-    let joined = false;
     try {
       const owner = new PublicKey(wallet.address);
       const amount = match.betAmountPlayerOne;
-      const playerTokenAccount = await prepareWagerAccount(
+      const programId = new PublicKey(solanaConfig.programId);
+
+      // 1. Build ATA creation instruction(s) — no separate send
+      const wagerPrep = await buildWagerInstruction(
         client,
         owner,
         match.bettingTokenMint,
         amount
       );
+
+      // 2. Build join_match instruction
+      const [chessMatchPda] = findChessMatchPda(matchId, programId);
+      const [matchEscrowPda] = findMatchEscrowPda(matchId, programId);
+      const joinIx = await client.program.methods
+        .joinMatch(new BN(amount.toString()))
+        .accountsPartial({
+          chessMatch: chessMatchPda,
+          playerTwoSigner: owner,
+          playerTokenAccount: wagerPrep.tokenAccount,
+          matchEscrowTokenAccount: matchEscrowPda,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .instruction();
+
+      // 3. Build delegate_match instruction
+      const rentPayer = getTransactionPayer(client, owner);
+      const [bufferChessMatch] = PublicKey.findProgramAddressSync(
+        [Buffer.from("buffer"), chessMatchPda.toBuffer()],
+        programId
+      );
+      const [delegationRecordChessMatch] = PublicKey.findProgramAddressSync(
+        [Buffer.from("delegation"), chessMatchPda.toBuffer()],
+        DELEGATION_PROGRAM_ID
+      );
+      const [delegationMetadataChessMatch] = PublicKey.findProgramAddressSync(
+        [Buffer.from("delegation-metadata"), chessMatchPda.toBuffer()],
+        DELEGATION_PROGRAM_ID
+      );
+      const delegateIx = await client.program.methods
+        .delegateMatch()
+        .accountsStrict({
+          payer: rentPayer,
+          player: owner,
+          bufferChessMatch,
+          delegationRecordChessMatch,
+          delegationMetadataChessMatch,
+          chessMatch: chessMatchPda,
+          ownerProgram: programId,
+          delegationProgram: DELEGATION_PROGRAM_ID,
+          systemProgram: SystemProgram.programId,
+        })
+        .instruction();
+
+      // 4. Bundle all three into a single transaction and send once
       await runTransaction(
-        () =>
-          client.joinMatch({
-            matchId,
-            betAmount: amount,
-            playerTokenAccount,
-          }),
+        async () => {
+          const provider = client.program.provider as unknown as {
+            connection: Connection;
+            sendAndConfirm(tx: Transaction): Promise<string>;
+          };
+
+          const transaction = new Transaction();
+          for (const ix of wagerPrep.instructions) {
+            transaction.add(ix);
+          }
+          transaction.add(joinIx);
+          transaction.add(delegateIx);
+
+          const signature = await provider.sendAndConfirm(transaction);
+
+          // Wait for the delegation to propagate so the ER is game-ready
+          await waitForDelegation(
+            provider.connection,
+            chessMatchPda,
+            programId,
+            solanaConfig.routerEndpoint
+          );
+
+          return { signature };
+        },
         "You joined the match"
       );
-      joined = true;
-      await runTransaction(
-        () =>
-          client.delegateMatch(
-            matchId,
-            getTransactionPayer(client, owner)
-          ),
-        "Fast on-chain play is ready"
-      );
     } catch {
-      if (joined) {
-        toast.info(
-          "The match is joined. Use “Enable fast play” to retry delegation."
-        );
-      }
+      // TransactionStatus handles error display.
+      // The single-transaction design means there is no partial state
+      // to clean up — either everything lands or nothing does.
     } finally {
       await refetch();
     }
