@@ -300,6 +300,7 @@ export function CreateMatchForm({
 
             <button
               type="submit"
+              onClick={handleSubmit}
               disabled={isSubmitting}
               aria-busy={isSubmitting}
               className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
