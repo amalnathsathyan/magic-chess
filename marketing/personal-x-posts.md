@@ -5,6 +5,29 @@
 
 ---
 
+### Aug 12 — Early Morning [DRAFT]
+**160 moves. 10 full matches. Zero errors. The chess engine works. Now the hard part: making the frontend not suck.**
+
+Ran 10 automated matches back-to-back on devnet tonight. Each match does the full lifecycle: create → join → delegate → session keys → 16 alternating half-moves via MagicBlock ER. Every move confirmed on-chain. Every session key worked. Every delegation resolved on the first attempt. `devnet-as.magicblock.app` handled all 160 moves without a single failure.
+
+But the frontend debugging was a different story. Here's what broke and how we fixed it:
+
+1. **React portal event delegation**: Clicks on the submit button inside a Radix Dialog Portal didn't fire `form.onSubmit`. The form just sat there. `form.requestSubmit()` worked, but `button.click()` didn't. Root cause: React 19's event delegation doesn't reach portal-rendered elements the same way. Fix: added `onClick={handleSubmit}` directly on the button. One attribute. Three hours of debugging.
+
+2. **`toArrayLike is not a function`**: Tried to bundle ATA creation + match init into a single transaction. Built a `Transaction` manually using `@solana/web3.js` v1 types, added instructions, called `provider.sendAndConfirm`. Boom. `@solana/kit` v5 uses web3.js v2 internally and tries to call `.toArrayLike()` on a v1 `PublicKey`. The fix: revert to `client.createMatch()` which uses Anchor's internal transaction builder. One step forward (single tx), one step back (v1/v2 compat), two steps forward (Anchor handles it).
+
+3. **`dynamicParams` build error**: Next.js 15 static export doesn't allow `dynamicParams: true`. The error message is clear but the fix isn't — you need `dynamic = "force-static"` in a server component (the layout), not the page (which is `"use client"`). Took 3 build-deploy cycles to get right.
+
+4. **Sponsor relay mint restriction**: The backend sponsor relay was hardcoded to only accept WSOL transactions. Picking MAGIC token in the token picker failed with "Associated-token instruction violates sponsor policy." The on-chain program validates token mints — the sponsor shouldn't. Removed the restriction.
+
+The frontend is now at a point where creating a match works with one click (after the onClick fix), joining bundles ATA+join+delegate into a single transaction (3 approvals → 1), and moves are gasless via session keys. The browser debug hooks (`window.__magicChess`) let agents control the board programmatically.
+
+What's still rough: the backend DB isn't syncing moves (no game history in the UI), the token picker shows balances but the sponsor only covers rent not wagers, and the Privy popup flow still requires manual approval for match creation. But the core loop — create, join, delegate, play, settle — works end to end.
+
+`#buildinpublic` `#solana` `#react` `#debugging` `#chess`
+
+---
+
 ### Aug 11 — Late Night [DRAFT]
 **15 commits. 1,300 lines. 6 deploy attempts. One Cloudflare Worker bug that took 4 tries to fix. The SPA fallback saga.**
 

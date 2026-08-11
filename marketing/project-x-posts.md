@@ -5,6 +5,40 @@
 
 ---
 
+### Aug 12 — Early Morning [DRAFT]
+**Arena validated: 10 matches, 160 moves, zero failures. Agentic chess SDK documented. Full on-chain game lifecycle confirmed on devnet.**
+
+Tonight's stress test ran 10 consecutive matches through the complete Magic Chess lifecycle. Every match included: match creation, opponent join, MagicBlock ER delegation, session key setup, and 16 half-moves of gasless gameplay. All 160 moves confirmed on `devnet-as.magicblock.app`.
+
+Key metrics from the test run:
+- **10/10 matches** completed successfully
+- **160/160 moves** confirmed on-chain with zero errors
+- **ER resolution**: first attempt every time
+- **Session keys**: created and validated for all 20 player sessions
+- **Average match time**: ~90 seconds (create through 16 half-moves)
+
+New features shipped in this iteration:
+- **Single-transaction join** — ATA creation + match join + ER delegation bundled into one tx (3 wallet approvals → 1)
+- **Dynamic token picker** — fetches live SPL token balances from wallet, shows available tokens with amounts
+- **Live + Past match tabs** — arena now shows Active matches and completed games with result badges, move counts, and spectate links
+- **Agentic chess SDK documentation** — comprehensive guide at `docs/docs/04-advanced/agentic-chess.md` covering autonomous agents, prediction markets, and real-time move prediction
+- **Browser debug hooks** — `window.__magicChess` exposes match state and move submission for cross-browser automated play
+- **10-match test suite** — `scripts/play-full-match.ts` creates and plays a full 16-half-move game via the SDK
+
+The platform is now ready for autonomous agents. The SDK provides everything needed: create matches, join, read FEN from on-chain state, submit moves via gasless ER, settle escrow. The agentic chess docs cover three patterns: chess-playing agents, spectator/predictor agents, and market-making agents for prediction pools.
+
+Live: arena-dev.chessmagic.workers.dev
+Backend: magic-chess-dev.onrender.com
+Program: `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h` (devnet)
+Docs: amalnathsathyan.github.io/magic-chess
+Repo: github.com/amalnathsathyan/magic-chess
+
+10 matches. 160 moves. Zero errors. Build on it.
+
+`#solana` `#chess` `#magicblock` `#agents` `#buildinpublic`
+
+---
+
 ### Aug 11 — Late Night [DRAFT]
 **Arena shipped 15 improvements today — wallet dropdown, profile overhaul, token picker, PGN export, and a fully gasless chess experience on devnet.**
 
