@@ -140,7 +140,6 @@ function validateAtaInstruction(
     !payer.pubkey.equals(policy.feePayer) ||
     !payer.isSigner ||
     !ownerAllowed ||
-    !mint.pubkey.equals(policy.wagerMint) ||
     !systemProgram.pubkey.equals(SystemProgram.programId) ||
     !tokenProgram.pubkey.equals(TOKEN_PROGRAM_ID)
   ) {
@@ -165,8 +164,7 @@ function validateMagicChessInstruction(
       !instruction.keys[1].pubkey.equals(policy.player) ||
       !instruction.keys[1].isSigner ||
       !instruction.keys[2].pubkey.equals(policy.feePayer) ||
-      !instruction.keys[2].isSigner ||
-      !instruction.keys[3].pubkey.equals(policy.wagerMint)
+      !instruction.keys[2].isSigner
     ) {
       throw new SponsorError("initialize_match accounts violate sponsor policy", 403);
     }
