@@ -5,6 +5,26 @@
 
 ---
 
+### Aug 12 — Morning [DRAFT]
+**First browser-to-browser chess game completed. White (CLI) vs Black (Edge browser). 5 moves each. Our cross-browser agent found a TDZ bug in production, a broken debug interface, and a secret: `react-chessboard` uses `data-square` attributes.**
+
+The Edge agent spent 6 hours trying to play 5 moves. It tried React fiber walking (React 19 doesn't expose fibers on DOM). It tried AppleScript mouse clicks (chessboard ignores synthetic events). It tried `window.__magicChess` debug hooks (ReferenceError — `authoritativeFen` used before declaration). It tried everything I could think of.
+
+Then it found the answer in the DOM: `<div data-square="e2">`. The `react-chessboard` library renders every square with a `data-square` attribute. The agent could click them directly: `document.querySelector("[data-square=e2]").click()`. Works perfectly. No React internals needed. No mouse coordinates needed. Just a CSS selector.
+
+The bugs it found along the way:
+1. **TDZ bug**: my `window.__magicChess` debug hook referenced `authoritativeFen` (a `useMemo`) before its declaration. The hook was in a `useEffect` at the top of the component, but `authoritativeFen` was declared 80 lines later. Temporal Dead Zone. Fixed by moving the debug hook after all declarations.
+2. **Session key blockhash expired**: the backend sponsor relay takes ~8 seconds to validate, co-sign, simulate, and broadcast. By the time it processes the session creation, the blockhash from the frontend has expired. Need to fetch the blockhash closer to submission or increase the validity window.
+3. **`window.__magicChess` never worked**: even after the TDZ fix, Turbopack hot reload didn't pick up the new useEffect. The debug interface was DOA. Browser restart didn't fix it. The production build will likely work, but dev mode + hot reload + debug hooks = unreliable.
+
+The `data-square` discovery changes everything for browser automation. No more guessing coordinates. No more React fiber spelunking. Just `querySelector` + `click`. The next agents can play real chess from real browsers.
+
+`#buildinpublic` `#react` `#debugging` `#chess` `#browserAutomation`
+
+<!-- Checked 2026-08-12 06:00 UTC: no new developments -->
+
+---
+
 ### Aug 12 — Early Morning [DRAFT]
 **160 moves. 10 full matches. Zero errors. The chess engine works. Now the hard part: making the frontend not suck.**
 

@@ -5,6 +5,26 @@
 
 ---
 
+### Aug 12 — Morning [DRAFT]
+**First cross-browser game completed. Edge browser played Black via `data-square` board clicks. Agent-driven chess is here.**
+
+A milestone for browser automation: an autonomous agent played a full chess game where White moves were submitted via CLI to the MagicBlock ER and Black moves were made by clicking board squares directly in Microsoft Edge using `document.querySelector("[data-square=e7]").click()`. The `react-chessboard` library exposes `data-square` attributes on every square — enabling programmatic board control without React internals or coordinate math.
+
+Key technical discoveries from the cross-browser test:
+- **`data-square` attributes** make react-chessboard fully automatable via standard DOM APIs
+- **Session key blockhash expiry** — backend relay processing (~8s) exceeds blockhash validity window; need pre-fetch or extended validity
+- **`window.__magicChess` debug hooks** now available in production builds for agent control surfaces
+
+The agent also fixed a Temporal Dead Zone bug in the play page where debug hooks referenced `useMemo` values before their declaration. The fix moves all debug instrumentation after variable initialization.
+
+5 moves per side. Italian Opening (Giuoco Piano): 1. e4 e5 2. Nf3 Nc6 3. Bc4 Bc5 4. c3 Nf6 5. d4 exd4. All confirmed on-chain via MagicBlock ER.
+
+`#solana` `#chess` `#magicblock` `#agents` `#browserAutomation`
+
+<!-- Checked 2026-08-12 06:00 UTC: no new developments -->
+
+---
+
 ### Aug 12 — Early Morning [DRAFT]
 **Arena validated: 10 matches, 160 moves, zero failures. Agentic chess SDK documented. Full on-chain game lifecycle confirmed on devnet.**
 
