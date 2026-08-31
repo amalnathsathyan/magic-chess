@@ -1,4 +1,3 @@
-import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Sql } from "postgres";
 import { sql } from "../db/pool.js";
@@ -15,13 +14,15 @@ import type {
   MatchNotification,
   MatchRealtimeHub,
 } from "../services/matchRealtime.js";
+import { syncAuthMode } from "../services/syncAuth.js";
 
 // ── Auth helper ──
-function requireApiKey(request: { headers: Record<string, string | string[] | undefined> }): void {
+function authorizeSyncRequest(request: {
+  headers: Record<string, string | string[] | undefined>;
+}): void {
   const raw = request.headers["x-api-key"];
-  const key = Array.isArray(raw) ? raw[0] : raw;
-  if (!key || !timingSafeEqual(Buffer.from(key), Buffer.from(config.apiKey))) {
-    throw { statusCode: 401, message: "Unauthorized — invalid or missing X-API-Key" };
+  if (syncAuthMode(raw, config.apiKey) === "invalid") {
+    throw { statusCode: 401, message: "Unauthorized — invalid X-API-Key" };
   }
 }
 
@@ -166,7 +167,7 @@ export function syncRoutes(
     "/api/sync/match-created",
     { schema: { body: syncBodySchema } },
     async (request, reply) => {
-      requireApiKey(request);
+      authorizeSyncRequest(request);
       enforceSyncRateLimit(request.ip);
       const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
       assertMatchId(matchId);
@@ -230,7 +231,7 @@ export function syncRoutes(
     "/api/sync/player-joined",
     { schema: { body: syncBodySchema } },
     async (request, reply) => {
-      requireApiKey(request);
+      authorizeSyncRequest(request);
       enforceSyncRateLimit(request.ip);
       const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
       assertMatchId(matchId);
@@ -301,7 +302,8 @@ export function syncRoutes(
     "/api/sync/match-aborted",
     { schema: { body: syncBodySchema } },
     async (request, reply) => {
-      requireApiKey(request);
+      authorizeSyncRequest(request);
+      enforceSyncRateLimit(request.ip);
       const {
         matchId,
         signature,
@@ -365,7 +367,7 @@ export function syncRoutes(
     "/api/sync/move-made",
     { schema: { body: syncBodySchema } },
     async (request, reply) => {
-      requireApiKey(request);
+      authorizeSyncRequest(request);
       enforceSyncRateLimit(request.ip);
       const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
       assertMatchId(matchId);
@@ -502,7 +504,7 @@ export function syncRoutes(
     "/api/sync/game-ended",
     { schema: { body: syncBodySchema } },
     async (request, reply) => {
-      requireApiKey(request);
+      authorizeSyncRequest(request);
       enforceSyncRateLimit(request.ip);
       const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
       assertMatchId(matchId);
@@ -586,7 +588,7 @@ export function syncRoutes(
     "/api/sync/payout",
     { schema: { body: syncBodySchema } },
     async (request, reply) => {
-      requireApiKey(request);
+      authorizeSyncRequest(request);
       enforceSyncRateLimit(request.ip);
       const { matchId, signature, runtimeEndpoint, eventIndex: requestedEventIndex } = request.body;
       assertMatchId(matchId);

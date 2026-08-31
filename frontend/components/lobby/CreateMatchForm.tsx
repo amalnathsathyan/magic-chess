@@ -19,6 +19,7 @@ import {
 import { getTransactionPayer, prepareWagerAccount } from "@/lib/wager";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { useTokenBalances, type TokenBalance } from "@/lib/token-balances";
+import { syncMatchCreated } from "@/lib/sync";
 
 interface CreateMatchFormProps {
   isOpen: boolean;
@@ -133,6 +134,8 @@ export function CreateMatchForm({
         predictionEnabled: false,
       });
 
+      void syncMatchCreated({ matchId, signature });
+
       toast.success("Match created on Solana", {
         description: `${signature.slice(0, 8)}…${signature.slice(-8)}`,
       });
@@ -186,9 +189,11 @@ export function CreateMatchForm({
                 className="flex h-11 w-full items-center justify-between rounded-lg border border-border bg-card px-3 text-sm transition-colors hover:bg-card-hover focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <span className={cn(isCustom && !customMint && "text-muted-foreground")}>
-                  {isCustom && customMint
-                    ? `${customMint.slice(0, 6)}…${customMint.slice(-4)}`
-                    : selectedToken.label}
+                  {isCustom
+                    ? customMint
+                      ? `${customMint.slice(0, 6)}…${customMint.slice(-4)}`
+                      : "Custom token"
+                    : selectedToken.symbol}
                 </span>
                 <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", tokenDropdownOpen && "rotate-180")} />
               </button>

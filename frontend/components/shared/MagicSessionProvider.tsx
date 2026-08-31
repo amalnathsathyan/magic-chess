@@ -57,7 +57,7 @@ export function MagicSessionProvider({ children }: { children: ReactNode }) {
 
   const ensureSession = useCallback(async (): Promise<MagicChessSession> => {
     const now = Math.floor(Date.now() / 1000);
-    if (session && session.expiresAt > now + 30) {
+    if (session?.token && session.expiresAt > now + 30) {
       const account = await client.program.provider.connection.getAccountInfo(
         session.token,
         "confirmed"

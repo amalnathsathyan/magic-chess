@@ -40,7 +40,10 @@ pub struct MakeMoveArgs {
 }
 
 #[session_auth_or(
-    ctx.accounts.chess_match.current_player_key() == ctx.accounts.player.key(),
+    ctx.accounts.chess_match.is_authorized_move_signer(
+        ctx.accounts.player.key(),
+        Clock::get()?.unix_timestamp,
+    ),
     ChessError::UnauthorizedSigner
 )]
 pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()> {
@@ -56,8 +59,9 @@ pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()
     );
 
     // 2. Wallet/session authorization is enforced by `session_auth_or` above.
-    // A valid SessionTokenV2 is bound to the wallet whose turn it is, this
-    // program, the temporary signer, and an expiry timestamp.
+    // It accepts the current player's wallet, the match's registered
+    // unexpired fast-play signer, or a valid SessionTokenV2 bound to the
+    // current player's wallet.
     let player_authority = chess_match.current_player_key();
     let player_color_making_move = chess_match.current_turn; // Color of the player making the move
 

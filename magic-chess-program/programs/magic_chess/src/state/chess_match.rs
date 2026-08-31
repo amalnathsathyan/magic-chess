@@ -64,4 +64,25 @@ impl ChessMatch {
             PlayerColor::Black => self.players[1],
         }
     }
+
+    /// Accept either the player's wallet or that side's registered,
+    /// unexpired fast-play signer.
+    pub fn is_authorized_move_signer(&self, signer: Pubkey, now: i64) -> bool {
+        if signer == self.current_player_key() {
+            return true;
+        }
+
+        match self.current_turn {
+            PlayerColor::White => {
+                signer == self.white_session_signer
+                    && self.white_session_signer != Pubkey::default()
+                    && self.white_session_expires_at > now
+            }
+            PlayerColor::Black => {
+                signer == self.black_session_signer
+                    && self.black_session_signer != Pubkey::default()
+                    && self.black_session_expires_at > now
+            }
+        }
+    }
 }

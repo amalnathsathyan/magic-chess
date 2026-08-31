@@ -24,6 +24,9 @@ npm run dev       # Start on :3001
 
 ## API
 
+- `GET /health` — process liveness (Render health check)
+- `GET /api/health` — database/indexer readiness plus realtime statistics
+
 ### Matches
 - `GET /api/matches` — list matches (filterable by status, player)
 - `GET /api/matches/:id` — single match + FEN
@@ -83,7 +86,7 @@ in-process notification is repaired with a snapshot.
 - `POST /api/sync/game-ended`
 - `POST /api/sync/payout`
 
-Every sync request uses `X-API-Key` and this JSON body:
+Every sync request uses this JSON body:
 
 ```json
 {
@@ -93,6 +96,11 @@ Every sync request uses `X-API-Key` and this JSON body:
   "eventIndex": 12
 }
 ```
+
+Browser clients omit `X-API-Key`; the backend accepts only events decoded from
+the confirmed transaction and configured Magic Chess program. Trusted indexers
+may additionally send `X-API-Key`. If the header is supplied, it must match the
+backend `API_KEY`.
 
 `runtimeEndpoint` is omitted for base-layer events. Include the router-resolved
 ER endpoint for ER events, especially delayed retries after undelegation. The

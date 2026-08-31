@@ -52,6 +52,7 @@ import { cn } from "@/lib/utils";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { magicBlockTxUrl, solanaDevnetTxUrl } from "@/lib/explorer";
 import { useMoveTransactionNotifications } from "@/hooks/useMoveTransactionNotifications";
+import { syncMoveMade, syncPlayerJoined } from "@/lib/sync";
 
 interface PlayPageProps {
   params: Promise<{ matchId: string }>;
@@ -428,6 +429,8 @@ export default function PlayPage({ params }: PlayPageProps) {
 
           const signature = await provider.sendAndConfirm(transaction);
 
+          void syncPlayerJoined({ matchId, signature });
+
           // Wait for the delegation to propagate so the ER is game-ready
           await waitForDelegation(
             provider.connection,
@@ -482,6 +485,11 @@ export default function PlayPage({ params }: PlayPageProps) {
     setTxStatus("submitting");
     try {
       const submission = await submitMove(matchId, source, target, promotion);
+      void syncMoveMade({
+        matchId,
+        signature: submission.signature,
+        runtimeEndpoint: submission.rpcEndpoint,
+      });
       setTxSignature(submission.signature);
       setTxExplorerHref(
         magicBlockTxUrl(submission.signature, submission.rpcEndpoint)

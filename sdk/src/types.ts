@@ -5,10 +5,11 @@ import type {
   VersionedTransaction,
 } from "@solana/web3.js";
 
-/** Short-lived signer authorized by a MagicBlock SessionTokenV2 account. */
+/** Short-lived signer registered on the match or authorized by SessionTokenV2. */
 export interface MagicChessSession {
   signer: Signer;
-  token: PublicKey;
+  /** Omit when using `setSessionKey`; provide for SessionTokenV2 authorization. */
+  token?: PublicKey;
   expiresAt: number;
 }
 

@@ -408,6 +408,9 @@ pub fn make_move_ix(
         accounts: vec![
             AccountMeta::new(*chess_match_pda, false),
             AccountMeta::new(*player, true),
+            // Anchor uses the program id as the sentinel for an omitted
+            // optional account; this keeps session-key moves account-compatible.
+            AccountMeta::new_readonly(program_id(), false),
         ],
         data,
     }

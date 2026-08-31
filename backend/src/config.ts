@@ -22,10 +22,16 @@ if (
   throw new Error("API_KEY must be set to a non-default value in production");
 }
 
-const corsOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000")
-  .split(",")
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const corsOrigins = Array.from(
+  new Set(
+    [
+      ...(process.env.CORS_ORIGIN || "http://localhost:3000").split(","),
+      "https://arena-dev.chessmagic.workers.dev",
+    ]
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+  )
+);
 
 if (corsOrigins.length === 0) {
   throw new Error("CORS_ORIGIN must contain at least one origin");

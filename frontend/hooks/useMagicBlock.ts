@@ -5,6 +5,18 @@ import { useMagicChessClient } from "@magic-chess/sdk/react";
 import { submitMoveTx } from "../lib/magicblock";
 import { useMagicSession } from "@/components/shared/MagicSessionProvider";
 
+function isSessionAuthorizationError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("unauthorizedsigner") ||
+    message.includes("unauthorized signer") ||
+    message.includes("6041") ||
+    message.includes("session token") ||
+    message.includes("session signer")
+  );
+}
+
 interface UseMagicBlockReturn {
   isSubmitting: boolean;
   sessionStatus: "idle" | "authorizing" | "ready" | "error";
@@ -47,15 +59,30 @@ export function useMagicBlock(): UseMagicBlockReturn {
       try {
         // One wallet approval creates the short-lived SessionTokenV2. The
         // actual ER move is then signed locally by the temporary key.
-        const activeSession = session ?? (await ensureSession());
-        return await submitMoveTx(
-          client,
-          matchId,
-          from,
-          to,
-          promotion,
-          activeSession
-        );
+        let activeSession = session;
+        if (!activeSession) {
+          try {
+            activeSession = await ensureSession();
+          } catch {
+            // SessionTokenV2 may not be cloned to the selected ER yet. Keep
+            // the game playable with the connected wallet signer.
+            return await submitMoveTx(client, matchId, from, to, promotion);
+          }
+        }
+
+        try {
+          return await submitMoveTx(
+            client,
+            matchId,
+            from,
+            to,
+            promotion,
+            activeSession
+          );
+        } catch (error) {
+          if (!isSessionAuthorizationError(error)) throw error;
+          return await submitMoveTx(client, matchId, from, to, promotion);
+        }
       } finally {
         setIsSubmitting(false);
       }

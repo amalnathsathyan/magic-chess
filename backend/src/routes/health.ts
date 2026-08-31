@@ -7,6 +7,13 @@ export function healthRoutes(
   app: FastifyInstance,
   realtime?: MatchRealtimeHub
 ): void {
+  // Lightweight liveness route for Render. Database readiness remains on
+  // /api/health so infrastructure can distinguish a running process from a
+  // backend that cannot currently serve indexed game state.
+  app.get("/health", async (_req, reply) => {
+    reply.code(200).send({ status: "ok" });
+  });
+
   app.get("/api/health", async (_req, reply) => {
     const dbOk = await checkDbReadiness();
     const sweepStats = getSweepStats();

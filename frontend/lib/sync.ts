@@ -4,24 +4,27 @@
  */
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
 
 async function syncPost(
   path: string,
   body: Record<string, unknown>
 ): Promise<void> {
-  if (!API_URL || !API_KEY) return; // No backend configured
+  if (!API_URL) return; // No backend configured
   try {
-    await fetch(`${API_URL.replace(/\/$/, "")}${path}`, {
+    const response = await fetch(`${API_URL.replace(/\/$/, "")}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Key": API_KEY,
       },
       body: JSON.stringify(body),
+      keepalive: true,
     });
-  } catch {
-    // Fire-and-forget; polling reconciles later
+    if (!response.ok) {
+      throw new Error(`Backend sync failed (${response.status})`);
+    }
+  } catch (error) {
+    // On-chain state is authoritative; polling can reconcile a failed hint.
+    console.warn(`Could not sync ${path}`, error);
   }
 }
 
@@ -39,6 +42,14 @@ export function syncMoveMade(params: {
   runtimeEndpoint?: string;
 }) {
   return syncPost("/api/sync/move-made", params);
+}
+
+export function syncPlayerJoined(params: {
+  matchId: string;
+  signature: string;
+  runtimeEndpoint?: string;
+}) {
+  return syncPost("/api/sync/player-joined", params);
 }
 
 export function syncGameEnded(params: {
