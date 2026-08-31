@@ -19,8 +19,8 @@ export function Header() {
   const pathname = usePathname();
 
   return (
-    <aside className="fixed bottom-0 left-0 z-50 w-full border-t border-white/5 bg-[#101015] md:sticky md:top-0 md:h-screen md:w-20 md:flex-col md:border-r md:border-t-0 md:border-white/5">
-      <div className="flex h-full w-full items-center justify-between px-4 md:flex-col md:px-0 md:py-6">
+    <aside className="fixed bottom-0 left-0 z-50 w-full border-t border-white/5 bg-[#101015] md:sticky md:top-0 md:h-dvh md:w-20 md:shrink-0 md:border-r md:border-t-0 md:border-white/5">
+      <div className="flex h-full min-w-0 items-center justify-between px-3 pb-[env(safe-area-inset-bottom)] md:flex-col md:px-0 md:py-6">
         {/* Top: Logo */}
         <div className="hidden md:flex items-center justify-center">
           <Link
@@ -40,7 +40,7 @@ export function Header() {
         </div>
 
         {/* Middle: Navigation */}
-        <nav className="flex w-full justify-around md:flex-col md:justify-center md:gap-6 md:w-auto">
+        <nav aria-label="Primary navigation" className="flex min-w-0 flex-1 justify-around md:w-full md:flex-none md:flex-col md:items-center md:justify-center md:gap-6">
           {NAV_LINKS.map((link) => {
             const isActive = pathname === link.href;
             const Icon = link.icon;
@@ -50,15 +50,16 @@ export function Header() {
                 href={link.href}
                 title={link.name}
                 className={cn(
-                  "group relative flex items-center justify-center p-3 transition-all rounded-xl",
+                  "group relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   isActive
                     ? "text-emerald-400 bg-emerald-500/10"
                     : "text-muted-foreground hover:text-foreground hover:bg-white/5"
                 )}
               >
-                <Icon className="h-6 w-6 stroke-[1.5]" />
+                <Icon aria-hidden="true" className="h-6 w-6 stroke-[1.5]" />
+                <span className="sr-only">{link.name}</span>
                 {isActive && (
-                  <span className="absolute bottom-1 md:bottom-auto md:left-0 md:top-1/2 md:-translate-y-1/2 h-1 w-1 md:h-8 md:w-1 bg-emerald-400 rounded-full shadow-[0_0_10px_rgba(0,230,118,0.5)]" />
+                  <span aria-hidden="true" className="absolute bottom-1 h-1 w-1 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(0,230,118,0.5)] md:bottom-auto md:left-0 md:top-1/2 md:h-8 md:w-1 md:-translate-y-1/2" />
                 )}
               </Link>
             );
@@ -66,7 +67,7 @@ export function Header() {
         </nav>
 
         {/* Bottom: Wallet */}
-        <div className="flex items-center justify-center md:pb-2">
+        <div className="flex min-w-11 shrink-0 items-center justify-center md:w-full md:pb-2">
           <WalletButton />
         </div>
       </div>

@@ -3,7 +3,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useCreateWallet, useWallets } from "@privy-io/react-auth/solana";
-import { Wallet, LogOut, Copy, Check } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Check,
+  Copy,
+  LoaderCircle,
+  LogOut,
+  Wallet,
+} from "lucide-react";
 import { toast } from "sonner";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { copyToClipboard } from "@/lib/clipboard";
@@ -16,6 +23,9 @@ export function WalletButton() {
   const [isCreatingWallet, setIsCreatingWallet] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [walletAction, setWalletAction] = useState<
+    "disconnecting" | "switching" | null
+  >(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const wallet = selectSolanaWallet(wallets);
@@ -33,9 +43,16 @@ export function WalletButton() {
         setDropdownOpen(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDropdownOpen(false);
+    };
 
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
   }, [dropdownOpen]);
 
   const handleCopy = useCallback(async () => {
@@ -50,10 +67,41 @@ export function WalletButton() {
     }
   }, [address]);
 
-  const handleDisconnect = useCallback(() => {
+  const disconnectWallets = useCallback(async () => {
+    await Promise.allSettled(
+      wallets.map((connectedWallet) => connectedWallet.disconnect())
+    );
+  }, [wallets]);
+
+  const handleDisconnect = useCallback(async () => {
     setDropdownOpen(false);
-    logout();
-  }, [logout]);
+    setWalletAction("disconnecting");
+    try {
+      await disconnectWallets();
+      await logout();
+      toast.success("Signed out");
+    } catch (error) {
+      console.error("Failed to sign out", error);
+      toast.error("Could not sign out. Please try again.");
+    } finally {
+      setWalletAction(null);
+    }
+  }, [disconnectWallets, logout]);
+
+  const handleSwitchAccount = useCallback(async () => {
+    setDropdownOpen(false);
+    setWalletAction("switching");
+    try {
+      await disconnectWallets();
+      await logout();
+      window.setTimeout(() => login({ loginMethods: ["wallet"] }), 0);
+    } catch (error) {
+      console.error("Failed to switch wallet", error);
+      toast.error("Could not switch wallets. Please try again.");
+    } finally {
+      setWalletAction(null);
+    }
+  }, [disconnectWallets, login, logout]);
 
   // ── Loading ──
   if (!ready || (authenticated && !walletsReady)) {
@@ -61,7 +109,7 @@ export function WalletButton() {
       <div
         role="status"
         aria-label="Loading wallet"
-        className="h-10 w-10 animate-pulse rounded-xl bg-white/5 motion-reduce:animate-none md:w-full"
+        className="h-11 w-11 animate-pulse rounded-xl bg-white/5 motion-reduce:animate-none"
       />
     );
   }
@@ -74,10 +122,10 @@ export function WalletButton() {
         onClick={login}
         aria-label="Sign in or connect a wallet"
         title="Sign in or connect a wallet"
-        className="flex h-10 min-w-10 items-center justify-center gap-2 rounded-xl bg-primary px-3 text-primary-foreground shadow-[0_0_15px_rgba(0,230,118,0.3)] transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_15px_rgba(0,230,118,0.3)] transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <Wallet aria-hidden="true" className="h-5 w-5 shrink-0" />
-        <span className="hidden text-sm font-semibold md:block">Sign in</span>
+        <span className="sr-only">Sign in</span>
       </button>
     );
   }
@@ -103,11 +151,15 @@ export function WalletButton() {
         onClick={handleCreateWallet}
         disabled={isCreatingWallet}
         aria-label={isCreatingWallet ? "Creating Solana wallet" : "Create Solana wallet"}
-        className="flex h-10 min-w-10 items-center justify-center gap-2 rounded-xl bg-primary px-3 text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
       >
-        <Wallet aria-hidden="true" className="h-5 w-5 shrink-0" />
-        <span className="hidden text-sm font-semibold md:block">
-          {isCreatingWallet ? "Creating..." : "Create wallet"}
+        {isCreatingWallet ? (
+          <LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin motion-reduce:animate-none" />
+        ) : (
+          <Wallet aria-hidden="true" className="h-5 w-5" />
+        )}
+        <span className="sr-only">
+          {isCreatingWallet ? "Creating wallet" : "Create wallet"}
         </span>
       </button>
     );
@@ -115,33 +167,44 @@ export function WalletButton() {
 
   // ── Connected ──
   return (
-    <div className="relative">
+    <div ref={dropdownRef} className="relative flex h-11 w-11 shrink-0">
       <button
         type="button"
         onClick={() => setDropdownOpen((prev) => !prev)}
+        disabled={walletAction !== null}
         aria-expanded={dropdownOpen}
-        aria-haspopup="true"
+        aria-controls="wallet-menu"
+        aria-busy={walletAction !== null}
         aria-label={shortAddress ? `Wallet ${shortAddress}` : "Wallet menu"}
+        title={shortAddress ?? "Wallet menu"}
         className={cn(
-          "flex h-10 min-w-10 items-center justify-center gap-2 rounded-xl border px-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "relative flex h-11 w-11 items-center justify-center rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           dropdownOpen
             ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
             : "border-border bg-card/50 text-primary hover:border-border-hover hover:bg-card-hover"
         )}
       >
-        <Wallet aria-hidden="true" className="h-5 w-5 shrink-0" />
-        {shortAddress && (
-          <span className="hidden text-xs font-mono font-medium md:block">
-            {shortAddress}
-          </span>
+        {walletAction ? (
+          <LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin motion-reduce:animate-none" />
+        ) : (
+          <Wallet aria-hidden="true" className="h-5 w-5" />
         )}
+        <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border border-card bg-primary" />
       </button>
 
       {dropdownOpen && (
         <div
-          ref={dropdownRef}
-          className="absolute right-0 top-full mt-2 w-72 rounded-xl border border-border bg-card p-3 shadow-[0_8px_32px_rgba(0,0,0,0.5)] z-50"
+          id="wallet-menu"
+          aria-label="Wallet actions"
+          className="absolute bottom-full right-0 z-50 mb-3 w-[min(18rem,calc(100vw-1rem))] rounded-xl border border-border bg-card p-3 shadow-[0_8px_32px_rgba(0,0,0,0.5)] md:bottom-0 md:left-full md:right-auto md:mb-0 md:ml-3"
         >
+          <div className="mb-2 px-1">
+            <p className="text-xs text-muted-foreground">Connected with</p>
+            <p className="mt-0.5 truncate text-sm font-medium text-foreground">
+              {wallet.standardWallet.name}
+            </p>
+          </div>
+
           {/* Full address with copy icon */}
           <div className="flex items-start gap-2 rounded-lg bg-white/[0.03] px-3 py-2.5">
             <span className="flex-1 break-all font-mono text-xs leading-relaxed text-foreground">
@@ -151,7 +214,7 @@ export function WalletButton() {
               type="button"
               onClick={handleCopy}
               aria-label="Copy wallet address"
-              className="shrink-0 rounded-md p-1 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {copied ? (
                 <Check aria-hidden="true" className="h-4 w-4 text-emerald-400" />
@@ -165,7 +228,7 @@ export function WalletButton() {
           <button
             type="button"
             onClick={handleCopy}
-            className="mt-1.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground"
+            className="mt-1.5 flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Copy aria-hidden="true" className="h-4 w-4" />
             Copy address
@@ -174,14 +237,35 @@ export function WalletButton() {
           {/* Separator */}
           <div className="my-1 h-px bg-border" />
 
+          <button
+            type="button"
+            onClick={handleSwitchAccount}
+            disabled={walletAction !== null}
+            aria-busy={walletAction === "switching"}
+            className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {walletAction === "switching" ? (
+              <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+            ) : (
+              <ArrowLeftRight aria-hidden="true" className="h-4 w-4" />
+            )}
+            Switch account
+          </button>
+
           {/* Disconnect */}
           <button
             type="button"
             onClick={handleDisconnect}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            disabled={walletAction !== null}
+            aria-busy={walletAction === "disconnecting"}
+            className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <LogOut aria-hidden="true" className="h-4 w-4" />
-            Disconnect
+            {walletAction === "disconnecting" ? (
+              <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+            ) : (
+              <LogOut aria-hidden="true" className="h-4 w-4" />
+            )}
+            Sign out
           </button>
         </div>
       )}
