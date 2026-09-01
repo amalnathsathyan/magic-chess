@@ -94,7 +94,10 @@ export function WalletButton() {
     try {
       await disconnectWallets();
       await logout();
-      window.setTimeout(() => login({ loginMethods: ["wallet"] }), 0);
+      window.setTimeout(
+        () => login({ loginMethods: ["wallet"], walletChainType: "solana-only" }),
+        0
+      );
     } catch (error) {
       console.error("Failed to switch wallet", error);
       toast.error("Could not switch wallets. Please try again.");
@@ -119,7 +122,7 @@ export function WalletButton() {
     return (
       <button
         type="button"
-        onClick={login}
+        onClick={() => login({ walletChainType: "solana-only" })}
         aria-label="Sign in or connect a wallet"
         title="Sign in or connect a wallet"
         className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_15px_rgba(0,230,118,0.3)] transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"

@@ -96,7 +96,7 @@ export function CreateMatchForm({
     event.preventDefault();
 
     if (!authenticated) {
-      login();
+      login({ walletChainType: "solana-only" });
       return;
     }
 
