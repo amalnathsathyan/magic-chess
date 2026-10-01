@@ -5,12 +5,12 @@ import test from "node:test";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { privyJwksUrl, verifyPrivyAccessToken } from "../src/services/privyAuth.js";
 
-const APP_ID = "cmth9quz203wq0di2z03h8b63";
+const APP_ID = "cmsdk4zc7003y0cjlc22j9igy";
 
 test("builds the Privy JWKS URL for an app", () => {
   assert.equal(
     privyJwksUrl(APP_ID),
-    "https://auth.privy.io/api/v1/apps/cmth9quz203wq0di2z03h8b63/jwks.json"
+    "https://auth.privy.io/api/v1/apps/cmsdk4zc7003y0cjlc22j9igy/jwks.json"
   );
 });
 
@@ -44,7 +44,7 @@ test("verifies Privy access tokens against a JWKS endpoint", async () => {
 
     // Token minted for another Privy app (the frontend/backend mismatch case).
     await assert.rejects(
-      verifyPrivyAccessToken(await sign("cmsdk4zc7003y0cjlc22j9igy"), APP_ID, { jwksUrl })
+      verifyPrivyAccessToken(await sign("cmth9quz203wq0di2z03h8b63"), APP_ID, { jwksUrl })
     );
     // Token signed by a key that isn't in the app's JWKS.
     const other = await generateKeyPair("ES256");
