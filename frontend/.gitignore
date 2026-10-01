@@ -28,3 +28,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .open-next/
+
+# wrangler local dev state
+.wrangler/

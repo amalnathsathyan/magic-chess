@@ -110,7 +110,7 @@ export interface LifecyclePollOptions {
 }
 
 const DEFAULT_LIFECYCLE_TIMEOUT_MS = 30_000;
-const DEFAULT_POLL_INTERVAL_MS = 500;
+const DEFAULT_POLL_INTERVAL_MS = 1_000;
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

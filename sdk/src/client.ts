@@ -37,6 +37,12 @@ import {
 import { formatRawTokenAmount, isFreeWager } from "./wager";
 
 const TOKEN_PROGRAM = TOKEN_PROGRAM_ID;
+
+/** Extra instructions bundled into the same transaction (one signature). */
+export interface TransactionExtras {
+  preInstructions?: TransactionInstruction[];
+  postInstructions?: TransactionInstruction[];
+}
 const SYSTEM_PROGRAM = SystemProgram.programId;
 
 /**
@@ -198,6 +204,7 @@ export class MagicChessClient {
         tokenProgram: TOKEN_PROGRAM,
         systemProgram: SYSTEM_PROGRAM,
       })
+      .preInstructions(params.preInstructions ?? [])
       .rpc();
 
     return { match: params.matchId, signature: sig };
@@ -251,7 +258,8 @@ export class MagicChessClient {
    */
   async abortMatch(
     matchId: string,
-    playerTokenAccount: PublicKey
+    playerTokenAccount: PublicKey,
+    options?: TransactionExtras
   ): Promise<{ signature: TransactionSignature }> {
     await this.requireBaseMatch(matchId);
     const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
@@ -266,6 +274,8 @@ export class MagicChessClient {
         playerSigner: this.requireWallet("abortMatch").publicKey,
         tokenProgram: TOKEN_PROGRAM,
       })
+      .preInstructions(options?.preInstructions ?? [])
+      .postInstructions(options?.postInstructions ?? [])
       .rpc();
 
     return { signature: sig };
@@ -374,7 +384,15 @@ export class MagicChessClient {
     matchId: string,
     playerOneAta: PublicKey,
     playerTwoAta: PublicKey,
-    platformFeeAta: PublicKey
+    platformFeeAta: PublicKey,
+    options?: TransactionExtras & {
+      /**
+       * Receives the escrow account's rent when it closes. Defaults to the
+       * wallet; sponsored transactions must return it to the sponsor that
+       * paid it.
+       */
+      rentRecipient?: PublicKey;
+    }
   ): Promise<{ signature: TransactionSignature }> {
     await this.requireBaseMatch(matchId);
     const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
@@ -388,9 +406,11 @@ export class MagicChessClient {
         playerOneAta,
         playerTwoAta,
         platformFeeAta,
-        payer: this.requireWallet("settleMatch").publicKey,
+        payer: options?.rentRecipient ?? this.requireWallet("settleMatch").publicKey,
         tokenProgram: TOKEN_PROGRAM,
       })
+      .preInstructions(options?.preInstructions ?? [])
+      .postInstructions(options?.postInstructions ?? [])
       .rpc();
 
     return { signature: sig };

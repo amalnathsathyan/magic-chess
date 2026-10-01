@@ -2,14 +2,25 @@
 
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { Trophy, Medal } from "lucide-react";
+import { Trophy, Medal, Sparkles } from "lucide-react";
 import { api, type ApiLeaderboardEntry } from "@/lib/api";
+import { predictionsApi } from "@/lib/predictions";
+
+type Predictor = Awaited<ReturnType<typeof predictionsApi.leaderboard>>["leaderboard"][number];
 
 export default function LeaderboardPage() {
   const [entries, setEntries] = useState<ApiLeaderboardEntry[]>([]);
   const [sortBy, setSortBy] = useState<"wins" | "winRate" | "totalGames">("wins");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [predictors, setPredictors] = useState<Predictor[] | null>(null);
+
+  useEffect(() => {
+    predictionsApi
+      .leaderboard()
+      .then((data) => setPredictors(data.leaderboard))
+      .catch(() => setPredictors([]));
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -97,6 +108,52 @@ export default function LeaderboardPage() {
           </table>
         )}
       </div>
+
+      <section className="mt-10" aria-labelledby="predictors-heading">
+        <h2 id="predictors-heading" className="flex items-center gap-2 font-heading text-xl font-bold">
+          <Sparkles className="h-5 w-5 text-amber-300" aria-hidden="true" />
+          Top predictors
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Spectators who best call moves in live games. Play points only.
+        </p>
+        <div className="mt-4 glass-card overflow-hidden">
+          {predictors === null ? (
+            <div className="flex justify-center py-8 text-sm text-muted-foreground">Loading...</div>
+          ) : predictors.length === 0 ? (
+            <div className="flex justify-center py-8 text-sm text-muted-foreground">
+              No predictions settled yet. Watch a live game and call the next move.
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <th className="py-3 pl-4 pr-2">#</th>
+                  <th className="py-3 px-2">Predictor</th>
+                  <th className="py-3 px-2 text-right">Called</th>
+                  <th className="py-3 px-2 text-right">Missed</th>
+                  <th className="py-3 pr-4 pl-2 text-right">Points</th>
+                </tr>
+              </thead>
+              <tbody>
+                {predictors.map((entry) => (
+                  <tr key={entry.wallet} className="border-b border-border/50 hover:bg-card/50 transition-colors">
+                    <td className="py-3 pl-4 pr-2">{rankIcon(entry.rank)}</td>
+                    <td className="py-3 px-2 font-mono text-xs">
+                      {entry.wallet.slice(0, 4)}...{entry.wallet.slice(-4)}
+                    </td>
+                    <td className="py-3 px-2 text-right text-sm text-emerald-400">{entry.betsWon}</td>
+                    <td className="py-3 px-2 text-right text-sm text-muted-foreground">{entry.betsLost}</td>
+                    <td className="py-3 pr-4 pl-2 text-right font-mono text-sm font-medium">
+                      {entry.balance.toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

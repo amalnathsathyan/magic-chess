@@ -34,6 +34,7 @@ export type {
 
 // Client
 export { MagicChessClient } from "./client";
+export type { TransactionExtras } from "./client";
 
 // PDA helpers
 export {

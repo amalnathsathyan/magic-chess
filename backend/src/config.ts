@@ -27,6 +27,7 @@ const corsOrigins = Array.from(
     [
       ...(process.env.CORS_ORIGIN || "http://localhost:3000").split(","),
       "https://arena-dev.chessmagic.workers.dev",
+      "https://arena.chessmagic.workers.dev",
     ]
       .map((origin) => origin.trim())
       .filter(Boolean)

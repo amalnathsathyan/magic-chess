@@ -1,35 +1,27 @@
-// Minimal worker — serves static assets with SPA fallback.
-// Dynamic routes (e.g. /play/<matchId>) map to their static placeholder files.
-const DYNAMIC_ROUTES = [
-  { pattern: /^\/play\/[^/]+$/, asset: "/play/placeholder.html" },
-  { pattern: /^\/play\/[^/]+\/spectate$/, asset: "/play/placeholder/spectate.html" },
-];
-
-function dynamicAsset(pathname) {
-  for (const { pattern, asset } of DYNAMIC_ROUTES) {
-    if (pattern.test(pathname)) return asset;
-  }
-  return null;
-}
-
+// Static-export router for Cloudflare Workers. Assets in `out/` are served
+// first (clean URLs like /arena -> arena.html); this worker only sees misses.
+//
+// Match pages are static and take the ID as a query parameter
+// (`/play?id=…`, `/spectate?id=…`). Older links used `/play/<id>` and
+// `/play/<id>/spectate`, which rendered a "placeholder" match; redirect them.
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // SPA fallback for dynamic routes
-    const dynAsset = dynamicAsset(url.pathname);
-    if (dynAsset) {
-      const asset = await env.ASSETS.fetch(new URL(dynAsset, request.url).toString());
-      if (asset.ok) return asset;
-    }
-
-    // Non-file paths → index.html (catch-all SPA fallback)
-    if (!url.pathname.includes(".")) {
-      const asset = await env.ASSETS.fetch(new URL("/index.html", request.url).toString());
-      if (asset.ok) return asset;
+    const legacy = url.pathname.match(/^\/play\/([^/]+?)(\/spectate)?\/?$/);
+    if (legacy && legacy[1] !== "placeholder") {
+      const target = new URL(legacy[2] ? "/spectate" : "/play", url.origin);
+      target.searchParams.set("id", decodeURIComponent(legacy[1]));
+      return Response.redirect(target.toString(), 302);
     }
 
     const asset = await env.ASSETS.fetch(request);
-    return asset.ok ? asset : new Response("Not Found", { status: 404 });
-  }
-}
+    if (asset.status !== 404) return asset;
+
+    const notFound = await env.ASSETS.fetch(new URL("/404.html", url.origin));
+    return new Response(notFound.ok ? notFound.body : "Not Found", {
+      status: 404,
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  },
+};

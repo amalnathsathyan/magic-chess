@@ -1,5 +1,6 @@
 import type {
   PublicKey,
+  TransactionInstruction,
   Signer,
   Transaction,
   VersionedTransaction,
@@ -163,6 +164,11 @@ export interface CreateMatchParams {
    * connected wallet for self-paid transactions.
    */
   rentPayer?: PublicKey;
+  /**
+   * Instructions prepended to the same transaction (e.g. creating and funding
+   * the wager token account) so the player signs once.
+   */
+  preInstructions?: TransactionInstruction[];
   /** Enable the spectator prediction pool for this match. Defaults to false. */
   predictionEnabled?: boolean;
 }

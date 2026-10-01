@@ -21,7 +21,9 @@ interface UseMagicBlockReturn {
   isSubmitting: boolean;
   sessionStatus: "idle" | "authorizing" | "ready" | "error";
   sessionError: string | null;
-  enableFastPlay: () => Promise<void>;
+  /** True once moves for this match sign locally (no wallet popups). */
+  isFastPlayReady: (matchId: string) => boolean;
+  enableFastPlay: (matchId?: string) => Promise<void>;
   submitMove: (
     matchId: string,
     from: string,
@@ -37,12 +39,20 @@ interface UseMagicBlockReturn {
 export function useMagicBlock(): UseMagicBlockReturn {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const client = useMagicChessClient();
-  const { session, status: sessionStatus, error: sessionError, ensureSession } =
-    useMagicSession();
+  const {
+    status: sessionStatus,
+    error: sessionError,
+    ensureSession,
+    forgetMatch,
+    isRegistered,
+  } = useMagicSession();
 
-  const enableFastPlay = useCallback(async () => {
-    await ensureSession();
-  }, [ensureSession]);
+  const enableFastPlay = useCallback(
+    async (matchId?: string) => {
+      await ensureSession(matchId);
+    },
+    [ensureSession]
+  );
 
   const submitMove = useCallback(
     async (
@@ -57,43 +67,32 @@ export function useMagicBlock(): UseMagicBlockReturn {
 
       setIsSubmitting(true);
       try {
-        // One wallet approval creates the short-lived SessionTokenV2. The
-        // actual ER move is then signed locally by the temporary key.
-        let activeSession = session;
-        if (!activeSession) {
-          try {
-            activeSession = await ensureSession();
-          } catch {
-            // SessionTokenV2 may not be cloned to the selected ER yet. Keep
-            // the game playable with the connected wallet signer.
-            return await submitMoveTx(client, matchId, from, to, promotion);
-          }
+        // Fast play: a temporary key registered on this match signs the ER
+        // move locally. Without one, the wallet signs (embedded wallets do it
+        // silently for moves), so play never blocks on session setup.
+        if (!isRegistered(matchId)) {
+          return await submitMoveTx(client, matchId, from, to, promotion);
         }
-
+        const activeSession = await ensureSession(matchId);
         try {
-          return await submitMoveTx(
-            client,
-            matchId,
-            from,
-            to,
-            promotion,
-            activeSession
-          );
+          return await submitMoveTx(client, matchId, from, to, promotion, activeSession);
         } catch (error) {
           if (!isSessionAuthorizationError(error)) throw error;
+          forgetMatch(matchId);
           return await submitMoveTx(client, matchId, from, to, promotion);
         }
       } finally {
         setIsSubmitting(false);
       }
     },
-    [client, ensureSession, session]
+    [client, ensureSession, forgetMatch, isRegistered]
   );
 
   return {
     isSubmitting,
     sessionStatus,
     sessionError,
+    isFastPlayReady: isRegistered,
     enableFastPlay,
     submitMove,
   };

@@ -1,5 +1,6 @@
 "use client";
 
+import { playHref } from "@/lib/match-links";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -401,7 +402,7 @@ export default function ProfilePage() {
                           ? match.blackPlayer
                           : match.whitePlayer;
                       const terminal = isTerminalStatus(match.gameStatus);
-                      const matchHref = `/play/${encodeURIComponent(match.matchId)}`;
+                      const matchHref = playHref(match.matchId);
 
                       return (
                         <div
