@@ -83,6 +83,46 @@ const INITIALIZE_MATCH_DISCRIMINATOR = Buffer.from([
 const DELEGATE_MATCH_DISCRIMINATOR = Buffer.from([
   30, 116, 9, 69, 147, 61, 133, 238,
 ]);
+
+/**
+ * Every Magic Chess instruction the sponsor will pay for, with the account
+ * index that must be the authenticated player (or the sponsor) and whether it
+ * creates sponsor-funded rent. Anything not listed is rejected: a new program
+ * instruction must be reviewed before it can spend sponsor funds.
+ */
+type MagicChessRule =
+  | { name: string; role: "player"; index: number; costly?: boolean }
+  | { name: string; role: "sponsor"; index: number }
+  | { name: string; role: "custom" };
+
+const MAGIC_CHESS_RULES = new Map<string, MagicChessRule>(
+  (
+    [
+      [[156, 133, 52, 179, 176, 29, 64, 124], { name: "initialize_match", role: "custom" }],
+      [[30, 116, 9, 69, 147, 61, 133, 238], { name: "delegate_match", role: "custom" }],
+      [[244, 8, 47, 130, 192, 59, 179, 44], { name: "join_match", role: "player", index: 1 }],
+      [[165, 210, 81, 124, 173, 175, 87, 201], { name: "abort_match", role: "player", index: 3 }],
+      [[43, 29, 143, 188, 152, 151, 136, 19], { name: "resign_game", role: "player", index: 1 }],
+      [[175, 234, 101, 151, 53, 30, 177, 137], { name: "claim_timeout_win", role: "player", index: 1 }],
+      [[78, 77, 152, 203, 222, 211, 208, 233], { name: "make_move", role: "player", index: 1 }],
+      [[13, 147, 179, 38, 67, 1, 69, 132], { name: "set_session_key", role: "player", index: 1 }],
+      [[81, 192, 32, 110, 104, 116, 144, 151], { name: "revoke_session_key", role: "player", index: 1 }],
+      // Escrow rent from settlement is refunded to `payer` (index 5); it
+      // must be the sponsor that originally funded it, never the caller.
+      [[236, 106, 133, 178, 45, 221, 98, 116], { name: "process_match_settlement", role: "sponsor", index: 5 }],
+      // close_match refunds the match account rent to `payer` (index 1).
+      [[79, 174, 36, 80, 233, 185, 176, 239], { name: "close_match", role: "sponsor", index: 1 }],
+    ] as Array<[number[], MagicChessRule]>
+  ).map(([discriminator, rule]) => [Buffer.from(discriminator).toString("hex"), rule])
+);
+
+/** Rough lamports a sponsored operation can lock up in rent. */
+export const SPONSOR_COST_ESTIMATES = {
+  initializeMatch: 20_000_000n,
+  createSession: 2_000_000n,
+  associatedTokenAccount: 2_100_000n,
+  signature: 10_000n,
+} as const;
 const CREATE_SESSION_V2_DISCRIMINATOR = Buffer.from([
   223, 233, 108, 7, 65, 194, 235, 38,
 ]);
@@ -94,6 +134,14 @@ export interface SponsorPolicy {
   wagerMint: PublicKey;
   platformFeeWallet?: PublicKey;
   maxWagerLamports: bigint;
+}
+
+export interface ValidatedSponsoredTransaction {
+  transaction: Transaction;
+  /** Upper bound of sponsor lamports this transaction can consume. */
+  estimatedCostLamports: bigint;
+  /** True when it creates a match or session (rent-heavy, rate limited). */
+  costly: boolean;
 }
 
 function rejectSponsorSystemDebit(
@@ -123,7 +171,8 @@ function rejectSponsorSystemDebit(
 
 function validateAtaInstruction(
   instruction: TransactionInstruction,
-  policy: SponsorPolicy
+  policy: SponsorPolicy,
+  magicChessAccounts: Set<string>
 ): void {
   if (
     instruction.data.length !== 1 ||
@@ -133,13 +182,19 @@ function validateAtaInstruction(
     throw new SponsorError("Only idempotent associated-token creation is sponsored");
   }
   const [payer, ata, owner, mint, systemProgram, tokenProgram] = instruction.keys;
-  const ownerAllowed =
-    owner.pubkey.equals(policy.player) ||
-    Boolean(policy.platformFeeWallet?.equals(owner.pubkey));
+  // The account must be consumed by a Magic Chess instruction in this same
+  // transaction (whose own constraints bind owner and mint, and which must
+  // pass simulation). Otherwise the sponsor would pay rent for arbitrary
+  // token accounts.
+  if (!magicChessAccounts.has(ata.pubkey.toBase58())) {
+    throw new SponsorError(
+      "Associated-token creation must be used by a Magic Chess instruction",
+      403
+    );
+  }
   if (
     !payer.pubkey.equals(policy.feePayer) ||
     !payer.isSigner ||
-    !ownerAllowed ||
     !systemProgram.pubkey.equals(SystemProgram.programId) ||
     !tokenProgram.pubkey.equals(TOKEN_PROGRAM_ID)
   ) {
@@ -157,7 +212,25 @@ function validateAtaInstruction(
 function validateMagicChessInstruction(
   instruction: TransactionInstruction,
   policy: SponsorPolicy
-): void {
+): MagicChessRule {
+  const rule = MAGIC_CHESS_RULES.get(instruction.data.subarray(0, 8).toString("hex"));
+  if (!rule) {
+    throw new SponsorError("This Magic Chess instruction is not sponsored", 403);
+  }
+  if (rule.role === "player") {
+    const key = instruction.keys[rule.index];
+    if (!key?.pubkey.equals(policy.player) || !key.isSigner) {
+      throw new SponsorError(`${rule.name} must be signed by the authenticated wallet`, 403);
+    }
+    return rule;
+  }
+  if (rule.role === "sponsor") {
+    const key = instruction.keys[rule.index];
+    if (!key?.pubkey.equals(policy.feePayer) || !key.isWritable) {
+      throw new SponsorError(`${rule.name} must refund rent to the sponsor`, 403);
+    }
+    return rule;
+  }
   if (instruction.data.subarray(0, 8).equals(INITIALIZE_MATCH_DISCRIMINATOR)) {
     if (
       instruction.keys.length < 8 ||
@@ -168,7 +241,7 @@ function validateMagicChessInstruction(
     ) {
       throw new SponsorError("initialize_match accounts violate sponsor policy", 403);
     }
-    return;
+    return rule;
   }
 
   if (instruction.data.subarray(0, 8).equals(DELEGATE_MATCH_DISCRIMINATOR)) {
@@ -215,6 +288,7 @@ function validateMagicChessInstruction(
       throw new SponsorError("delegate_match accounts violate sponsor policy", 403);
     }
   }
+  return rule;
 }
 
 function readRequiredOption(
@@ -295,6 +369,13 @@ export function validateSponsoredTransaction(
   serialized: Buffer,
   policy: SponsorPolicy
 ): Transaction {
+  return analyzeSponsoredTransaction(serialized, policy).transaction;
+}
+
+export function analyzeSponsoredTransaction(
+  serialized: Buffer,
+  policy: SponsorPolicy
+): ValidatedSponsoredTransaction {
   if (serialized.length === 0 || serialized.length > MAX_TRANSACTION_BYTES) {
     throw new SponsorError("Serialized transaction has an invalid size");
   }
@@ -322,25 +403,41 @@ export function validateSponsoredTransaction(
     throw new SponsorError("Authenticated wallet signature is missing or invalid", 403);
   }
 
+  const magicChessAccounts = new Set<string>();
+  for (const instruction of transaction.instructions) {
+    if (instruction.programId.equals(policy.programId)) {
+      instruction.keys.forEach(({ pubkey }) => magicChessAccounts.add(pubkey.toBase58()));
+    }
+  }
+
   let hasAppInstruction = false;
   let hasSessionInstruction = false;
   let sessionSignerKey: PublicKey | null = null;
   let operationInstructionCount = 0;
+  let costly = false;
+  let estimatedCostLamports =
+    SPONSOR_COST_ESTIMATES.signature * BigInt(transaction.signatures.length);
   for (const instruction of transaction.instructions) {
     const programId = instruction.programId;
     if (programId.equals(policy.programId)) {
       operationInstructionCount += 1;
       hasAppInstruction = true;
-      validateMagicChessInstruction(instruction, policy);
+      const rule = validateMagicChessInstruction(instruction, policy);
+      if (rule.name === "initialize_match") {
+        costly = true;
+        estimatedCostLamports += SPONSOR_COST_ESTIMATES.initializeMatch;
+      }
     } else if (programId.equals(SESSION_PROGRAM_ID)) {
       operationInstructionCount += 1;
       hasAppInstruction = true;
       hasSessionInstruction = true;
+      costly = true;
+      estimatedCostLamports += SPONSOR_COST_ESTIMATES.createSession;
       sessionSignerKey = validateSessionInstruction(instruction, policy);
     } else if (programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID)) {
       operationInstructionCount += 1;
-      hasAppInstruction = true;
-      validateAtaInstruction(instruction, policy);
+      estimatedCostLamports += SPONSOR_COST_ESTIMATES.associatedTokenAccount;
+      validateAtaInstruction(instruction, policy, magicChessAccounts);
     } else if (programId.equals(SystemProgram.programId)) {
       operationInstructionCount += 1;
       rejectSponsorSystemDebit(instruction, policy);
@@ -377,7 +474,7 @@ export function validateSponsoredTransaction(
   ) {
     throw new SponsorError("Session signer signature is missing", 403);
   }
-  return transaction;
+  return { transaction, estimatedCostLamports, costly };
 }
 
 export interface RelaySponsoredTransactionInput {
@@ -400,12 +497,23 @@ export class SolanaSponsorService {
     this.feePayer = loadFeePayer(feePayerSecret, feePayerAddress);
   }
 
-  async relay(input: RelaySponsoredTransactionInput): Promise<string> {
-    const transaction = validateSponsoredTransaction(input.serialized, {
+  get feePayerAddress(): PublicKey {
+    return this.feePayer.publicKey;
+  }
+
+  analyze(input: Pick<RelaySponsoredTransactionInput, "serialized" | "player">) {
+    return analyzeSponsoredTransaction(input.serialized, {
       ...this.policy,
       feePayer: this.feePayer.publicKey,
       player: input.player,
     });
+  }
+
+  async relay(
+    input: RelaySponsoredTransactionInput,
+    analyzed = this.analyze(input)
+  ): Promise<string> {
+    const { transaction } = analyzed;
     const blockhash = transaction.recentBlockhash!;
     const validity = await this.connection.isBlockhashValid(blockhash, {
       commitment: "confirmed",

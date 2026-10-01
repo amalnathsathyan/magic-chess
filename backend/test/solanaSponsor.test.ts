@@ -8,6 +8,7 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import {
+  analyzeSponsoredTransaction,
   SponsorError,
   validateSponsoredTransaction,
   type SponsorPolicy,
@@ -177,7 +178,7 @@ function delegateInstruction(
   });
 }
 
-test("accepts an authenticated idempotent ATA preparation", () => {
+test("rejects a standalone ATA creation (sponsor rent drain)", () => {
   const sponsor = Keypair.generate();
   const player = Keypair.generate();
   const mint = Keypair.generate().publicKey;
@@ -186,11 +187,170 @@ test("accepts an authenticated idempotent ATA preparation", () => {
     memo(player.publicKey)
   );
 
-  const validated = validateSponsoredTransaction(
+  assert.throws(
+    () =>
+      validateSponsoredTransaction(
+        serializePartiallySigned(transaction, player),
+        policy(sponsor.publicKey, player.publicKey, mint)
+      ),
+    /no Magic Chess operation|must be used by a Magic Chess instruction/
+  );
+});
+
+function initializeInstruction(
+  sponsor: PublicKey,
+  player: PublicKey,
+  mint: PublicKey,
+  playerTokenAccount = Keypair.generate().publicKey
+): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: MAGIC_CHESS_PROGRAM,
+    keys: [
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: true },
+      { pubkey: player, isSigner: true, isWritable: true },
+      { pubkey: sponsor, isSigner: true, isWritable: true },
+      { pubkey: mint, isSigner: false, isWritable: false },
+      { pubkey: playerTokenAccount, isSigner: false, isWritable: true },
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+    ],
+    data: INITIALIZE_MATCH_DISCRIMINATOR,
+  });
+}
+
+function ataAddress(owner: PublicKey, mint: PublicKey): PublicKey {
+  return PublicKey.findProgramAddressSync(
+    [owner.toBuffer(), TOKEN_PROGRAM.toBuffer(), mint.toBuffer()],
+    ATA_PROGRAM
+  )[0];
+}
+
+test("accepts ATA creation consumed by initialize_match and reports it as costly", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    ataInstruction(sponsor.publicKey, player.publicKey, mint),
+    initializeInstruction(
+      sponsor.publicKey,
+      player.publicKey,
+      mint,
+      ataAddress(player.publicKey, mint)
+    )
+  );
+
+  const result = analyzeSponsoredTransaction(
     serializePartiallySigned(transaction, player),
     policy(sponsor.publicKey, player.publicKey, mint)
   );
-  assert.ok(validated.feePayer?.equals(sponsor.publicKey));
+  assert.equal(result.costly, true);
+  assert.ok(result.estimatedCostLamports > 20_000_000n);
+});
+
+test("rejects Magic Chess instructions that are not on the allowlist", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const unknown = new TransactionInstruction({
+    programId: MAGIC_CHESS_PROGRAM,
+    keys: [{ pubkey: player.publicKey, isSigner: true, isWritable: true }],
+    // initialize_prediction_pool: rent-creating, not sponsored.
+    data: Buffer.from([143, 97, 75, 159, 98, 119, 94, 131]),
+  });
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(unknown);
+
+  assert.throws(
+    () =>
+      validateSponsoredTransaction(
+        serializePartiallySigned(transaction, player),
+        policy(sponsor.publicKey, player.publicKey, mint)
+      ),
+    /not sponsored/
+  );
+});
+
+function settleInstruction(rentDestination: PublicKey, atas: PublicKey[]): TransactionInstruction {
+  return new TransactionInstruction({
+    programId: MAGIC_CHESS_PROGRAM,
+    keys: [
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: true },
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: true },
+      ...atas.map((pubkey) => ({ pubkey, isSigner: false, isWritable: true })),
+      { pubkey: rentDestination, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_PROGRAM, isSigner: false, isWritable: false },
+    ],
+    data: Buffer.from([236, 106, 133, 178, 45, 221, 98, 116]),
+  });
+}
+
+test("accepts settlement that refunds escrow rent to the sponsor, with opponent ATAs", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const opponent = Keypair.generate().publicKey;
+  const platform = Keypair.generate().publicKey;
+  const mint = Keypair.generate().publicKey;
+  const atas = [player.publicKey, opponent, platform].map((owner) => ataAddress(owner, mint));
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    ataInstruction(sponsor.publicKey, opponent, mint),
+    settleInstruction(sponsor.publicKey, atas),
+    memo(player.publicKey)
+  );
+
+  assert.doesNotThrow(() =>
+    validateSponsoredTransaction(
+      serializePartiallySigned(transaction, player),
+      policy(sponsor.publicKey, player.publicKey, mint)
+    )
+  );
+});
+
+test("rejects settlement that redirects sponsor-funded escrow rent", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const atas = [0, 1, 2].map(() => Keypair.generate().publicKey);
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    settleInstruction(player.publicKey, atas),
+    memo(player.publicKey)
+  );
+
+  assert.throws(
+    () =>
+      validateSponsoredTransaction(
+        serializePartiallySigned(transaction, player),
+        policy(sponsor.publicKey, player.publicKey, mint)
+      ),
+    /refund rent to the sponsor/
+  );
+});
+
+test("rejects join_match signed by a different wallet", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const other = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const join = new TransactionInstruction({
+    programId: MAGIC_CHESS_PROGRAM,
+    keys: [
+      { pubkey: Keypair.generate().publicKey, isSigner: false, isWritable: true },
+      { pubkey: other.publicKey, isSigner: true, isWritable: true },
+    ],
+    data: Buffer.from([244, 8, 47, 130, 192, 59, 179, 44]),
+  });
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    join,
+    memo(player.publicKey)
+  );
+
+  assert.throws(
+    () =>
+      validateSponsoredTransaction(
+        serializePartiallySigned(transaction, player, [other]),
+        policy(sponsor.publicKey, player.publicKey, mint)
+      ),
+    /signed by the authenticated wallet/
+  );
 });
 
 test("accepts initialize_match only when the configured sponsor is rent payer", () => {
@@ -348,13 +508,18 @@ test("rejects any System transfer sourced from sponsor funds", () => {
   const player = Keypair.generate();
   const mint = Keypair.generate().publicKey;
   const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
-    ataInstruction(sponsor.publicKey, player.publicKey, mint),
-    memo(player.publicKey),
     SystemProgram.transfer({
       fromPubkey: sponsor.publicKey,
       toPubkey: player.publicKey,
       lamports: 1,
-    })
+    }),
+    ataInstruction(sponsor.publicKey, player.publicKey, mint),
+    initializeInstruction(
+      sponsor.publicKey,
+      player.publicKey,
+      mint,
+      ataAddress(player.publicKey, mint)
+    )
   );
 
   assert.throws(
