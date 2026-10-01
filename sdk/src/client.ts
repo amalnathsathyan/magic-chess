@@ -206,6 +206,7 @@ export class MagicChessClient {
       })
       .preInstructions(params.preInstructions ?? [])
       .postInstructions(params.postInstructions ?? [])
+      .signers(params.signers ?? [])
       .rpc();
 
     return { match: params.matchId, signature: sig };
