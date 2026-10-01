@@ -105,7 +105,19 @@ pub fn handle_claim_timeout_win(ctx: Context<ClaimTimeoutWin>) -> Result<()> {
         chess_match.active_task_id = -1;
     }
 
-    // 8. Schedule process_match_settlement crank task (fires in 5 seconds)
+    // 8. Settlement and undelegation. While the Task Scheduler CPI is
+    // disabled nothing runs them automatically: a player finalizes from the
+    // app (undelegate_match, then process_match_settlement on L1).
+    if !schedule_timeout::TASK_SCHEDULER_ENABLED {
+        msg!(
+            "Match {} ended. Auto-settlement disabled; a player must finalize ({}process_match_settlement).",
+            chess_match.match_id,
+            if chess_match.is_delegated { "undelegate_match, then " } else { "" }
+        );
+        return Ok(());
+    }
+
+    // Schedule process_match_settlement crank task (fires in 5 seconds)
     let base_id = i64::from_le_bytes(chess_match_key.as_ref()[..8].try_into().unwrap());
     let settlement_task_id = base_id.wrapping_add(10_000); // Offset for settlement tasks
 
