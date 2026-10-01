@@ -22,7 +22,7 @@ import { selectSolanaWallet } from "@/lib/privy-wallet";
 
 const APP_VERSION = "0.1.0";
 const GITHUB_URL = "https://github.com/amalnathsathyan/magic-chess";
-const DOCS_URL = "https://github.com/amalnathsathyan/magic-chess/tree/main/docs";
+const DOCS_URL = "https://github.com/amalnathsathyan/magic-chess/tree/dev/docs";
 
 export default function SettingsPage() {
   const [soundEnabled, setSoundEnabled] = useState(true);
