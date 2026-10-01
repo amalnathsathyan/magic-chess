@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { MarketSnapshot, SettledEvent } from "@/lib/predictions";
 import {
   api,
   getApiUrl,
@@ -48,6 +49,11 @@ export function useMatchRealtime(args: {
     data: MatchNotificationEvent;
   } | null>(null);
   const [refreshSequence, setRefreshSequence] = useState(0);
+  const [predictionMarket, setPredictionMarket] = useState<MarketSnapshot | null>(null);
+  const [predictionSettled, setPredictionSettled] = useState<{
+    sequence: number;
+    data: SettledEvent;
+  } | null>(null);
   const [verifying, setVerifying] = useState(false);
 
   const openSession = useCallback(
@@ -100,6 +106,13 @@ export function useMatchRealtime(args: {
           data,
         }));
         setRefreshSequence((value) => value + 1);
+      });
+      listen<MarketSnapshot>("prediction.market", setPredictionMarket);
+      listen<SettledEvent>("prediction.settled", (data) => {
+        setPredictionSettled((current) => ({
+          sequence: (current?.sequence ?? 0) + 1,
+          data,
+        }));
       });
       listen<{ reason: string }>("resync.required", () => {
         setRefreshSequence((value) => value + 1);
@@ -162,6 +175,8 @@ export function useMatchRealtime(args: {
     presence,
     notification,
     refreshSequence,
+    predictionMarket,
+    predictionSettled,
     verifying,
     verifyPlayerPresence,
   };

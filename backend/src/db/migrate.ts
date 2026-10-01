@@ -276,6 +276,67 @@ const migrations: Array<{ name: string; run: (s: Sql) => Promise<void> }> = [
       `);
     },
   },
+  {
+    name: "006_move_predictions",
+    run: async (s) => {
+      await s.unsafe(`
+        ALTER TABLE moves ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMPTZ
+      `);
+      await s.unsafe(`
+        CREATE TABLE IF NOT EXISTS prediction_accounts (
+          wallet          VARCHAR(44)  PRIMARY KEY,
+          balance         BIGINT       NOT NULL CHECK (balance >= 0),
+          total_staked    BIGINT       NOT NULL DEFAULT 0,
+          total_won       BIGINT       NOT NULL DEFAULT 0,
+          bets_won        INTEGER      NOT NULL DEFAULT 0,
+          bets_lost       INTEGER      NOT NULL DEFAULT 0,
+          last_refill_at  TIMESTAMPTZ,
+          created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+          updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+        )
+      `);
+      await s.unsafe(`
+        CREATE TABLE IF NOT EXISTS move_bets (
+          id             BIGSERIAL    PRIMARY KEY,
+          match_id       VARCHAR(32)  NOT NULL REFERENCES matches(match_id),
+          ply            INTEGER      NOT NULL CHECK (ply >= 1),
+          wallet         VARCHAR(44)  NOT NULL REFERENCES prediction_accounts(wallet),
+          predicted_san  VARCHAR(12)  NOT NULL,
+          stake          BIGINT       NOT NULL CHECK (stake > 0),
+          status         VARCHAR(10)  NOT NULL DEFAULT 'open'
+                         CHECK (status IN ('open', 'won', 'lost', 'refunded')),
+          payout         BIGINT       NOT NULL DEFAULT 0,
+          -- clock_timestamp(): the real insert time, compared against the
+          -- move's confirmed block time to refund late predictions.
+          created_at     TIMESTAMPTZ  NOT NULL DEFAULT clock_timestamp(),
+          settled_at     TIMESTAMPTZ,
+          UNIQUE (match_id, ply, wallet)
+        )
+      `);
+      await s.unsafe(`
+        CREATE INDEX IF NOT EXISTS idx_move_bets_open
+          ON move_bets (match_id, ply) WHERE status = 'open'
+      `);
+      await s.unsafe(`
+        CREATE INDEX IF NOT EXISTS idx_move_bets_wallet
+          ON move_bets (wallet, created_at DESC)
+      `);
+      await s.unsafe(`
+        CREATE TABLE IF NOT EXISTS move_markets (
+          match_id    VARCHAR(32)  NOT NULL REFERENCES matches(match_id),
+          ply         INTEGER      NOT NULL,
+          status      VARCHAR(10)  NOT NULL CHECK (status IN ('settled', 'void')),
+          actual_uci  VARCHAR(6),
+          actual_san  VARCHAR(12),
+          settled_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (match_id, ply)
+        )
+      `);
+      for (const table of ["prediction_accounts", "move_bets", "move_markets"]) {
+        await s.unsafe(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+      }
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

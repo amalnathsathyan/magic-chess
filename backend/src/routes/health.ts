@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { checkDbReadiness } from "../db/pool.js";
+import { config } from "../config.js";
 import { getCacheSize, getSweepStats } from "../services/boardCache.js";
 import type { MatchRealtimeHub } from "../services/matchRealtime.js";
 
@@ -28,6 +29,17 @@ export function healthRoutes(
           : null,
         lastSweepBefore: sweepStats.lastSweepBefore,
         lastSweepAfter: sweepStats.lastSweepAfter,
+      },
+      // Public identifiers only, so the frontend's NEXT_PUBLIC_PRIVY_APP_ID
+      // and sponsor address can be checked against the backend's.
+      auth: {
+        privyAppId: config.sponsor.privyAppId || null,
+        privyVerification: config.sponsor.privyJwtVerificationKey
+          ? "pem-key"
+          : config.sponsor.privyAppId
+            ? "jwks"
+            : "not-configured",
+        sponsorFeePayer: config.sponsor.feePayerAddress || null,
       },
       realtime: realtime?.stats() ?? {
         connections: 0,

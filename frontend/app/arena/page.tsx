@@ -6,7 +6,9 @@ import { AlertCircle, History, Plus, RefreshCw, Search, Swords, Activity } from 
 import { PublicKey } from "@solana/web3.js";
 import { useWallets } from "@privy-io/react-auth/solana";
 import { useMatches, usePlayerMatches } from "@magic-chess/sdk/react";
-import { GameStatus } from "@magic-chess/sdk";
+import { GameStatus, type MatchInfo } from "@magic-chess/sdk";
+import { LiveGames } from "@/components/lobby/LiveGames";
+import { api, type ApiMatch } from "@/lib/api";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
 import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
@@ -18,6 +20,80 @@ import {
 const APP_MATCH_ID = /^mc-[0-9a-f]{20}$/;
 const SUPPORTED_MOVE_TIMEOUTS = new Set([60, 180, 600]);
 const AUTO_REFRESH_MS = 15_000;
+
+const API_STATUS: Record<string, GameStatus> = {
+  WaitingForOpponent: GameStatus.WaitingForOpponent,
+  Active: GameStatus.Active,
+  WhiteWins: GameStatus.WhiteWins,
+  BlackWins: GameStatus.BlackWins,
+  Draw: GameStatus.Draw,
+  Aborted: GameStatus.Aborted,
+};
+
+/** Indexed match → the SDK's MatchInfo shape used by the cards below. */
+function apiToMatchInfo(match: ApiMatch): MatchInfo | null {
+  const gameStatus = API_STATUS[match.gameStatus];
+  if (!gameStatus) return null;
+  try {
+    const wager = BigInt(match.betAmountPerPlayer ?? "0");
+    return {
+      matchId: match.matchId,
+      players: [
+        new PublicKey(match.whitePlayer),
+        match.blackPlayer ? new PublicKey(match.blackPlayer) : PublicKey.default,
+      ],
+      gameStatus,
+      bettingTokenMint: new PublicKey(match.bettingTokenMint),
+      betAmountPlayerOne: wager,
+      totalPot: BigInt(match.totalPot ?? "0"),
+      moveTimeoutDuration: BigInt(match.moveTimeoutSeconds ?? "0"),
+      lastMoveTimestamp: BigInt(Math.floor(Date.parse(match.lastMoveAt) / 1000) || 0),
+      fullmoveNumber: Math.floor((match.moveCount ?? 0) / 2) + 1,
+      isFree: wager === 0n,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The wallet's matches. In-progress games are delegated to MagicBlock, so the
+ * base-layer program scan can't see them; the indexer can. Merge both.
+ */
+function useMyMatches(walletAddress: string | null, chainMatches: MatchInfo[]) {
+  const [indexed, setIndexed] = useState<MatchInfo[]>([]);
+  useEffect(() => {
+    if (!walletAddress) {
+      setIndexed([]);
+      return;
+    }
+    let cancelled = false;
+    const load = () =>
+      api
+        .listMatches({ player: walletAddress, limit: 50 })
+        .then(({ matches }) => {
+          if (!cancelled) {
+            setIndexed(matches.map(apiToMatchInfo).filter((m): m is MatchInfo => m !== null));
+          }
+        })
+        .catch(() => undefined);
+    void load();
+    const id = window.setInterval(load, 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [walletAddress]);
+
+  return useMemo(() => {
+    const byId = new Map<string, MatchInfo>();
+    for (const match of indexed) byId.set(match.matchId, match);
+    for (const match of chainMatches) byId.set(match.matchId, match); // chain wins
+    return [...byId.values()].sort(
+      (a, b) => Number(b.lastMoveTimestamp) - Number(a.lastMoveTimestamp)
+    );
+  }, [chainMatches, indexed]);
+}
 
 /** Map a GameStatus enum value to a human-readable result label. */
 function gameStatusToResult(status: GameStatus): string | undefined {
@@ -43,7 +119,12 @@ export default function ArenaPage() {
   const { wallets } = useWallets();
   const walletAddress = selectSolanaWallet(wallets)?.address ?? null;
   const player = walletAddress ? new PublicKey(walletAddress) : null;
-  const { matches: playerMatches, loading: playerMatchesLoading, error: playerMatchesError } = usePlayerMatches(player);
+  const {
+    matches: chainPlayerMatches,
+    loading: playerMatchesLoading,
+    error: playerMatchesError,
+  } = usePlayerMatches(player);
+  const playerMatches = useMyMatches(walletAddress, chainPlayerMatches);
   const [activeTab, setActiveTab] = useState<"past" | "live" | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -92,6 +173,7 @@ export default function ArenaPage() {
           wagerToken: solanaConfig.wagerSymbol,
           timeControl: `${Number(match.moveTimeoutDuration)}s / move`,
           status: "open" as const,
+          isOwn: white === walletAddress,
           createdAt: Number(match.lastMoveTimestamp) * 1_000,
         };
       })
@@ -102,7 +184,7 @@ export default function ArenaPage() {
           .filter(Boolean)
           .some((value) => value!.toLowerCase().includes(query));
       });
-  }, [matches, search]);
+  }, [matches, search, walletAddress]);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
@@ -149,6 +231,21 @@ export default function ArenaPage() {
           </button>
         </div>
       </motion.div>
+
+      <section className="mb-8" aria-labelledby="live-games-heading">
+        <h2
+          id="live-games-heading"
+          className="mb-3 flex items-center gap-2 font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+        >
+          <span className="h-2 w-2 animate-pulse rounded-full bg-red-400" aria-hidden="true" />
+          Live now — watch &amp; predict
+        </h2>
+        <LiveGames excludePlayer={walletAddress} />
+      </section>
+
+      <h2 className="mb-3 font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+        Open matches
+      </h2>
 
       <div className="mb-6">
         <label htmlFor="match-search" className="sr-only">
@@ -287,7 +384,7 @@ export default function ArenaPage() {
                 [0, 1].map((i) => (
                   <div key={i} className="h-24 animate-pulse rounded-xl border border-border bg-card/60" />
                 ))
-              ) : playerMatchesError ? (
+              ) : playerMatchesError && playerMatches.length === 0 ? (
                 <div className="flex flex-col items-center py-10 text-center">
                   <AlertCircle className="mb-2 h-8 w-8 text-destructive" aria-hidden="true" />
                   <p className="text-sm text-muted-foreground">{playerMatchesError.message}</p>
@@ -314,6 +411,7 @@ export default function ArenaPage() {
                       wagerToken: solanaConfig.wagerSymbol,
                       timeControl: `${Number(m.moveTimeoutDuration)}s / move`,
                       status: "in_progress",
+                      isOwn: true,
                       createdAt: Number(m.lastMoveTimestamp) * 1_000,
                       moveCount: m.fullmoveNumber,
                     }}
@@ -330,7 +428,7 @@ export default function ArenaPage() {
                 [0, 1].map((i) => (
                   <div key={i} className="h-24 animate-pulse rounded-xl border border-border bg-card/60" />
                 ))
-              ) : playerMatchesError ? (
+              ) : playerMatchesError && playerMatches.length === 0 ? (
                 <div className="flex flex-col items-center py-10 text-center">
                   <AlertCircle className="mb-2 h-8 w-8 text-destructive" aria-hidden="true" />
                   <p className="text-sm text-muted-foreground">{playerMatchesError.message}</p>

@@ -36,6 +36,42 @@ const MEMO_PROGRAM_ID = new PublicKey(
   "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"
 );
 const SPONSOR_AUTHORIZATION_MEMO = "magic-chess:sponsor";
+const COMPUTE_BUDGET_PROGRAM_ID = new PublicKey(
+  "ComputeBudget111111111111111111111111111111"
+);
+
+/**
+ * Magic Chess instructions that can't move funds: playing a move, managing the
+ * per-match fast-play key, and committing/undelegating the rollup state.
+ * Embedded wallets sign these without a modal so play feels instant; anything
+ * else (wagers, joins, settlement, resignation) keeps the approval screen.
+ */
+const GAMEPLAY_DISCRIMINATORS = new Set(
+  [
+    [78, 77, 152, 203, 222, 211, 208, 233], // make_move
+    [13, 147, 179, 38, 67, 1, 69, 132], // set_session_key
+    [81, 192, 32, 110, 104, 116, 144, 151], // revoke_session_key
+    [201, 80, 148, 145, 9, 196, 225, 56], // commit_state
+    [142, 117, 126, 27, 242, 11, 103, 14], // undelegate_match
+  ].map((bytes) => Buffer.from(bytes).toString("hex"))
+);
+
+function isGameplayOnly(transaction: Transaction | VersionedTransaction): boolean {
+  if ("version" in transaction) return false;
+  const programId = new PublicKey(PROGRAM_ID);
+  return (
+    transaction.instructions.length > 0 &&
+    transaction.instructions.every((instruction) => {
+      if (instruction.programId.equals(COMPUTE_BUDGET_PROGRAM_ID)) return true;
+      return (
+        instruction.programId.equals(programId) &&
+        GAMEPLAY_DISCRIMINATORS.has(
+          Buffer.from(instruction.data.subarray(0, 8)).toString("hex")
+        )
+      );
+    })
+  );
+}
 
 function serializeTransaction(
   transaction: Transaction | VersionedTransaction
@@ -98,9 +134,10 @@ async function relaySponsoredTransaction(input: {
   const accessToken = await getAccessToken();
   if (!accessToken) throw new Error("Your Privy session expired. Sign in again.");
 
-  const response = await fetch(
-    `${solanaConfig.apiUrl.replace(/\/$/, "")}/api/transactions/sponsor`,
-    {
+  const sponsorUrl = `${solanaConfig.apiUrl.replace(/\/$/, "")}/api/transactions/sponsor`;
+  let response: Response;
+  try {
+    response = await fetch(sponsorUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -111,12 +148,26 @@ async function relaySponsoredTransaction(input: {
         walletAddress: input.walletAddress,
         lastValidBlockHeight: input.lastValidBlockHeight,
       }),
-    }
-  );
+    });
+  } catch (cause) {
+    console.error("Gas sponsor unreachable", sponsorUrl, cause);
+    throw new Error(
+      "The gas sponsorship server is unreachable, so nothing was sent. Try again in a minute."
+    );
+  }
   const body = (await response.json().catch(() => null)) as
-    | { signature?: string; error?: string }
+    | { signature?: string; error?: string; code?: string }
     | null;
   if (!response.ok || !body?.signature) {
+    console.error("Sponsored transaction rejected", response.status, body);
+    if (response.status === 401) {
+      throw new Error(
+        "Gas sponsorship rejected your sign-in token. Sign out and in again; if it persists, the server's PRIVY_APP_ID doesn't match this site's Privy app."
+      );
+    }
+    if (response.status >= 502 && !body?.error) {
+      throw new Error("The gas sponsorship server is starting or down. Try again in a minute.");
+    }
     throw new Error(body?.error ?? `Sponsor rejected the transaction (${response.status}).`);
   }
   return body.signature;
@@ -140,15 +191,17 @@ export function SolanaProgramProvider({
   const anchorWallet = useMemo<BrowserAnchorWallet | undefined>(() => {
     if (!solanaWallet) return undefined;
 
+    const embedded = isPrivyEmbeddedWallet(solanaWallet);
     const signForAnchor = async <T extends Transaction | VersionedTransaction>(
       transaction: T
     ): Promise<T> => {
+      const quiet = embedded && isGameplayOnly(transaction);
       const { signedTransaction } = await signTransaction({
         transaction: serializeTransaction(transaction),
         wallet: solanaWallet,
         chain: PRIVY_SOLANA_CHAIN,
         options: {
-          uiOptions: { showWalletUIs: true },
+          uiOptions: { showWalletUIs: !quiet },
         },
       });
       return deserializeSignedTransaction(transaction, signedTransaction);

@@ -30,7 +30,16 @@ interface MagicSessionContextValue {
   session: MagicChessSession | null;
   status: SessionState;
   error: string | null;
-  ensureSession: () => Promise<MagicChessSession>;
+  /**
+   * Create (or reuse) the temporary signer. With a delegated `matchId`, also
+   * register it on that match's rollup state via `set_session_key`, so moves
+   * authorize without needing the SessionTokenV2 to be visible on the ER.
+   */
+  ensureSession: (matchId?: string) => Promise<MagicChessSession>;
+  /** Forget a match registration (e.g. after an authorization failure). */
+  forgetMatch: (matchId: string) => void;
+  /** Whether the signer is registered on this match. */
+  isRegistered: (matchId: string) => boolean;
   clearSession: () => void;
 }
 
@@ -42,43 +51,78 @@ export function MagicSessionProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<SessionState>("idle");
   const [error, setError] = useState<string | null>(null);
   const pendingRef = useRef<Promise<MagicChessSession> | null>(null);
+  const registeredRef = useRef<Map<string, number>>(new Map());
+  const [, setRegistrationVersion] = useState(0);
   const walletAddress = client.wallet?.publicKey.toBase58() ?? null;
 
   const clearSession = useCallback(() => {
     // The secret key is intentionally memory-only: never localStorage, logs,
     // API payloads, or committed configuration.
     pendingRef.current = null;
+    registeredRef.current = new Map();
     setSession(null);
     setStatus("idle");
     setError(null);
   }, []);
 
+  const forgetMatch = useCallback((matchId: string) => {
+    registeredRef.current.delete(matchId);
+    setRegistrationVersion((value) => value + 1);
+  }, []);
+
+  const isRegistered = useCallback(
+    (matchId: string) =>
+      Boolean(session) && registeredRef.current.get(matchId) === session?.expiresAt,
+    [session]
+  );
+
+  /** One wallet signature on the ER; no SOL needed there. */
+  const registerOnMatch = useCallback(
+    async (matchId: string, active: MagicChessSession) => {
+      if (registeredRef.current.get(matchId) === active.expiresAt) return true;
+      try {
+        await client.setSessionKey(matchId, active.signer.publicKey, active.expiresAt);
+        registeredRef.current.set(matchId, active.expiresAt);
+        setRegistrationVersion((value) => value + 1);
+        return true;
+      } catch (cause) {
+        console.warn("Could not register the fast-play key on the match", cause);
+        return false;
+      }
+    },
+    [client]
+  );
+
   useEffect(() => clearSession(), [clearSession, walletAddress]);
 
-  const ensureSession = useCallback(async (): Promise<MagicChessSession> => {
+  const withMatch = useCallback(
+    async (active: MagicChessSession, matchId?: string): Promise<MagicChessSession> => {
+      if (!matchId) return active;
+      // Registered on the match: authorize via the match account, not the
+      // base-layer token (which the ER may not have cloned).
+      return (await registerOnMatch(matchId, active))
+        ? { signer: active.signer, expiresAt: active.expiresAt }
+        : active;
+    },
+    [registerOnMatch]
+  );
+
+  const ensureSession = useCallback(async (matchId?: string): Promise<MagicChessSession> => {
     const now = Math.floor(Date.now() / 1000);
-    if (session?.token && session.expiresAt > now + 30) {
-      const account = await client.program.provider.connection.getAccountInfo(
-        session.token,
-        "confirmed"
-      );
-      if (account?.owner.equals(SESSION_PROGRAM_ID)) return session;
+    if (session && session.expiresAt > now + 60) {
+      return withMatch(session, matchId);
     }
-    if (pendingRef.current) return pendingRef.current;
+    if (pendingRef.current) return withMatch(await pendingRef.current, matchId);
     if (!client.wallet) throw new Error("Connect a wallet before enabling fast play.");
 
     const promise = (async () => {
       setStatus("authorizing");
       setError(null);
       const provider = client.program.provider as SponsorAwareProvider;
-      const sponsorPayer = provider.sponsorPayer;
-      if (!sponsorPayer) {
-        throw new Error(
-          "Fast-play session sponsorship is only available for the embedded Privy wallet."
-        );
-      }
-
       const authority = client.wallet!.publicKey;
+      // Embedded wallets are sponsored; external wallets pay the tiny
+      // session top-up themselves.
+      const sessionFeePayer = provider.sponsorPayer ?? authority;
       const signer = Keypair.generate();
       const expiresAt = Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS;
       const [token] = PublicKey.findProgramAddressSync(
@@ -115,7 +159,7 @@ export function MagicSessionProvider({ children }: { children: ReactNode }) {
         .accounts({
           sessionToken: token,
           sessionSigner: signer.publicKey,
-          feePayer: sponsorPayer,
+          feePayer: sessionFeePayer,
           authority,
           targetProgram: client.programId,
           systemProgram: PublicKey.default,
@@ -147,12 +191,12 @@ export function MagicSessionProvider({ children }: { children: ReactNode }) {
       });
 
     pendingRef.current = promise;
-    return promise;
-  }, [client, session]);
+    return withMatch(await promise, matchId);
+  }, [client, session, withMatch]);
 
   const value = useMemo(
-    () => ({ session, status, error, ensureSession, clearSession }),
-    [clearSession, ensureSession, error, session, status]
+    () => ({ session, status, error, ensureSession, forgetMatch, isRegistered, clearSession }),
+    [clearSession, ensureSession, error, forgetMatch, isRegistered, session, status]
   );
 
   return (

@@ -1,5 +1,7 @@
 "use client";
 
+import { useAppLogin } from "@/hooks/useAppLogin";
+import { playHref } from "@/lib/match-links";
 import { useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { PublicKey } from "@solana/web3.js";
@@ -16,7 +18,7 @@ import {
   solanaConfig,
   WRAPPED_SOL_MINT,
 } from "@/lib/solana-config";
-import { getTransactionPayer, prepareWagerAccount } from "@/lib/wager";
+import { buildWagerInstruction, getTransactionPayer } from "@/lib/wager";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { useTokenBalances, type TokenBalance } from "@/lib/token-balances";
 import { syncMatchCreated } from "@/lib/sync";
@@ -46,7 +48,8 @@ export function CreateMatchForm({
   const [customMint, setCustomMint] = useState("");
   const [tokenDropdownOpen, setTokenDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { authenticated, login } = usePrivy();
+  const { authenticated } = usePrivy();
+  const login = useAppLogin();
   const { wallets } = useWallets();
   const client = useMagicChessClient();
   const router = useRouter();
@@ -96,7 +99,7 @@ export function CreateMatchForm({
     event.preventDefault();
 
     if (!authenticated) {
-      login({ walletChainType: "solana-only" });
+      login();
       return;
     }
 
@@ -115,12 +118,8 @@ export function CreateMatchForm({
       const platformFeeWallet = getPlatformFeeWallet();
       const matchId = `mc-${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`;
 
-      const playerTokenAccount = await prepareWagerAccount(
-        client,
-        player,
-        mint,
-        rawWager
-      );
+      // Wager ATA + SOL wrapping ride in the same transaction: one approval.
+      const wagerPrep = await buildWagerInstruction(client, player, mint, rawWager);
 
       const { signature } = await client.createMatch({
         matchId,
@@ -129,7 +128,8 @@ export function CreateMatchForm({
         platformFeeBasisPoints: solanaConfig.platformFeeBps,
         platformFeeWallet,
         bettingTokenMint: mint,
-        playerTokenAccount,
+        playerTokenAccount: wagerPrep.tokenAccount,
+        preInstructions: wagerPrep.instructions,
         rentPayer: getTransactionPayer(client, player),
         predictionEnabled: false,
       });
@@ -140,7 +140,7 @@ export function CreateMatchForm({
         description: `${signature.slice(0, 8)}…${signature.slice(-8)}`,
       });
       onClose();
-      router.push(`/play/${matchId}`);
+      router.push(playHref(matchId));
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Unable to create the match.";

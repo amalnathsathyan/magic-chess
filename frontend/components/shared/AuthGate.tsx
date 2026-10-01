@@ -1,12 +1,14 @@
 "use client";
 
+import { useAppLogin } from "@/hooks/useAppLogin";
 import { useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useCreateWallet, useWallets } from "@privy-io/react-auth/solana";
 import { LoaderCircle, LogIn, Wallet } from "lucide-react";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
-  const { ready, authenticated, login } = usePrivy();
+  const { ready, authenticated } = usePrivy();
+  const login = useAppLogin();
   const { ready: walletsReady, wallets } = useWallets();
   const { createWallet } = useCreateWallet();
   const [isCreatingWallet, setIsCreatingWallet] = useState(false);
@@ -45,7 +47,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           </p>
           <button
             type="button"
-            onClick={() => login({ walletChainType: "solana-only" })}
+            onClick={() => login()}
             className="mt-6 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <LogIn aria-hidden="true" className="h-4 w-4" />

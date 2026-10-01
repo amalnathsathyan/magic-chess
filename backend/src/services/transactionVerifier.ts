@@ -1,11 +1,11 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 import { config } from "../config.js";
 
-const DELEGATION_PROGRAM_ID = new PublicKey(
+export const DELEGATION_PROGRAM_ID = new PublicKey(
   "DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh"
 );
-const programId = new PublicKey(config.solana.programId);
-const baseConnection = new Connection(config.solana.rpcEndpoint, "confirmed");
+export const programId = new PublicKey(config.solana.programId);
+export const baseConnection = new Connection(config.solana.rpcEndpoint, "confirmed");
 
 const EVENT_DISCRIMINATORS = {
   DrawPayoutEvent: Buffer.from([204, 185, 220, 244, 158, 169, 10, 187]),
@@ -258,7 +258,7 @@ export function decodeEvent(data: Buffer): VerifiedProgramEvent | null {
   }
 }
 
-async function getDelegationStatus(account: PublicKey): Promise<DelegationStatus> {
+export async function getDelegationStatus(account: PublicKey): Promise<DelegationStatus> {
   const response = await fetch(config.solana.routerEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -280,7 +280,7 @@ async function getDelegationStatus(account: PublicKey): Promise<DelegationStatus
   return body.result;
 }
 
-function erConnection(fqdn: string): Connection {
+export function erConnection(fqdn: string): Connection {
   const endpoint = new URL(/^https?:\/\//.test(fqdn) ? fqdn : `https://${fqdn}`);
   if (endpoint.protocol !== "https:" || !endpoint.hostname.endsWith(".magicblock.app")) {
     throw new Error("Untrusted ER endpoint");
@@ -292,7 +292,7 @@ function erConnection(fqdn: string): Connection {
   return new Connection(endpoint.toString(), "confirmed");
 }
 
-function matchPda(matchId: string): PublicKey {
+export function matchPda(matchId: string): PublicKey {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("chess_match"), Buffer.from(matchId)],
     programId
@@ -323,7 +323,7 @@ async function candidateConnections(
   );
 }
 
-function indexedProgramEvents(
+export function indexedProgramEvents(
   logs: string[]
 ): Array<{ event: VerifiedProgramEvent; eventIndex: number }> {
   const stack: string[] = [];

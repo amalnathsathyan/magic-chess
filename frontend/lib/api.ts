@@ -48,6 +48,9 @@ export interface ApiMatch {
   lastMoveAt: string;
   boardFen: string | null;
   moveCount: number;
+  betAmountPerPlayer?: string;
+  /** Open move predictions spectators have placed on this match. */
+  openPredictions?: number;
 }
 
 export interface ApiMatchDetail extends ApiMatch {
@@ -61,6 +64,8 @@ export interface ApiMatchDetail extends ApiMatch {
 
 export interface ApiMove {
   moveNumber: number;
+  /** Standard algebraic notation, derived server-side (falls back to UCI). */
+  san?: string;
   playerColor: string;
   playerPubkey: string;
   algebraicMove: string;

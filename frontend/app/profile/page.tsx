@@ -1,5 +1,7 @@
 "use client";
 
+import { useAppLogin } from "@/hooks/useAppLogin";
+import { playHref } from "@/lib/match-links";
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -96,7 +98,8 @@ function ProfileSkeleton() {
 }
 
 export default function ProfilePage() {
-  const { ready, authenticated, login } = usePrivy();
+  const { ready, authenticated } = usePrivy();
+  const login = useAppLogin();
   const { ready: walletsReady, wallets } = useWallets();
   const walletAddress = selectSolanaWallet(wallets)?.address ?? null;
   const [stats, setStats] = useState<ApiPlayerStats | null>(null);
@@ -174,7 +177,7 @@ export default function ProfilePage() {
           </div>
           <button
             type="button"
-            onClick={login}
+            onClick={() => login()}
             className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             <LogIn className="h-4 w-4" aria-hidden="true" />
@@ -401,7 +404,7 @@ export default function ProfilePage() {
                           ? match.blackPlayer
                           : match.whitePlayer;
                       const terminal = isTerminalStatus(match.gameStatus);
-                      const matchHref = `/play/${encodeURIComponent(match.matchId)}`;
+                      const matchHref = playHref(match.matchId);
 
                       return (
                         <div

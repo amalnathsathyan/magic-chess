@@ -27,6 +27,27 @@ export function isFreshPlayerProof(issuedAt: number, now = Date.now()): boolean 
   );
 }
 
+/** Verify an ed25519 signature (base64) over a UTF-8 message for a Solana wallet. */
+export function verifySolanaMessageSignature(
+  wallet: string,
+  message: string,
+  signatureBase64: string
+): boolean {
+  try {
+    const publicKeyBytes = new PublicKey(wallet).toBuffer();
+    const signature = Buffer.from(signatureBase64, "base64");
+    if (signature.length !== 64) return false;
+    const publicKey = createPublicKey({
+      key: Buffer.concat([ED25519_SPKI_PREFIX, publicKeyBytes]),
+      format: "der",
+      type: "spki",
+    });
+    return verify(null, Buffer.from(message, "utf8"), publicKey, signature);
+  } catch {
+    return false;
+  }
+}
+
 export function verifyPlayerSessionSignature(args: {
   matchId: string;
   wallet: string;

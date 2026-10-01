@@ -27,6 +27,7 @@ const corsOrigins = Array.from(
     [
       ...(process.env.CORS_ORIGIN || "http://localhost:3000").split(","),
       "https://arena-dev.chessmagic.workers.dev",
+      "https://arena.chessmagic.workers.dev",
     ]
       .map((origin) => origin.trim())
       .filter(Boolean)
@@ -69,10 +70,29 @@ export const config = {
     privyAppId: process.env.PRIVY_APP_ID || "",
     privyJwtVerificationKey:
       process.env.PRIVY_JWT_VERIFICATION_KEY?.replace(/\\n/g, "\n") || "",
+    // Defaults to the app's JWKS endpoint when no PEM key is configured.
+    privyJwksUrl: process.env.PRIVY_JWKS_URL || "",
     requestsPerMinute: Number(process.env.SPONSOR_REQUESTS_PER_MINUTE || "10"),
+    // Match/session creations per Privy user per hour (rent-heavy).
+    costlyPerHour: Number(process.env.SPONSOR_COSTLY_PER_HOUR || "12"),
+    // Circuit breaker on total sponsor lamports per rolling hour.
+    hourlyBudgetLamports: BigInt(
+      process.env.SPONSOR_HOURLY_BUDGET_LAMPORTS || "2000000000"
+    ),
     maxWagerLamports: BigInt(
       process.env.SPONSOR_MAX_WAGER_LAMPORTS || "1000000000"
     ),
+  },
+
+  indexer: {
+    enabled: process.env.CHAIN_INDEXER_ENABLED !== "false",
+    matchIntervalMs: Number(process.env.CHAIN_INDEXER_MATCH_INTERVAL_MS || "3000"),
+    programIntervalMs: Number(process.env.CHAIN_INDEXER_PROGRAM_INTERVAL_MS || "15000"),
+  },
+
+  predictions: {
+    // HMAC secret for prediction sessions; random per boot when unset.
+    sessionSecret: process.env.PREDICTION_SESSION_SECRET || undefined,
   },
 
   // Shared secret for sync endpoint auth

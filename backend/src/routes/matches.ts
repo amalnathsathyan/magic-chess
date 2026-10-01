@@ -1,6 +1,20 @@
 import type { FastifyInstance } from "fastify";
 import { sql } from "../db/pool.js";
 import { getFen } from "../services/boardCache.js";
+import { INITIAL_FEN, sanFromUci } from "../services/movePredictions.js";
+
+const listQuerySchema = {
+  type: "object",
+  properties: {
+    status: {
+      type: "string",
+      enum: ["WaitingForOpponent", "Active", "WhiteWins", "BlackWins", "Draw", "Aborted", "Completed"],
+    },
+    player: { type: "string", minLength: 32, maxLength: 44 },
+    page: { type: "integer", minimum: 1, maximum: 10_000, default: 1 },
+    limit: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+  },
+} as const;
 
 interface MatchQuery {
   status?: string;
@@ -13,6 +27,7 @@ export function matchRoutes(app: FastifyInstance): void {
   // ── List matches ──
   app.get<{ Querystring: MatchQuery }>(
     "/api/matches",
+    { schema: { querystring: listQuerySchema } },
     async (request, reply) => {
       const { status, player, page = 1, limit = 20 } = request.query;
 
@@ -59,10 +74,13 @@ export function matchRoutes(app: FastifyInstance): void {
           match_id, white_player, black_player, game_status,
           total_pot, betting_token_mint, created_at, last_move_at,
           game_end_reason, move_timeout_seconds, current_fen,
-          (SELECT COUNT(*) FROM moves WHERE moves.match_id = matches.match_id) AS move_count
+          bet_amount_per_player,
+          (SELECT COUNT(*) FROM moves WHERE moves.match_id = matches.match_id) AS move_count,
+          (SELECT COUNT(*) FROM move_bets b
+             WHERE b.match_id = matches.match_id AND b.status = 'open') AS open_predictions
         FROM matches
         ${where}
-        ORDER BY created_at DESC
+        ORDER BY last_move_at DESC
         LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
         [...params, effectiveLimit, offset]
       );
@@ -80,6 +98,8 @@ export function matchRoutes(app: FastifyInstance): void {
         lastMoveAt: row.lastMoveAt,
         boardFen: row.currentFen ?? getFen(row.matchId as string),
         moveCount: Number(row.moveCount ?? 0),
+        betAmountPerPlayer: String(row.betAmountPerPlayer ?? "0"),
+        openPredictions: Number(row.openPredictions ?? 0),
       }));
 
       reply.send({
@@ -164,12 +184,27 @@ export function matchRoutes(app: FastifyInstance): void {
         ORDER BY move_number ASC
       `;
 
+      // The program logs coordinate moves; derive SAN from the position before
+      // each move for a readable move list.
+      let fenBefore: string | null = INITIAL_FEN;
+      let expectedPly = 1;
+      const sans = moves.map((m: Record<string, unknown>) => {
+        const san =
+          fenBefore && Number(m.moveNumber) === expectedPly
+            ? sanFromUci(fenBefore, String(m.algebraicMove))
+            : null;
+        fenBefore = String(m.fenAfterMove);
+        expectedPly = Number(m.moveNumber) + 1;
+        return san;
+      });
+
       reply.send({
         matchId,
         whitePlayer: match[0].whitePlayer,
         blackPlayer: match[0].blackPlayer,
-        moves: moves.map((m: Record<string, unknown>) => ({
+        moves: moves.map((m: Record<string, unknown>, index: number) => ({
           moveNumber: m.moveNumber,
+          san: sans[index] ?? m.algebraicMove,
           playerColor: m.playerColor,
           playerPubkey: m.playerPubkey,
           algebraicMove: m.algebraicMove,

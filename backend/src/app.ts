@@ -12,6 +12,12 @@ import { realtimeRoutes } from "./routes/realtime.js";
 import { MatchRealtimeHub } from "./services/matchRealtime.js";
 import { loadMatchRealtimeSnapshot } from "./services/matchSnapshot.js";
 import { transactionRoutes } from "./routes/transactions.js";
+import { predictionRoutes } from "./routes/predictions.js";
+import { ingestEvent, type IngestHooks } from "./services/eventIngest.js";
+import { ChainIndexer } from "./services/chainIndexer.js";
+import { MovePredictionService } from "./services/movePredictions.js";
+import { PredictionSessions } from "./services/predictionSession.js";
+import { readLiveMatchState } from "./services/matchState.js";
 
 async function main(): Promise<void> {
   const app = Fastify({
@@ -27,19 +33,26 @@ async function main(): Promise<void> {
   // CORS
   await app.register(cors, {
     origin: config.corsOrigins,
-    methods: ["GET", "POST", "OPTIONS"],
+    methods: ["GET", "POST", "DELETE", "OPTIONS"],
     credentials: true,
   });
 
+  // A database outage must not take down the gas-sponsor relay, which needs
+  // no database: keep serving and retry migrations in the background.
+  // /api/health reports "degraded" until they succeed.
   if (config.runMigrationsOnStart) {
-    try {
-      app.log.info("Running database migrations");
-      await runMigrations();
-      app.log.info("Migrations complete");
-    } catch (err) {
-      app.log.error(err, "Migration failed");
-      process.exit(1);
-    }
+    const migrate = async (attempt: number): Promise<void> => {
+      try {
+        app.log.info({ attempt }, "Running database migrations");
+        await runMigrations();
+        app.log.info("Migrations complete");
+      } catch (err) {
+        const delayMs = Math.min(5 * 60_000, 15_000 * 2 ** Math.min(attempt, 4));
+        app.log.error({ err, retryInMs: delayMs }, "Migration failed; serving degraded and retrying");
+        setTimeout(() => void migrate(attempt + 1), delayMs).unref();
+      }
+    };
+    await migrate(0);
   }
 
   const realtime = new MatchRealtimeHub(loadMatchRealtimeSnapshot, {
@@ -48,16 +61,51 @@ async function main(): Promise<void> {
   });
   realtime.start();
 
+  const predictions = new MovePredictionService({
+    readLiveState: readLiveMatchState,
+    publish: (matchId, event, data) => realtime.publish(matchId, event, data),
+  });
+  const hooks: IngestHooks = {
+    onMoveIndexed: ({ matchId }) => predictions.onMoveIndexed({ matchId }),
+    onGameEnded: (args) => predictions.onGameEnded(args),
+  };
+
   // Routes
   healthRoutes(app, realtime);
   matchRoutes(app);
   realtimeRoutes(app, realtime);
   playerRoutes(app);
   leaderboardRoutes(app);
-  syncRoutes(app, realtime);
+  syncRoutes(app, realtime, hooks);
   transactionRoutes(app);
+  predictionRoutes(app, predictions, new PredictionSessions(config.predictions.sessionSecret));
 
-  app.addHook("onClose", async () => realtime.close());
+  const indexer = new ChainIndexer({
+    ingest: (input) => ingestEvent(input, hooks),
+    onApplied: async (matchId, result) => {
+      await realtime.refresh(matchId, result.notification).catch((error) =>
+        app.log.warn({ error: String(error), matchId }, "Realtime refresh after index failed")
+      );
+    },
+    log: app.log,
+    matchIntervalMs: config.indexer.matchIntervalMs,
+    programIntervalMs: config.indexer.programIntervalMs,
+  });
+  if (config.indexer.enabled) indexer.start();
+
+  // Safety net for settlements a missed hook left open.
+  const sweep = setInterval(() => {
+    predictions.sweep().catch((error) =>
+      app.log.warn({ error: String(error) }, "Prediction sweep failed")
+    );
+  }, 30_000);
+  sweep.unref();
+
+  app.addHook("onClose", async () => {
+    clearInterval(sweep);
+    indexer.close();
+    realtime.close();
+  });
 
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, "Shutting down");

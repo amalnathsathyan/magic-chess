@@ -1,19 +1,20 @@
 "use client";
 
-import { use, useCallback, useEffect, useMemo, useState } from "react";
-
-
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   ArrowLeft,
+  Check,
   Clock3,
+  Copy,
   ExternalLink,
   LoaderCircle,
   RefreshCw,
   ShieldCheck,
   Sword,
-  User,
+  Zap,
 } from "lucide-react";
 import { Chess, type Move as ChessMove, type Square } from "chess.js";
 import { PublicKey, SystemProgram, Transaction, type Connection } from "@solana/web3.js";
@@ -21,14 +22,12 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { BN } from "@anchor-lang/core";
 import { useWallets } from "@privy-io/react-auth/solana";
 import {
-  boardToFen,
   DELEGATION_PROGRAM_ID,
   findChessMatchPda,
   findMatchEscrowPda,
   GameStatus,
   waitForDelegation,
   type ChessMatch,
-  type Piece,
 } from "@magic-chess/sdk";
 import { useMagicChessClient, useMatch } from "@magic-chess/sdk/react";
 import { toast } from "sonner";
@@ -39,13 +38,12 @@ import { MoveList } from "@/components/chess/MoveList";
 import { PromotionDialog } from "@/components/chess/PromotionDialog";
 import { BoardControls } from "@/components/chess/BoardControls";
 import { api, type ApiMatchHistory } from "@/lib/api";
-import { shortenAddress } from "@/lib/chess";
 import { sounds } from "@/lib/sounds";
 import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
 import {
+  buildSettlementInstructions,
   buildWagerInstruction,
   getTransactionPayer,
-  prepareSettlementAccounts,
 } from "@/lib/wager";
 import { useMagicBlock } from "@/hooks/useMagicBlock";
 import { cn } from "@/lib/utils";
@@ -53,45 +51,22 @@ import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { magicBlockTxUrl, solanaDevnetTxUrl } from "@/lib/explorer";
 import { useMoveTransactionNotifications } from "@/hooks/useMoveTransactionNotifications";
 import { syncMoveMade, syncPlayerJoined } from "@/lib/sync";
-
-interface PlayPageProps {
-  params: Promise<{ matchId: string }>;
-}
+import { PlayerRow } from "@/components/chess/PlayerRow";
+import { PredictionPanel } from "@/components/predictions/PredictionPanel";
+import { useMatchRealtime } from "@/hooks/useMatchRealtime";
+import { copyToClipboard } from "@/lib/clipboard";
+import { absoluteUrl, playHref, spectateHref } from "@/lib/match-links";
+import {
+  formatRemaining,
+  isSquare,
+  matchToFen,
+  pliesPlayed,
+} from "@/lib/match-board";
 
 type TxStatus = "idle" | "submitting" | "confirming" | "success" | "error";
 type PromotionPiece = "q" | "r" | "b" | "n";
 
 const EMPTY_PUBLIC_KEY = PublicKey.default.toBase58();
-
-function normalizeBoardPiece(piece: Piece | null): {
-  pieceType: "Pawn" | "Knight" | "Bishop" | "Rook" | "Queen" | "King";
-  color: "White" | "Black";
-} | null {
-  if (!piece) return null;
-  const names = {
-    pawn: "Pawn",
-    knight: "Knight",
-    bishop: "Bishop",
-    rook: "Rook",
-    queen: "Queen",
-    king: "King",
-  } as const;
-  return {
-    pieceType: names[piece.pieceType],
-    color: piece.color === "white" ? "White" : "Black",
-  };
-}
-
-function matchToFen(match: ChessMatch): string {
-  return boardToFen(
-    match.board.map((row) => row.map(normalizeBoardPiece)),
-    match.currentTurn,
-    match.castlingRights,
-    match.enPassantTarget,
-    match.halfmoveClock,
-    match.fullmoveNumber
-  );
-}
 
 function statusLabel(status: GameStatus): string {
   const labels: Record<GameStatus, string> = {
@@ -105,73 +80,28 @@ function statusLabel(status: GameStatus): string {
   return labels[status];
 }
 
-function formatRemaining(milliseconds: number): { text: string; isLow: boolean } {
-  const seconds = Math.max(0, Math.ceil(milliseconds / 1_000));
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return {
-    text: mins > 0
-      ? `${mins}:${String(secs).padStart(2, "0")}`
-      : `${secs}s`,
-    isLow: seconds <= 10,
-  };
-}
-
-function isSquare(value: string): value is Square {
-  return /^[a-h][1-8]$/.test(value);
-}
-
-function PlayerRow({
-  address,
-  color,
-  active,
-  connectedAddress,
-}: {
-  address: string | null;
-  color: "White" | "Black";
-  active: boolean;
-  connectedAddress?: string;
-}) {
-  const isYou = Boolean(address && connectedAddress === address);
+export default function PlayPage() {
   return (
-    <div
-      className={cn(
-        "flex min-h-12 w-full max-w-[560px] items-center justify-between gap-3 rounded-lg border px-3 py-2",
-        active ? "border-primary/40 bg-primary/10" : "border-border bg-card/40"
-      )}
-    >
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary">
-          <User className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-xs text-muted-foreground">
-            {color}{isYou ? " · You" : ""}
-          </p>
-          <p className="truncate font-mono text-sm font-semibold" title={address ?? undefined}>
-            {address ? shortenAddress(address, 6) : "Waiting for opponent"}
-          </p>
-        </div>
-      </div>
-      {active ? (
-        <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary">
-          To move
-        </span>
-      ) : null}
-    </div>
+    <Suspense fallback={null}>
+      <PlayView />
+    </Suspense>
   );
 }
 
-export default function PlayPage({ params }: PlayPageProps) {
-  const { matchId } = use(params);
+function PlayView() {
+  const matchId = useSearchParams().get("id") ?? "";
+  const router = useRouter();
   const client = useMagicChessClient();
-  const { match, loading, error, refetch } = useMatch(matchId);
+  const { match, loading, error, refetch } = useMatch(matchId || null);
+  const realtime = useMatchRealtime({ matchId });
+  const [copied, setCopied] = useState(false);
   const { wallets } = useWallets();
   const wallet = selectSolanaWallet(wallets);
   const {
     submitMove,
     sessionStatus,
     sessionError,
+    isFastPlayReady,
     enableFastPlay,
   } = useMagicBlock();
 
@@ -192,6 +122,7 @@ export default function PlayPage({ params }: PlayPageProps) {
   const [txError, setTxError] = useState<string>();
 
   const loadHistory = useCallback(async () => {
+    if (!matchId) return;
     try {
       setHistory(await api.getMatchHistory(matchId));
       setHistoryUnavailable(false);
@@ -211,17 +142,21 @@ export default function PlayPage({ params }: PlayPageProps) {
   });
 
   useEffect(() => {
+    if (realtime.refreshSequence > 0) refreshAfterMove();
+  }, [realtime.refreshSequence, refreshAfterMove]);
+
+  useEffect(() => {
     void loadHistory();
     let polling = false;
     const intervalId = window.setInterval(() => {
-      if (polling) return;
+      if (polling || document.visibilityState !== "visible") return;
       polling = true;
       void Promise.allSettled([refetch(), loadHistory()]).finally(() => {
         polling = false;
       });
-    }, 3_000);
+    }, realtime.status === "live" ? 8_000 : 3_000);
     return () => window.clearInterval(intervalId);
-  }, [loadHistory, refetch]);
+  }, [loadHistory, realtime.status, refetch]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -234,14 +169,7 @@ export default function PlayPage({ params }: PlayPageProps) {
     return cleanup;
   }, []);
 
-  const authoritativeFen = useMemo(() => {
-    if (!match) return null;
-    try {
-      return matchToFen(match);
-    } catch {
-      return null;
-    }
-  }, [match]);
+  const authoritativeFen = useMemo(() => (match ? matchToFen(match) : null), [match]);
 
   useEffect(() => {
     const resize = () =>
@@ -278,10 +206,19 @@ export default function PlayPage({ params }: PlayPageProps) {
   const canMove = Boolean(
     isActive && match?.isDelegated && isMyTurn && !isBusy && displayFen
   );
+  const fastPlayReady = isFastPlayReady(matchId);
 
   useEffect(() => {
     if (playerColor) setOrientation(playerColor);
   }, [playerColor]);
+
+  // Viewers who aren't in this game belong on the live spectator view, which
+  // doesn't need sign-in and carries the prediction market.
+  useEffect(() => {
+    if (match && !isWaiting && !isParticipant && walletAddress) {
+      router.replace(spectateHref(matchId));
+    }
+  }, [isParticipant, isWaiting, match, matchId, router, walletAddress]);
 
   const timeoutMilliseconds = match
     ? Number(match.moveTimeoutDuration) * 1_000
@@ -302,7 +239,7 @@ export default function PlayPage({ params }: PlayPageProps) {
       !isBusy
   );
 
-  const historyMoves = history?.moves.map((move) => move.algebraicMove) ?? [];
+  const historyMoves = history?.moves.map((move) => move.san ?? move.algebraicMove) ?? [];
   const moves = optimisticMove
     ? [...historyMoves, optimisticMove.san]
     : historyMoves;
@@ -452,6 +389,45 @@ export default function PlayPage({ params }: PlayPageProps) {
     }
   };
 
+  const handleCopyInvite = async () => {
+    if (await copyToClipboard(absoluteUrl(playHref(matchId)))) {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1_500);
+    } else {
+      toast.error("Couldn't copy the invite link.");
+    }
+  };
+
+  const handleAbort = async () => {
+    if (!match || !wallet || !isWaiting || walletAddress !== whiteAddress) return;
+    if (!window.confirm("Cancel this match and refund your wager?")) return;
+    try {
+      const owner = new PublicKey(wallet.address);
+      // Recreate the refund ATA idempotently in case it was closed since.
+      const prep = await buildWagerInstruction(client, owner, match.bettingTokenMint, 0n);
+      await runTransaction(
+        () =>
+          client.abortMatch(matchId, prep.tokenAccount, {
+            preInstructions: prep.instructions,
+          }),
+        "Match cancelled and wager refunded"
+      );
+    } catch {
+      // TransactionStatus contains the actionable error.
+    }
+  };
+
+  const handleEnableFastPlay = async () => {
+    try {
+      await enableFastPlay(matchId);
+      if (isFastPlayReady(matchId)) toast.success("Instant moves enabled");
+    } catch (cause) {
+      toast.error("Could not enable instant moves", {
+        description: cause instanceof Error ? cause.message : String(cause),
+      });
+    }
+  };
+
   const handleDelegate = async () => {
     if (!wallet) return;
     try {
@@ -585,25 +561,21 @@ export default function PlayPage({ params }: PlayPageProps) {
       if (!payer.equals(baseMatch.players[0]) && !payer.equals(baseMatch.players[1])) {
         throw new Error("Only a match player can finalize this game.");
       }
-      const [playerOneAta, playerTwoAta, platformFeeAta] =
-        await prepareSettlementAccounts(
-          client,
-          payer,
-          baseMatch.bettingTokenMint,
-          [
-            baseMatch.players[0],
-            baseMatch.players[1],
-            baseMatch.platformFeeWallet,
-          ]
-        );
+      // Payout ATAs ride in the settlement transaction: one approval, and
+      // escrow rent returns to whoever funded it.
+      const settlement = buildSettlementInstructions(
+        client,
+        payer,
+        baseMatch.bettingTokenMint,
+        [baseMatch.players[0], baseMatch.players[1], baseMatch.platformFeeWallet]
+      );
+      const [playerOneAta, playerTwoAta, platformFeeAta] = settlement.accounts;
       await runTransaction(
         () =>
-          client.settleMatch(
-            matchId,
-            playerOneAta,
-            playerTwoAta,
-            platformFeeAta
-          ),
+          client.settleMatch(matchId, playerOneAta, playerTwoAta, platformFeeAta, {
+            preInstructions: settlement.instructions,
+            rentRecipient: settlement.rentRecipient,
+          }),
         "Payout settled on Solana"
       );
     } catch {
@@ -685,8 +657,18 @@ export default function PlayPage({ params }: PlayPageProps) {
                 <h1 className="font-heading text-lg font-semibold">Match unavailable</h1>
               </div>
               <p className="mt-3 text-sm text-muted-foreground">
-                {error?.message || "No on-chain match was found for this identifier."}
+                {!matchId
+                  ? "No match was selected."
+                  : error?.message ||
+                    "No on-chain match was found for this ID yet. A new match can take a few seconds to appear; this page keeps checking."}
               </p>
+              <Link
+                href="/arena"
+                className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-border px-4 text-sm font-medium hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                Back to the arena
+              </Link>
             </div>
           ) : (
             <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -700,7 +682,28 @@ export default function PlayPage({ params }: PlayPageProps) {
                       (orientation === "white" ? "black" : "white")
                   }
                   connectedAddress={walletAddress}
+                  online={
+                    orientation === "white"
+                      ? realtime.presence?.black.online
+                      : realtime.presence?.white.online
+                  }
                 />
+
+                {isActive && isParticipant ? (
+                  <p
+                    aria-live="polite"
+                    className={cn(
+                      "w-full max-w-[560px] rounded-lg px-3 py-2 text-center text-sm font-medium",
+                      isMyTurn ? "bg-primary/15 text-primary" : "bg-card/60 text-muted-foreground"
+                    )}
+                  >
+                    {isBusy && txStatus === "submitting"
+                      ? "Sending your move…"
+                      : isMyTurn
+                        ? "Your move"
+                        : "Waiting for your opponent…"}
+                  </p>
+                ) : null}
 
                 <div className="relative">
                   {displayFen ? (
@@ -812,14 +815,35 @@ export default function PlayPage({ params }: PlayPageProps) {
                       className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                     >
                       {isBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-                      Join for {formatTokenAmount(match.betAmountPlayerOne)} {solanaConfig.wagerSymbol}
+                      {match.betAmountPlayerOne === 0n
+                        ? "Join free match"
+                        : `Join for ${formatTokenAmount(match.betAmountPlayerOne)} ${solanaConfig.wagerSymbol}`}
                     </button>
                   ) : null}
 
                   {isWaiting && walletAddress === whiteAddress ? (
-                    <p className="mt-5 rounded-lg border border-border bg-card/50 p-3 text-sm text-muted-foreground">
-                      Your match is live on Solana. Share this match ID with an opponent.
-                    </p>
+                    <div className="mt-5 space-y-3">
+                      <p className="rounded-lg border border-border bg-card/50 p-3 text-sm text-muted-foreground">
+                        Your match is open. Send the invite link to an opponent — this page
+                        updates the moment they join.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void handleCopyInvite()}
+                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        {copied ? "Invite link copied" : "Copy invite link"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleAbort()}
+                        disabled={isBusy}
+                        className="min-h-10 w-full rounded-lg border border-border px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                      >
+                        Cancel match and refund
+                      </button>
+                    </div>
                   ) : null}
 
                   {isActive && isParticipant && !match.isDelegated ? (
@@ -834,40 +858,34 @@ export default function PlayPage({ params }: PlayPageProps) {
                   ) : null}
 
                   {isActive && isParticipant && match.isDelegated ? (
-                    <div className="mt-4 rounded-lg border border-primary/25 bg-primary/5 p-3">
-                      <p className="text-sm font-medium text-foreground">
-                        {sessionStatus === "ready"
-                          ? "Instant moves enabled"
-                          : sessionStatus === "authorizing"
-                            ? "Authorizing instant moves…"
-                            : "Enable instant moves"}
+                    fastPlayReady ? (
+                      <p className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+                        <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+                        Instant moves on — no wallet popups
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        Approve once. Moves use a short-lived MagicBlock session key with no wallet popups.
-                      </p>
-                      {sessionError ? (
-                        <p className="mt-2 text-xs text-destructive">{sessionError}</p>
-                      ) : null}
-                      {sessionStatus !== "ready" ? (
+                    ) : (
+                      <div className="mt-4 rounded-lg border border-primary/25 bg-primary/5 p-3">
+                        <p className="text-sm font-medium text-foreground">
+                          {sessionStatus === "authorizing" ? "Setting up instant moves…" : "Enable instant moves"}
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Approve once: a temporary key that can only move your pieces in this game
+                          signs each move, so there's no popup per move.
+                        </p>
+                        {sessionError ? (
+                          <p className="mt-2 text-xs text-destructive">{sessionError}</p>
+                        ) : null}
                         <button
                           type="button"
-                          onClick={() => {
-                            void enableFastPlay()
-                              .then(() => toast.success("Instant moves enabled"))
-                              .catch((cause: unknown) =>
-                                toast.error("Could not enable instant moves", {
-                                  description:
-                                    cause instanceof Error ? cause.message : String(cause),
-                                })
-                              );
-                          }}
+                          onClick={() => void handleEnableFastPlay()}
                           disabled={sessionStatus === "authorizing" || isBusy}
-                          className="mt-3 min-h-10 w-full rounded-md border border-primary/40 px-3 text-xs font-semibold text-primary disabled:opacity-60"
+                          className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-primary/40 px-3 text-xs font-semibold text-primary disabled:opacity-60"
                         >
+                          <Zap className="h-3.5 w-3.5" aria-hidden="true" />
                           {sessionStatus === "authorizing" ? "Approve in wallet…" : "Enable with one approval"}
                         </button>
-                      ) : null}
-                    </div>
+                      </div>
+                    )
                   ) : null}
 
                   {canClaimTimeout ? (
@@ -914,7 +932,7 @@ export default function PlayPage({ params }: PlayPageProps) {
 
                   {!isParticipant && !isWaiting ? (
                     <Link
-                      href={`/play/${matchId}/spectate`}
+                      href={spectateHref(matchId)}
                       className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
                     >
                       Open spectator mode
@@ -922,6 +940,17 @@ export default function PlayPage({ params }: PlayPageProps) {
                     </Link>
                   ) : null}
                 </section>
+
+                <PredictionPanel
+                  matchId={matchId}
+                  fen={authoritativeFen}
+                  pliesPlayed={pliesPlayed(match)}
+                  isActive={isActive}
+                  isFinished={isFinished}
+                  playerColor={playerColor}
+                  liveMarket={realtime.predictionMarket}
+                  liveSettled={realtime.predictionSettled}
+                />
 
                 <TransactionStatus
                   status={txStatus}
@@ -945,7 +974,7 @@ export default function PlayPage({ params }: PlayPageProps) {
                 />
                 {historyUnavailable ? (
                   <p className="text-xs text-muted-foreground">
-                    Move notation is unavailable because the read-only indexer is not configured. The board still comes directly from the authoritative on-chain account.
+                    Move list is catching up. The board always comes straight from the on-chain match.
                   </p>
                 ) : null}
               </aside>

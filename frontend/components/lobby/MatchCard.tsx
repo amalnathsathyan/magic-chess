@@ -1,5 +1,6 @@
 "use client";
 
+import { playHref, spectateHref } from "@/lib/match-links";
 import Link from "next/link";
 import { useMemo } from "react";
 import { Castle, Clock, Coins, Crown, Swords, User, Zap } from "lucide-react";
@@ -13,6 +14,8 @@ export interface MatchCardData {
   wagerToken: string; // "SOL" or SPL mint
   timeControl: string; // e.g. "60s / move", "180s / move", "600s / move"
   status: "open" | "in_progress" | "completed";
+  /** The viewer plays in this match: open the player view, not spectate. */
+  isOwn?: boolean;
   createdAt: number;
   /** Human-readable result label, e.g. "White Wins", "Draw". Only for completed matches. */
   result?: string;
@@ -84,9 +87,9 @@ export function MatchCard({ match, className }: MatchCardProps) {
   return (
     <Link
       href={
-        isOpen
-          ? `/play/${match.matchId}`
-          : `/play/${match.matchId}/spectate`
+        isOpen || match.isOwn
+          ? playHref(match.matchId)
+          : spectateHref(match.matchId)
       }
       className={cn(
         "group glass-card block p-5 transition-all hover:border-border-hover hover:shadow-glow",
@@ -187,7 +190,11 @@ export function MatchCard({ match, className }: MatchCardProps) {
         <div className="shrink-0">
           {isOpen ? (
             <span className="inline-flex items-center justify-center rounded-lg bg-primary/20 px-3 py-1.5 text-xs font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-              Join Match
+              {match.isOwn ? "Open" : "Join Match"}
+            </span>
+          ) : isInProgress && match.isOwn ? (
+            <span className="inline-flex items-center justify-center rounded-lg bg-primary/20 px-3 py-1.5 text-xs font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+              Resume
             </span>
           ) : isInProgress ? (
             <span className="inline-flex items-center justify-center rounded-lg bg-accent/20 px-3 py-1.5 text-xs font-semibold text-accent transition-colors group-hover:bg-accent group-hover:text-accent-foreground">

@@ -6,6 +6,7 @@ import {
   SolanaSponsorService,
   SponsorError,
 } from "../services/solanaSponsor.js";
+import { SponsorBudget, SponsorBudgetError } from "../services/sponsorBudget.js";
 
 interface SponsorTransactionBody {
   transaction: string;
@@ -29,20 +30,25 @@ const sponsorBodySchema = {
   },
 } as const;
 
-const attempts = new Map<string, { windowStart: number; count: number }>();
+const budget = new SponsorBudget({
+  requestsPerMinute: config.sponsor.requestsPerMinute,
+  costlyPerHour: config.sponsor.costlyPerHour,
+  hourlyBudgetLamports: config.sponsor.hourlyBudgetLamports,
+});
+setInterval(() => budget.sweep(), 60_000).unref();
 
-function enforceRateLimit(key: string): void {
-  const now = Date.now();
-  const current = attempts.get(key);
-  if (!current || now - current.windowStart >= 60_000) {
-    attempts.set(key, { windowStart: now, count: 1 });
-    return;
-  }
-  current.count += 1;
-  if (current.count > config.sponsor.requestsPerMinute) {
-    throw new SponsorError("Sponsor rate limit exceeded", 429, "rate_limited");
+function withBudget<T>(action: () => T): T {
+  try {
+    return action();
+  } catch (error) {
+    if (error instanceof SponsorBudgetError) {
+      throw new SponsorError(error.message, 429, "rate_limited");
+    }
+    throw error;
   }
 }
+
+let sponsorService: SolanaSponsorService | null = null;
 
 function bearerToken(authorization: string | undefined): string {
   if (!authorization?.startsWith("Bearer ")) {
@@ -52,7 +58,7 @@ function bearerToken(authorization: string | undefined): string {
 }
 
 async function verifyRequestToken(token: string) {
-  if (!config.sponsor.privyAppId || !config.sponsor.privyJwtVerificationKey) {
+  if (!config.sponsor.privyAppId) {
     throw new SponsorError(
       "Privy access-token verification is not configured",
       503,
@@ -60,11 +66,10 @@ async function verifyRequestToken(token: string) {
     );
   }
   try {
-    return await verifyPrivyAccessToken(
-      token,
-      config.sponsor.privyAppId,
-      config.sponsor.privyJwtVerificationKey
-    );
+    return await verifyPrivyAccessToken(token, config.sponsor.privyAppId, {
+      verificationKey: config.sponsor.privyJwtVerificationKey,
+      jwksUrl: config.sponsor.privyJwksUrl,
+    });
   } catch {
     throw new SponsorError(
       "Privy access token is invalid or expired",
@@ -75,7 +80,8 @@ async function verifyRequestToken(token: string) {
 }
 
 function buildSponsor(): SolanaSponsorService {
-  return new SolanaSponsorService(
+  if (sponsorService) return sponsorService;
+  sponsorService = new SolanaSponsorService(
     config.solana.rpcEndpoint,
     {
       programId: new PublicKey(config.solana.programId),
@@ -88,6 +94,7 @@ function buildSponsor(): SolanaSponsorService {
     config.sponsor.feePayerPrivateKey,
     config.sponsor.feePayerAddress
   );
+  return sponsorService;
 }
 
 export function transactionRoutes(app: FastifyInstance): void {
@@ -99,13 +106,19 @@ export function transactionRoutes(app: FastifyInstance): void {
         const claims = await verifyRequestToken(
           bearerToken(request.headers.authorization)
         );
-        enforceRateLimit(`${claims.userId}:${request.body.walletAddress}`);
+        withBudget(() => budget.checkRequest(claims.userId));
         const player = new PublicKey(request.body.walletAddress);
-        const signature = await buildSponsor().relay({
+        const sponsor = buildSponsor();
+        const input = {
           serialized: Buffer.from(request.body.transaction, "base64"),
           player,
           lastValidBlockHeight: request.body.lastValidBlockHeight,
-        });
+        };
+        const analyzed = sponsor.analyze(input);
+        withBudget(() =>
+          budget.reserve(claims.userId, analyzed.estimatedCostLamports, analyzed.costly)
+        );
+        const signature = await sponsor.relay(input, analyzed);
         return reply.code(200).send({ signature });
       } catch (error) {
         const sponsorError =
