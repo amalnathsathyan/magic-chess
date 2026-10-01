@@ -37,15 +37,22 @@ async function main(): Promise<void> {
     credentials: true,
   });
 
+  // A database outage must not take down the gas-sponsor relay, which needs
+  // no database: keep serving and retry migrations in the background.
+  // /api/health reports "degraded" until they succeed.
   if (config.runMigrationsOnStart) {
-    try {
-      app.log.info("Running database migrations");
-      await runMigrations();
-      app.log.info("Migrations complete");
-    } catch (err) {
-      app.log.error(err, "Migration failed");
-      process.exit(1);
-    }
+    const migrate = async (attempt: number): Promise<void> => {
+      try {
+        app.log.info({ attempt }, "Running database migrations");
+        await runMigrations();
+        app.log.info("Migrations complete");
+      } catch (err) {
+        const delayMs = Math.min(5 * 60_000, 15_000 * 2 ** Math.min(attempt, 4));
+        app.log.error({ err, retryInMs: delayMs }, "Migration failed; serving degraded and retrying");
+        setTimeout(() => void migrate(attempt + 1), delayMs).unref();
+      }
+    };
+    await migrate(0);
   }
 
   const realtime = new MatchRealtimeHub(loadMatchRealtimeSnapshot, {

@@ -134,9 +134,10 @@ async function relaySponsoredTransaction(input: {
   const accessToken = await getAccessToken();
   if (!accessToken) throw new Error("Your Privy session expired. Sign in again.");
 
-  const response = await fetch(
-    `${solanaConfig.apiUrl.replace(/\/$/, "")}/api/transactions/sponsor`,
-    {
+  const sponsorUrl = `${solanaConfig.apiUrl.replace(/\/$/, "")}/api/transactions/sponsor`;
+  let response: Response;
+  try {
+    response = await fetch(sponsorUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -147,12 +148,26 @@ async function relaySponsoredTransaction(input: {
         walletAddress: input.walletAddress,
         lastValidBlockHeight: input.lastValidBlockHeight,
       }),
-    }
-  );
+    });
+  } catch (cause) {
+    console.error("Gas sponsor unreachable", sponsorUrl, cause);
+    throw new Error(
+      "The gas sponsorship server is unreachable, so nothing was sent. Try again in a minute."
+    );
+  }
   const body = (await response.json().catch(() => null)) as
-    | { signature?: string; error?: string }
+    | { signature?: string; error?: string; code?: string }
     | null;
   if (!response.ok || !body?.signature) {
+    console.error("Sponsored transaction rejected", response.status, body);
+    if (response.status === 401) {
+      throw new Error(
+        "Gas sponsorship rejected your sign-in token. Sign out and in again; if it persists, the server's PRIVY_APP_ID doesn't match this site's Privy app."
+      );
+    }
+    if (response.status >= 502 && !body?.error) {
+      throw new Error("The gas sponsorship server is starting or down. Try again in a minute.");
+    }
     throw new Error(body?.error ?? `Sponsor rejected the transaction (${response.status}).`);
   }
   return body.signature;
