@@ -6,197 +6,220 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
-import { BN } from "@anchor-lang/core";
-import { SessionTokenManager } from "@magicblock-labs/gum-sdk";
-import { Keypair, PublicKey } from "@solana/web3.js";
+import { Keypair, type TransactionInstruction } from "@solana/web3.js";
 import { useMagicChessClient } from "@magic-chess/sdk/react";
 import type { MagicChessSession } from "@magic-chess/sdk";
-import type { SponsorAwareProvider } from "@/components/shared/SolanaProgramProvider";
 
-const SESSION_PROGRAM_ID = new PublicKey(
-  "KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5"
-);
-// Keep below the backend's one-hour cap to tolerate client/server clock skew.
-const SESSION_DURATION_SECONDS = 55 * 60;
-const SESSION_TOP_UP_LAMPORTS = 2_000_000;
+/**
+ * Lifetime of a per-match fast-play key. The program caps it at 7 days; one
+ * day covers any realistic game, and an expired key just falls back to the
+ * wallet until it is re-enabled.
+ */
+const SESSION_DURATION_SECONDS = 24 * 60 * 60;
+const STORAGE_PREFIX = "magic-chess:fast-play";
 
 type SessionState = "idle" | "authorizing" | "ready" | "error";
 
+/** A key generated for a match, not yet confirmed on-chain. */
+export interface PreparedMatchSession {
+  session: MagicChessSession;
+  /** `set_session_key` for the same transaction as create/join. */
+  instruction: TransactionInstruction;
+  /** Call once the transaction carrying `instruction` has confirmed. */
+  save: () => void;
+}
+
 interface MagicSessionContextValue {
-  session: MagicChessSession | null;
   status: SessionState;
   error: string | null;
+  /** The saved, unexpired fast-play key for this match, if any. */
+  getSession: (matchId: string) => MagicChessSession | null;
   /**
-   * Create (or reuse) the temporary signer. With a delegated `matchId`, also
-   * register it on that match's rollup state via `set_session_key`, so moves
-   * authorize without needing the SessionTokenV2 to be visible on the ER.
+   * Generate a key and the `set_session_key` instruction to bundle into the
+   * create or join transaction, so instant moves cost no extra approval.
    */
-  ensureSession: (matchId?: string) => Promise<MagicChessSession>;
-  /** Forget a match registration (e.g. after an authorization failure). */
+  prepareMatchSession: (matchId: string) => Promise<PreparedMatchSession>;
+  /** Register a new key on a match that is already running (one approval). */
+  enableForMatch: (matchId: string) => Promise<MagicChessSession>;
+  /** Drop a key the match no longer accepts. */
   forgetMatch: (matchId: string) => void;
-  /** Whether the signer is registered on this match. */
-  isRegistered: (matchId: string) => boolean;
-  clearSession: () => void;
 }
 
 const MagicSessionContext = createContext<MagicSessionContextValue | null>(null);
 
+interface StoredSession {
+  secretKey: string;
+  expiresAt: number;
+}
+
+function storageKey(wallet: string, matchId: string): string {
+  return `${STORAGE_PREFIX}:${wallet}:${matchId}`;
+}
+
+function toBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return window.btoa(binary);
+}
+
+function fromBase64(value: string): Uint8Array {
+  return Uint8Array.from(window.atob(value), (char) => char.charCodeAt(0));
+}
+
+function nowSeconds(): number {
+  return Math.floor(Date.now() / 1000);
+}
+
+/**
+ * The key lives in localStorage so a refresh doesn't bring wallet popups
+ * back. It can only sign `make_move` for this wallet's side of one match, and
+ * expires on-chain, so it is never a general-purpose wallet key.
+ */
+function readStored(wallet: string, matchId: string): MagicChessSession | null {
+  try {
+    const raw = window.localStorage.getItem(storageKey(wallet, matchId));
+    if (!raw) return null;
+    const stored = JSON.parse(raw) as StoredSession;
+    if (stored.expiresAt <= nowSeconds() + 30) {
+      window.localStorage.removeItem(storageKey(wallet, matchId));
+      return null;
+    }
+    return {
+      signer: Keypair.fromSecretKey(fromBase64(stored.secretKey)),
+      expiresAt: stored.expiresAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(wallet: string, matchId: string, session: MagicChessSession) {
+  try {
+    const signer = session.signer as Keypair;
+    const stored: StoredSession = {
+      secretKey: toBase64(signer.secretKey),
+      expiresAt: session.expiresAt,
+    };
+    window.localStorage.setItem(storageKey(wallet, matchId), JSON.stringify(stored));
+  } catch {
+    // Storage blocked: the key still works until the page reloads.
+  }
+}
+
+function removeStored(wallet: string, matchId: string) {
+  try {
+    window.localStorage.removeItem(storageKey(wallet, matchId));
+  } catch {
+    // Nothing to clean up.
+  }
+}
+
 export function MagicSessionProvider({ children }: { children: ReactNode }) {
   const client = useMagicChessClient();
-  const [session, setSession] = useState<MagicChessSession | null>(null);
   const [status, setStatus] = useState<SessionState>("idle");
   const [error, setError] = useState<string | null>(null);
-  const pendingRef = useRef<Promise<MagicChessSession> | null>(null);
-  const registeredRef = useRef<Map<string, number>>(new Map());
-  const [, setRegistrationVersion] = useState(0);
+  // In-memory copy so sessions survive blocked storage; keyed by wallet+match.
+  const [sessions, setSessions] = useState<Map<string, MagicChessSession>>(
+    () => new Map()
+  );
   const walletAddress = client.wallet?.publicKey.toBase58() ?? null;
 
-  const clearSession = useCallback(() => {
-    // The secret key is intentionally memory-only: never localStorage, logs,
-    // API payloads, or committed configuration.
-    pendingRef.current = null;
-    registeredRef.current = new Map();
-    setSession(null);
+  useEffect(() => {
     setStatus("idle");
     setError(null);
-  }, []);
+  }, [walletAddress]);
 
-  const forgetMatch = useCallback((matchId: string) => {
-    registeredRef.current.delete(matchId);
-    setRegistrationVersion((value) => value + 1);
-  }, []);
-
-  const isRegistered = useCallback(
-    (matchId: string) =>
-      Boolean(session) && registeredRef.current.get(matchId) === session?.expiresAt,
-    [session]
-  );
-
-  /** One wallet signature on the ER; no SOL needed there. */
-  const registerOnMatch = useCallback(
-    async (matchId: string, active: MagicChessSession) => {
-      if (registeredRef.current.get(matchId) === active.expiresAt) return true;
-      try {
-        await client.setSessionKey(matchId, active.signer.publicKey, active.expiresAt);
-        registeredRef.current.set(matchId, active.expiresAt);
-        setRegistrationVersion((value) => value + 1);
-        return true;
-      } catch (cause) {
-        console.warn("Could not register the fast-play key on the match", cause);
-        return false;
-      }
+  const remember = useCallback(
+    (matchId: string, session: MagicChessSession) => {
+      if (!walletAddress) return;
+      writeStored(walletAddress, matchId, session);
+      setSessions((current) =>
+        new Map(current).set(storageKey(walletAddress, matchId), session)
+      );
     },
-    [client]
+    [walletAddress]
   );
 
-  useEffect(() => clearSession(), [clearSession, walletAddress]);
-
-  const withMatch = useCallback(
-    async (active: MagicChessSession, matchId?: string): Promise<MagicChessSession> => {
-      if (!matchId) return active;
-      // Registered on the match: authorize via the match account, not the
-      // base-layer token (which the ER may not have cloned).
-      return (await registerOnMatch(matchId, active))
-        ? { signer: active.signer, expiresAt: active.expiresAt }
-        : active;
+  const getSession = useCallback(
+    (matchId: string): MagicChessSession | null => {
+      if (!walletAddress || !matchId) return null;
+      const cached = sessions.get(storageKey(walletAddress, matchId));
+      if (cached && cached.expiresAt > nowSeconds() + 30) return cached;
+      if (typeof window === "undefined") return null;
+      return readStored(walletAddress, matchId);
     },
-    [registerOnMatch]
+    [sessions, walletAddress]
   );
 
-  const ensureSession = useCallback(async (matchId?: string): Promise<MagicChessSession> => {
-    const now = Math.floor(Date.now() / 1000);
-    if (session && session.expiresAt > now + 60) {
-      return withMatch(session, matchId);
-    }
-    if (pendingRef.current) return withMatch(await pendingRef.current, matchId);
-    if (!client.wallet) throw new Error("Connect a wallet before enabling fast play.");
+  const forgetMatch = useCallback(
+    (matchId: string) => {
+      if (!walletAddress) return;
+      removeStored(walletAddress, matchId);
+      setSessions((current) => {
+        const next = new Map(current);
+        next.delete(storageKey(walletAddress, matchId));
+        return next;
+      });
+    },
+    [walletAddress]
+  );
 
-    const promise = (async () => {
+  const prepareMatchSession = useCallback(
+    async (matchId: string): Promise<PreparedMatchSession> => {
+      if (!client.wallet) throw new Error("Connect a wallet before creating a match.");
+      const session: MagicChessSession = {
+        signer: Keypair.generate(),
+        expiresAt: nowSeconds() + SESSION_DURATION_SECONDS,
+      };
+      const instruction = await client.buildSetSessionKeyInstruction(
+        matchId,
+        session.signer.publicKey,
+        session.expiresAt
+      );
+      return {
+        session,
+        instruction,
+        save: () => {
+          remember(matchId, session);
+          setStatus("ready");
+          setError(null);
+        },
+      };
+    },
+    [client, remember]
+  );
+
+  const enableForMatch = useCallback(
+    async (matchId: string): Promise<MagicChessSession> => {
+      if (!client.wallet) throw new Error("Connect a wallet before enabling instant moves.");
       setStatus("authorizing");
       setError(null);
-      const provider = client.program.provider as SponsorAwareProvider;
-      const authority = client.wallet!.publicKey;
-      // Embedded wallets are sponsored; external wallets pay the tiny
-      // session top-up themselves.
-      const sessionFeePayer = provider.sponsorPayer ?? authority;
-      const signer = Keypair.generate();
-      const expiresAt = Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS;
-      const [token] = PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("session_token_v2"),
-          client.programId.toBuffer(),
-          signer.publicKey.toBuffer(),
-          authority.toBuffer(),
-        ],
-        SESSION_PROGRAM_ID
-      );
-
-      const manager = new SessionTokenManager(
-        provider.wallet as never,
-        provider.connection as never
-      );
-      const methods = manager.program.methods as unknown as {
-        createSessionV2(
-          topUp: boolean,
-          validUntil: BN,
-          lamports: BN
-        ): {
-          accounts(accounts: Record<string, PublicKey>): {
-            transaction(): Promise<import("@solana/web3.js").Transaction>;
-          };
+      try {
+        const session: MagicChessSession = {
+          signer: Keypair.generate(),
+          expiresAt: nowSeconds() + SESSION_DURATION_SECONDS,
         };
-      };
-      const transaction = await methods
-        .createSessionV2(
-          true,
-          new BN(expiresAt),
-          new BN(SESSION_TOP_UP_LAMPORTS)
-        )
-        .accounts({
-          sessionToken: token,
-          sessionSigner: signer.publicKey,
-          feePayer: sessionFeePayer,
-          authority,
-          targetProgram: client.programId,
-          systemProgram: PublicKey.default,
-        })
-        .transaction();
-
-      await provider.sendAndConfirm(transaction, [signer], {
-        commitment: "confirmed",
-        preflightCommitment: "confirmed",
-      });
-      const account = await provider.connection.getAccountInfo(token, "confirmed");
-      if (!account?.owner.equals(SESSION_PROGRAM_ID)) {
-        throw new Error("The fast-play session was not created on Solana devnet.");
-      }
-
-      const created: MagicChessSession = { signer, token, expiresAt };
-      setSession(created);
-      setStatus("ready");
-      return created;
-    })()
-      .catch((cause: unknown) => {
+        // Sent to whichever runtime holds the match (the ER mid-game).
+        await client.setSessionKey(matchId, session.signer.publicKey, session.expiresAt);
+        remember(matchId, session);
+        setStatus("ready");
+        return session;
+      } catch (cause) {
         const message = cause instanceof Error ? cause.message : String(cause);
         setStatus("error");
         setError(message);
         throw cause;
-      })
-      .finally(() => {
-        pendingRef.current = null;
-      });
-
-    pendingRef.current = promise;
-    return withMatch(await promise, matchId);
-  }, [client, session, withMatch]);
+      }
+    },
+    [client, remember]
+  );
 
   const value = useMemo(
-    () => ({ session, status, error, ensureSession, forgetMatch, isRegistered, clearSession }),
-    [clearSession, ensureSession, error, forgetMatch, isRegistered, session, status]
+    () => ({ status, error, getSession, prepareMatchSession, enableForMatch, forgetMatch }),
+    [enableForMatch, error, forgetMatch, getSession, prepareMatchSession, status]
   );
 
   return (

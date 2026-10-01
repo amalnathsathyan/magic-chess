@@ -46,6 +46,7 @@ import {
   getTransactionPayer,
 } from "@/lib/wager";
 import { useMagicBlock } from "@/hooks/useMagicBlock";
+import { useMagicSession } from "@/components/shared/MagicSessionProvider";
 import { cn } from "@/lib/utils";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { magicBlockTxUrl, solanaDevnetTxUrl } from "@/lib/explorer";
@@ -101,9 +102,10 @@ function PlayView() {
     submitMove,
     sessionStatus,
     sessionError,
-    isFastPlayReady,
+    getFastPlaySession,
     enableFastPlay,
   } = useMagicBlock();
+  const { prepareMatchSession } = useMagicSession();
 
   const [history, setHistory] = useState<ApiMatchHistory | null>(null);
   const [historyUnavailable, setHistoryUnavailable] = useState(false);
@@ -206,7 +208,20 @@ function PlayView() {
   const canMove = Boolean(
     isActive && match?.isDelegated && isMyTurn && !isBusy && displayFen
   );
-  const fastPlayReady = isFastPlayReady(matchId);
+  const fastPlaySession = getFastPlaySession(matchId);
+  // Moves are popup-free only when the key saved here is the one the match
+  // has registered for our side.
+  const registeredSigner = match
+    ? playerColor === "white"
+      ? match.whiteSessionSigner
+      : playerColor === "black"
+        ? match.blackSessionSigner
+        : null
+    : null;
+  const fastPlayReady = Boolean(
+    fastPlaySession &&
+      registeredSigner?.equals(fastPlaySession.signer.publicKey)
+  );
 
   useEffect(() => {
     if (playerColor) setOrientation(playerColor);
@@ -320,7 +335,11 @@ function PlayView() {
         })
         .instruction();
 
-      // 3. Build delegate_match instruction
+      // 3. Register this player's instant-move key in the same transaction,
+      //    before delegation, so the clock never runs on a separate approval.
+      const fastPlay = await prepareMatchSession(matchId);
+
+      // 4. Build delegate_match instruction
       const rentPayer = getTransactionPayer(client, owner);
       const [bufferChessMatch] = PublicKey.findProgramAddressSync(
         [Buffer.from("buffer"), chessMatchPda.toBuffer()],
@@ -349,7 +368,7 @@ function PlayView() {
         })
         .instruction();
 
-      // 4. Bundle all three into a single transaction and send once
+      // 5. Bundle everything into a single transaction and send once
       await runTransaction(
         async () => {
           const provider = client.program.provider as unknown as {
@@ -362,9 +381,11 @@ function PlayView() {
             transaction.add(ix);
           }
           transaction.add(joinIx);
+          transaction.add(fastPlay.instruction);
           transaction.add(delegateIx);
 
           const signature = await provider.sendAndConfirm(transaction);
+          fastPlay.save();
 
           void syncPlayerJoined({ matchId, signature });
 
@@ -420,7 +441,8 @@ function PlayView() {
   const handleEnableFastPlay = async () => {
     try {
       await enableFastPlay(matchId);
-      if (isFastPlayReady(matchId)) toast.success("Instant moves enabled");
+      await refetch();
+      toast.success("Instant moves enabled");
     } catch (cause) {
       toast.error("Could not enable instant moves", {
         description: cause instanceof Error ? cause.message : String(cause),
@@ -605,7 +627,7 @@ function PlayView() {
         return { ok: true, from, to };
       },
       enableSession: () => {
-        enableFastPlay()
+        enableFastPlay(matchId)
           .then(() => toast.success("Session enabled"))
           .catch((e: unknown) => toast.error("Session failed", { description: String(e) }));
       },
