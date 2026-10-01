@@ -205,6 +205,7 @@ export class MagicChessClient {
         systemProgram: SYSTEM_PROGRAM,
       })
       .preInstructions(params.preInstructions ?? [])
+      .postInstructions(params.postInstructions ?? [])
       .rpc();
 
     return { match: params.matchId, signature: sig };
@@ -579,20 +580,30 @@ export class MagicChessClient {
     };
   }
 
+  /**
+   * Build `set_session_key` without sending it, so it can ride in the same
+   * transaction as `initialize_match` or `join_match` (before `delegate_match`).
+   */
+  async buildSetSessionKeyInstruction(
+    matchId: string,
+    sessionSigner: PublicKey,
+    expiresAt: IntegerInput,
+    player: PublicKey = this.requireWallet("setSessionKey").publicKey
+  ): Promise<TransactionInstruction> {
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+    return this.program.methods
+      .setSessionKey(sessionSigner, toBN(expiresAt, "expiresAt", true))
+      .accountsPartial({ chessMatch: chessMatchPda, player })
+      .instruction();
+  }
+
   /** Register a real session signer on the authoritative runtime. */
   async setSessionKey(
     matchId: string,
     sessionSigner: PublicKey,
     expiresAt: IntegerInput
   ): Promise<{ signature: TransactionSignature }> {
-    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
-    const ix = await this.program.methods
-      .setSessionKey(sessionSigner, toBN(expiresAt, "expiresAt", true))
-      .accountsPartial({
-        chessMatch: chessMatchPda,
-        player: this.requireWallet("setSessionKey").publicKey,
-      })
-      .instruction();
+    const ix = await this.buildSetSessionKeyInstruction(matchId, sessionSigner, expiresAt);
     const runtime = await this.runtimeForMatch(matchId);
     const signature = await this.sendInstruction(runtime.connection, ix);
     return { signature };

@@ -169,6 +169,11 @@ export interface CreateMatchParams {
    * the wager token account) so the player signs once.
    */
   preInstructions?: TransactionInstruction[];
+  /**
+   * Instructions appended after `initialize_match` in the same transaction
+   * (e.g. `set_session_key`, so instant moves need no extra approval).
+   */
+  postInstructions?: TransactionInstruction[];
   /** Enable the spectator prediction pool for this match. Defaults to false. */
   predictionEnabled?: boolean;
 }

@@ -11,6 +11,7 @@ import { Check, ChevronDown, Clock, Coins, LoaderCircle, Plus, Sword, X } from "
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useMagicChessClient } from "@magic-chess/sdk/react";
+import { useMagicSession } from "@/components/shared/MagicSessionProvider";
 import { cn } from "@/lib/utils";
 import {
   getPlatformFeeWallet,
@@ -52,6 +53,7 @@ export function CreateMatchForm({
   const login = useAppLogin();
   const { wallets } = useWallets();
   const client = useMagicChessClient();
+  const { prepareMatchSession } = useMagicSession();
   const router = useRouter();
 
   const wallet = selectSolanaWallet(wallets);
@@ -120,6 +122,9 @@ export function CreateMatchForm({
 
       // Wager ATA + SOL wrapping ride in the same transaction: one approval.
       const wagerPrep = await buildWagerInstruction(client, player, mint, rawWager);
+      // White's instant-move key is registered by the same transaction, so
+      // there's no separate approval once the game starts.
+      const fastPlay = await prepareMatchSession(matchId);
 
       const { signature } = await client.createMatch({
         matchId,
@@ -130,10 +135,12 @@ export function CreateMatchForm({
         bettingTokenMint: mint,
         playerTokenAccount: wagerPrep.tokenAccount,
         preInstructions: wagerPrep.instructions,
+        postInstructions: [fastPlay.instruction],
         rentPayer: getTransactionPayer(client, player),
         predictionEnabled: false,
       });
 
+      fastPlay.save();
       void syncMatchCreated({ matchId, signature });
 
       toast.success("Match created on Solana", {
