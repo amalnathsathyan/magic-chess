@@ -67,9 +67,13 @@ transfer sourced from the sponsor. ATA rent remains capped because an account
 owner can later close an ATA and reclaim its rent.
 
 Required backend variables are `SOLANA_FEE_PAYER_PRIVATE_KEY`,
-`SOLANA_FEE_PAYER_ADDRESS`, `PRIVY_APP_ID`,
-`PRIVY_JWT_VERIFICATION_KEY`, `WAGER_MINT`, and
-`PLATFORM_FEE_WALLET`. Required browser variables are
+`SOLANA_FEE_PAYER_ADDRESS`, `PRIVY_APP_ID`, `WAGER_MINT`, and
+`PLATFORM_FEE_WALLET`. Privy access tokens are verified against the app's
+JWKS endpoint (`https://auth.privy.io/api/v1/apps/<PRIVY_APP_ID>/jwks.json`)
+by default; `PRIVY_JWKS_URL` or a PEM `PRIVY_JWT_VERIFICATION_KEY` override
+it. `PRIVY_APP_ID` must equal the frontend's `NEXT_PUBLIC_PRIVY_APP_ID`
+(check `auth.privyAppId` on `/api/health`), or every sponsored transaction is
+rejected as unauthorized. Required browser variables are
 `NEXT_PUBLIC_SOLANA_SPONSOR_MODE=backend` and the public
 `NEXT_PUBLIC_SOLANA_FEE_PAYER_ADDRESS`.
 

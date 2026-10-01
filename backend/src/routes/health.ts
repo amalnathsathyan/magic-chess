@@ -34,7 +34,11 @@ export function healthRoutes(
       // and sponsor address can be checked against the backend's.
       auth: {
         privyAppId: config.sponsor.privyAppId || null,
-        privyVerificationConfigured: Boolean(config.sponsor.privyJwtVerificationKey),
+        privyVerification: config.sponsor.privyJwtVerificationKey
+          ? "pem-key"
+          : config.sponsor.privyAppId
+            ? "jwks"
+            : "not-configured",
         sponsorFeePayer: config.sponsor.feePayerAddress || null,
       },
       realtime: realtime?.stats() ?? {

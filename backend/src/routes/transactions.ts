@@ -58,7 +58,7 @@ function bearerToken(authorization: string | undefined): string {
 }
 
 async function verifyRequestToken(token: string) {
-  if (!config.sponsor.privyAppId || !config.sponsor.privyJwtVerificationKey) {
+  if (!config.sponsor.privyAppId) {
     throw new SponsorError(
       "Privy access-token verification is not configured",
       503,
@@ -66,11 +66,10 @@ async function verifyRequestToken(token: string) {
     );
   }
   try {
-    return await verifyPrivyAccessToken(
-      token,
-      config.sponsor.privyAppId,
-      config.sponsor.privyJwtVerificationKey
-    );
+    return await verifyPrivyAccessToken(token, config.sponsor.privyAppId, {
+      verificationKey: config.sponsor.privyJwtVerificationKey,
+      jwksUrl: config.sponsor.privyJwksUrl,
+    });
   } catch {
     throw new SponsorError(
       "Privy access token is invalid or expired",

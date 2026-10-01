@@ -70,6 +70,8 @@ export const config = {
     privyAppId: process.env.PRIVY_APP_ID || "",
     privyJwtVerificationKey:
       process.env.PRIVY_JWT_VERIFICATION_KEY?.replace(/\\n/g, "\n") || "",
+    // Defaults to the app's JWKS endpoint when no PEM key is configured.
+    privyJwksUrl: process.env.PRIVY_JWKS_URL || "",
     requestsPerMinute: Number(process.env.SPONSOR_REQUESTS_PER_MINUTE || "10"),
     // Match/session creations per Privy user per hour (rent-heavy).
     costlyPerHour: Number(process.env.SPONSOR_COSTLY_PER_HOUR || "12"),
