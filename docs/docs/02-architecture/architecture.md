@@ -311,4 +311,4 @@ All significant state transitions emit Anchor events for off-chain indexing.
 | Platform fee ATA owner | **Pending fix** — owner constraint missing in settlement |
 | Duplicate mutable accounts | **Pending fix** — no duplicate check in settlement |
 
-For the full security analysis including all 13 audit findings, see [SELF_AUDIT.md](https://github.com/amalnathsathyan/magic-chess/blob/main/magic-chess-program/SELF_AUDIT.md).
+For the full security analysis including all 13 audit findings, see [SELF_AUDIT.md](https://github.com/amalnathsathyan/magic-chess/blob/dev/magic-chess-program/SELF_AUDIT.md).

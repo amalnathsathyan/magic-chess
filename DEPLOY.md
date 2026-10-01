@@ -413,3 +413,20 @@ solana config get
 | **A: Surfpool** | Local fork | Free | Instant | Rapid iteration, unit/integration tests |
 | **B: Devnet** | Solana Devnet | ~6 SOL (free faucet) | ~2-5 min | Integration testing, MagicBlock base |
 | **C: MagicBlock** | MagicBlock Devnet | Requires Path B first | ~1 min (delegation) | Gasless moves, sessions, crank |
+
+---
+
+## Web App Deployment
+
+There is one branch (`dev`) and one deployment.
+
+| Piece | Where | Source |
+|---|---|---|
+| Frontend | Cloudflare Worker `arena-dev` → https://arena-dev.chessmagic.workers.dev | `frontend/` on `dev`, config in `frontend/wrangler.toml` |
+| Backend | Render → https://magic-chess-dev.onrender.com | `backend/` |
+
+Every push to `dev` rebuilds the frontend through Cloudflare Workers Builds
+(production branch `dev`, root directory `./frontend/`, build `npm run build`,
+deploy `npx wrangler deploy`). Public config lives in the `[vars]` block of
+`frontend/wrangler.toml`; change `NEXT_PUBLIC_API_URL` there if the backend moves.
+The backend's allowed origins are set by `CORS_ORIGIN` (see `backend/.env.example`).

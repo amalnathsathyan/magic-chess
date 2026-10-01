@@ -1,7 +1,10 @@
 # Cloudflare Workers configuration for Arena frontend
 # Static export served via Workers static assets.
 #
+# Single deployment: this Worker builds from the `dev` branch.
+#
 # Dashboard Settings → Build:
+#   Production branch: dev
 #   Build command:   npm run build
 #   Deploy command:  npx wrangler deploy
 #   Root directory:  ./frontend/
@@ -30,6 +33,3 @@ NEXT_PUBLIC_API_URL = "https://magic-chess-dev.onrender.com"
 NEXT_PUBLIC_SOLANA_SPONSOR_MODE = "backend"
 NEXT_PUBLIC_SOLANA_FEE_PAYER_ADDRESS = "BuMLxTELQyTyNxroqFGHJprL1sdVMyQJ7om3MQUGToPQ"
 NEXT_PUBLIC_PRIVY_APP_ID = "cmsdk4zc7003y0cjlc22j9igy"
-
-# NEXT_PUBLIC_PRIVY_APP_ID and NEXT_PUBLIC_API_URL must be supplied as
-# Cloudflare build variables.
