@@ -29,6 +29,10 @@ struct ScheduleTaskArgs {
     instructions: Vec<Vec<u8>>,
 }
 
+/// Whether `invoke_schedule_task` actually reaches the Task Scheduler.
+/// Callers check this before logging that a task was scheduled.
+pub const TASK_SCHEDULER_ENABLED: bool = false;
+
 #[derive(Accounts)]
 pub struct ScheduleTimeout<'info> {
     #[account(
@@ -72,7 +76,8 @@ pub fn handle_schedule_timeout(ctx: Context<ScheduleTimeout>, task_id: i64) -> R
 /// (Magic11111111111111111111111111111111111111) is confirmed available on
 /// the target runtime.
 ///
-/// To re-enable: uncomment the CPI block below and remove this early return.
+/// To re-enable: uncomment the CPI block below, remove this early return, and
+/// set `TASK_SCHEDULER_ENABLED` to true.
 pub fn invoke_schedule_task(
     task_id: i64,
     execution_interval_millis: i64,
