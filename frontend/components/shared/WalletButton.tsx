@@ -1,5 +1,6 @@
 "use client";
 
+import { useAppLogin } from "@/hooks/useAppLogin";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useCreateWallet, useWallets } from "@privy-io/react-auth/solana";
@@ -17,7 +18,8 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { cn } from "@/lib/utils";
 
 export function WalletButton() {
-  const { login, logout, authenticated, ready } = usePrivy();
+  const { logout, authenticated, ready } = usePrivy();
+  const login = useAppLogin();
   const { ready: walletsReady, wallets } = useWallets();
   const { createWallet } = useCreateWallet();
   const [isCreatingWallet, setIsCreatingWallet] = useState(false);
@@ -95,7 +97,7 @@ export function WalletButton() {
       await disconnectWallets();
       await logout();
       window.setTimeout(
-        () => login({ loginMethods: ["wallet"], walletChainType: "solana-only" }),
+        () => login({ loginMethods: ["wallet"] }),
         0
       );
     } catch (error) {
@@ -122,7 +124,7 @@ export function WalletButton() {
     return (
       <button
         type="button"
-        onClick={() => login({ walletChainType: "solana-only" })}
+        onClick={() => login()}
         aria-label="Sign in or connect a wallet"
         title="Sign in or connect a wallet"
         className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_15px_rgba(0,230,118,0.3)] transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"

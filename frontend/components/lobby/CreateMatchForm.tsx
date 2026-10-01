@@ -1,5 +1,6 @@
 "use client";
 
+import { useAppLogin } from "@/hooks/useAppLogin";
 import { playHref } from "@/lib/match-links";
 import { useMemo, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
@@ -47,7 +48,8 @@ export function CreateMatchForm({
   const [customMint, setCustomMint] = useState("");
   const [tokenDropdownOpen, setTokenDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { authenticated, login } = usePrivy();
+  const { authenticated } = usePrivy();
+  const login = useAppLogin();
   const { wallets } = useWallets();
   const client = useMagicChessClient();
   const router = useRouter();
@@ -97,7 +99,7 @@ export function CreateMatchForm({
     event.preventDefault();
 
     if (!authenticated) {
-      login({ walletChainType: "solana-only" });
+      login();
       return;
     }
 

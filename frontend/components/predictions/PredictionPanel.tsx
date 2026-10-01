@@ -1,5 +1,6 @@
 "use client";
 
+import { useAppLogin } from "@/hooks/useAppLogin";
 import { useEffect, useMemo, useState } from "react";
 import { Chess, type Square } from "chess.js";
 import {
@@ -93,7 +94,8 @@ export function PredictionPanel({
   onPreview,
   className,
 }: PredictionPanelProps) {
-  const { authenticated, login } = usePrivy();
+  const { authenticated } = usePrivy();
+  const login = useAppLogin();
   const session = usePredictionSession();
   const { market, myBets, error, submitting, place, cancel } = useMovePredictions({
     matchId,
