@@ -2487,6 +2487,7 @@ dependencies = [
  "solana-pubkey 4.3.0",
  "solana-sdk",
  "solana-system-program 4.1.2",
+ "spl-token",
 ]
 
 [[package]]

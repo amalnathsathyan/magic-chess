@@ -135,7 +135,8 @@ export function CreateMatchForm({
         bettingTokenMint: mint,
         playerTokenAccount: wagerPrep.tokenAccount,
         preInstructions: wagerPrep.instructions,
-        postInstructions: [fastPlay.instruction],
+        postInstructions: fastPlay.instructions,
+        signers: fastPlay.signers,
         rentPayer: getTransactionPayer(client, player),
         predictionEnabled: false,
       });

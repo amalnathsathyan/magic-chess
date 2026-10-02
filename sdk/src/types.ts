@@ -174,6 +174,8 @@ export interface CreateMatchParams {
    * (e.g. `set_session_key`, so instant moves need no extra approval).
    */
   postInstructions?: TransactionInstruction[];
+  /** Extra keypairs that must sign (e.g. a session signer for create_session_v2). */
+  signers?: Signer[];
   /** Enable the spectator prediction pool for this match. Defaults to false. */
   predictionEnabled?: boolean;
 }

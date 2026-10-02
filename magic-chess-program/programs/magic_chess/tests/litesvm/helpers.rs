@@ -7,7 +7,6 @@
 //
 // Instruction discriminators are the first 8 bytes of sha256("global:<name>").
 
-use anchor_lang::AccountDeserialize;
 use anchor_litesvm::{
     AccountMeta, AnchorContext, AnchorLiteSVM, Instruction, Keypair, Pubkey, Signer, TestHelpers,
 };

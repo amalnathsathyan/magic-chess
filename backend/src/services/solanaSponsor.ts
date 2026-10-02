@@ -32,7 +32,9 @@ const MAX_TRANSACTION_BYTES = 1_232;
 const MAX_INSTRUCTIONS = 8;
 const SESSION_TOKEN_V2_SEED = Buffer.from("session_token_v2");
 const SESSION_TOP_UP_LAMPORTS = 2_000_000n;
-const MAX_SESSION_DURATION_SECONDS = 60 * 60;
+// Covers a whole game; the token can only sign this program's moves for
+// this wallet, and validity doesn't change what the sponsor pays.
+const MAX_SESSION_DURATION_SECONDS = 24 * 60 * 60;
 
 export class SponsorError extends Error {
   constructor(
@@ -315,6 +317,8 @@ function validateSessionInstruction(
     throw new SponsorError("Only canonical create_session_v2 is sponsored", 403);
   }
 
+  // The authority may show as writable: in a create/join transaction the
+  // player is writable for the wager, which only puts their own funds at stake.
   const [sessionToken, sessionSigner, feePayer, authority, targetProgram, systemProgram] =
     instruction.keys;
   const [expectedToken] = PublicKey.findProgramAddressSync(
@@ -338,7 +342,6 @@ function validateSessionInstruction(
     !feePayer.isWritable ||
     !authority.pubkey.equals(policy.player) ||
     !authority.isSigner ||
-    authority.isWritable ||
     !targetProgram.pubkey.equals(policy.programId) ||
     targetProgram.isSigner ||
     targetProgram.isWritable ||
@@ -412,6 +415,8 @@ export function analyzeSponsoredTransaction(
 
   let hasAppInstruction = false;
   let hasSessionInstruction = false;
+  let sessionInstructionCount = 0;
+  let opensMatch = false;
   let sessionSignerKey: PublicKey | null = null;
   let operationInstructionCount = 0;
   let costly = false;
@@ -423,6 +428,9 @@ export function analyzeSponsoredTransaction(
       operationInstructionCount += 1;
       hasAppInstruction = true;
       const rule = validateMagicChessInstruction(instruction, policy);
+      if (rule.name === "initialize_match" || rule.name === "join_match") {
+        opensMatch = true;
+      }
       if (rule.name === "initialize_match") {
         costly = true;
         estimatedCostLamports += SPONSOR_COST_ESTIMATES.initializeMatch;
@@ -431,6 +439,7 @@ export function analyzeSponsoredTransaction(
       operationInstructionCount += 1;
       hasAppInstruction = true;
       hasSessionInstruction = true;
+      sessionInstructionCount += 1;
       costly = true;
       estimatedCostLamports += SPONSOR_COST_ESTIMATES.createSession;
       sessionSignerKey = validateSessionInstruction(instruction, policy);
@@ -462,7 +471,12 @@ export function analyzeSponsoredTransaction(
   if (!hasAppInstruction) {
     throw new SponsorError("Transaction contains no Magic Chess operation", 403);
   }
-  if (hasSessionInstruction && operationInstructionCount !== 1) {
+  // A session token rides alone, or in the create/join transaction so the
+  // player approves instant moves together with the match.
+  if (
+    sessionInstructionCount > 1 ||
+    (hasSessionInstruction && operationInstructionCount !== 1 && !opensMatch)
+  ) {
     throw new SponsorError("Session creation cannot be combined with other operations", 403);
   }
   if (

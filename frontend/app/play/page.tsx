@@ -17,7 +17,13 @@ import {
   Zap,
 } from "lucide-react";
 import { Chess, type Move as ChessMove, type Square } from "chess.js";
-import { PublicKey, SystemProgram, Transaction, type Connection } from "@solana/web3.js";
+import {
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  type Connection,
+  type Keypair,
+} from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { BN } from "@anchor-lang/core";
 import { useWallets } from "@privy-io/react-auth/solana";
@@ -209,8 +215,9 @@ function PlayView() {
     isActive && match?.isDelegated && isMyTurn && !isBusy && displayFen
   );
   const fastPlaySession = getFastPlaySession(matchId);
-  // Moves are popup-free only when the key saved here is the one the match
-  // has registered for our side.
+  // Moves are popup-free when the key saved here has a MagicBlock session
+  // token, or is the one the match has registered for our side. A key the
+  // rollup rejects is dropped on the first move, which brings the panel back.
   const registeredSigner = match
     ? playerColor === "white"
       ? match.whiteSessionSigner
@@ -220,7 +227,8 @@ function PlayView() {
     : null;
   const fastPlayReady = Boolean(
     fastPlaySession &&
-      registeredSigner?.equals(fastPlaySession.signer.publicKey)
+      (fastPlaySession.token ||
+        registeredSigner?.equals(fastPlaySession.signer.publicKey))
   );
 
   useEffect(() => {
@@ -335,8 +343,9 @@ function PlayView() {
         })
         .instruction();
 
-      // 3. Register this player's instant-move key in the same transaction,
-      //    before delegation, so the clock never runs on a separate approval.
+      // 3. Authorize this player's instant-move key (session token and match
+      //    registration) in the same transaction, before delegation, so the
+      //    clock never runs on a separate approval.
       const fastPlay = await prepareMatchSession(matchId);
 
       // 4. Build delegate_match instruction
@@ -373,7 +382,7 @@ function PlayView() {
         async () => {
           const provider = client.program.provider as unknown as {
             connection: Connection;
-            sendAndConfirm(tx: Transaction): Promise<string>;
+            sendAndConfirm(tx: Transaction, signers?: Keypair[]): Promise<string>;
           };
 
           const transaction = new Transaction();
@@ -381,10 +390,10 @@ function PlayView() {
             transaction.add(ix);
           }
           transaction.add(joinIx);
-          transaction.add(fastPlay.instruction);
+          transaction.add(...fastPlay.instructions);
           transaction.add(delegateIx);
 
-          const signature = await provider.sendAndConfirm(transaction);
+          const signature = await provider.sendAndConfirm(transaction, fastPlay.signers);
           fastPlay.save();
 
           void syncPlayerJoined({ matchId, signature });
@@ -892,7 +901,7 @@ function PlayView() {
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           Approve once: a temporary key that can only move your pieces in this game
-                          signs each move, so there's no popup per move.
+                          signs each move, so there&apos;s no popup per move.
                         </p>
                         {sessionError ? (
                           <p className="mt-2 text-xs text-destructive">{sessionError}</p>
