@@ -70,9 +70,15 @@ async function verifyRequestToken(token: string) {
       verificationKey: config.sponsor.privyJwtVerificationKey,
       jwksUrl: config.sponsor.privyJwksUrl,
     });
-  } catch {
+  } catch (cause) {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    console.warn("Privy access token rejected", {
+      reason,
+      appId: config.sponsor.privyAppId,
+      verification: config.sponsor.privyJwtVerificationKey ? "pem-key" : "jwks",
+    });
     throw new SponsorError(
-      "Privy access token is invalid or expired",
+      `Privy access token is invalid or expired (${reason})`,
       401,
       "unauthorized"
     );

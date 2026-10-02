@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
-import { exportJWK, generateKeyPair, SignJWT } from "jose";
+import { exportJWK, exportSPKI, generateKeyPair, SignJWT } from "jose";
 import { privyJwksUrl, verifyPrivyAccessToken } from "../src/services/privyAuth.js";
 
 const APP_ID = "cmsdk4zc7003y0cjlc22j9igy";
@@ -50,6 +50,22 @@ test("verifies Privy access tokens against a JWKS endpoint", async () => {
     const other = await generateKeyPair("ES256");
     await assert.rejects(
       verifyPrivyAccessToken(await sign(APP_ID, other.privateKey), APP_ID, { jwksUrl })
+    );
+
+    // A stale pasted PEM key (Privy rotated keys) falls back to the JWKS.
+    const stalePem = await exportSPKI(other.publicKey);
+    const fallback = await verifyPrivyAccessToken(await sign(APP_ID), APP_ID, {
+      verificationKey: stalePem,
+      jwksUrl,
+    });
+    assert.equal(fallback.userId, "did:privy:user-1");
+    // ...but a token neither key accepts is still rejected.
+    const stranger = await generateKeyPair("ES256");
+    await assert.rejects(
+      verifyPrivyAccessToken(await sign(APP_ID, stranger.privateKey), APP_ID, {
+        verificationKey: stalePem,
+        jwksUrl,
+      })
     );
   } finally {
     server.close();

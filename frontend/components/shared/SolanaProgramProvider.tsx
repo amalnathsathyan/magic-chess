@@ -162,7 +162,8 @@ async function relaySponsoredTransaction(input: {
     console.error("Sponsored transaction rejected", response.status, body);
     if (response.status === 401) {
       throw new Error(
-        "Gas sponsorship rejected your sign-in token. Sign out and in again; if it persists, the server's PRIVY_APP_ID doesn't match this site's Privy app."
+        `Gas sponsorship rejected your sign-in token. Sign out and in again; if it persists, check the backend's Privy settings at ${solanaConfig.apiUrl.replace(/\/$/, "")}/health.` +
+          (body?.error ? ` Server said: ${body.error}` : "")
       );
     }
     if (response.status >= 502 && !body?.error) {
