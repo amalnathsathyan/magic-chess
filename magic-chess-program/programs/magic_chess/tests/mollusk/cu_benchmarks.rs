@@ -444,6 +444,8 @@ fn run_make_move_bench(
     let accounts_meta = vec![
         AccountMeta::new(match_pda, false),
         AccountMeta::new(player_pubkey, true),
+        // Omitted optional session_token: Anchor's sentinel is the program id.
+        AccountMeta::new_readonly(prog_id, false),
     ];
     let instruction = Instruction::new_with_bytes(prog_id, &ix_data, accounts_meta);
 
