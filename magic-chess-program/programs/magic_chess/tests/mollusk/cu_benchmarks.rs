@@ -327,9 +327,11 @@ fn build_chess_match_bytes(
     data.extend_from_slice(&0u32.to_le_bytes());
     // is_delegated: bool
     data.push(0u8);
-    // session_signer: Pubkey
+    // white_session_signer: Pubkey, white_session_expires_at: i64
     data.extend_from_slice(&Pubkey::default().to_bytes());
-    // session_expires_at: i64
+    data.extend_from_slice(&0i64.to_le_bytes());
+    // black_session_signer: Pubkey, black_session_expires_at: i64
+    data.extend_from_slice(&Pubkey::default().to_bytes());
     data.extend_from_slice(&0i64.to_le_bytes());
     // active_task_id: i64 (-1 = no active task)
     data.extend_from_slice(&(-1i64).to_le_bytes());
