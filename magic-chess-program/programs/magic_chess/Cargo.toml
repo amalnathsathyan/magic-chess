@@ -46,6 +46,8 @@ anchor-lang = "1.1.2"
 anchor-litesvm = "0.4"
 solana-sdk = "2.3"
 sha2 = "0.10"
+# Pulled in by anchor-litesvm; its entrypoint clashes with ours when linking tests.
+spl-token = { version = "9", features = ["no-entrypoint"] }
 
 [[test]]
 name = "litesvm"
