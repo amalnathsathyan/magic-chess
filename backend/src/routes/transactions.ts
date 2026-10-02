@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { PublicKey } from "@solana/web3.js";
 import { config } from "../config.js";
-import { verifyPrivyAccessToken } from "../services/privyAuth.js";
+import { PrivyAuthError, verifyPrivyAccessToken } from "../services/privyAuth.js";
 import {
   SolanaSponsorService,
   SponsorError,
@@ -72,16 +72,22 @@ async function verifyRequestToken(token: string) {
     });
   } catch (cause) {
     const reason = cause instanceof Error ? cause.message : String(cause);
+    const kind = cause instanceof PrivyAuthError ? cause.kind : "config";
     console.warn("Privy access token rejected", {
       reason,
+      kind,
       appId: config.sponsor.privyAppId,
       verification: config.sponsor.privyJwtVerificationKey ? "pem-key" : "jwks",
     });
-    throw new SponsorError(
-      `Privy access token is invalid or expired (${reason})`,
-      401,
-      "unauthorized"
-    );
+    // The backend couldn't check the token at all: not the player's fault.
+    if (kind === "config") {
+      throw new SponsorError(
+        `Gas sponsorship can't check Privy sign-ins right now: ${reason}`,
+        503,
+        "sponsor_unavailable"
+      );
+    }
+    throw new SponsorError(`Privy access token rejected: ${reason}`, 401, "unauthorized");
   }
 }
 

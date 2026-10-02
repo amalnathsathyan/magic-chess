@@ -8,6 +8,10 @@ const required = (key: string): string => {
   return val;
 };
 
+/** Dashboard-pasted values often pick up stray whitespace or wrapping quotes. */
+const cleanEnv = (key: string): string =>
+  (process.env[key] ?? "").trim().replace(/^(["'])([\s\S]*)\1$/, "$2").trim();
+
 const nodeEnv = process.env.NODE_ENV || "development";
 const port = Number(process.env.PORT || "3001");
 if (!Number.isInteger(port) || port < 1 || port > 65_535) {
@@ -67,11 +71,10 @@ export const config = {
   sponsor: {
     feePayerAddress: process.env.SOLANA_FEE_PAYER_ADDRESS || "",
     feePayerPrivateKey: process.env.SOLANA_FEE_PAYER_PRIVATE_KEY || "",
-    privyAppId: process.env.PRIVY_APP_ID || "",
-    privyJwtVerificationKey:
-      process.env.PRIVY_JWT_VERIFICATION_KEY?.replace(/\\n/g, "\n") || "",
+    privyAppId: cleanEnv("PRIVY_APP_ID"),
+    privyJwtVerificationKey: cleanEnv("PRIVY_JWT_VERIFICATION_KEY").replace(/\\n/g, "\n"),
     // Defaults to the app's JWKS endpoint when no PEM key is configured.
-    privyJwksUrl: process.env.PRIVY_JWKS_URL || "",
+    privyJwksUrl: cleanEnv("PRIVY_JWKS_URL"),
     requestsPerMinute: Number(process.env.SPONSOR_REQUESTS_PER_MINUTE || "10"),
     // Match/session creations per Privy user per hour (rent-heavy).
     costlyPerHour: Number(process.env.SPONSOR_COSTLY_PER_HOUR || "12"),

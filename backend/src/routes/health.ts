@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { checkDbReadiness } from "../db/pool.js";
 import { config } from "../config.js";
 import { getCacheSize, getSweepStats } from "../services/boardCache.js";
+import { privyJwksUrl } from "../services/privyAuth.js";
 import type { MatchRealtimeHub } from "../services/matchRealtime.js";
 
 export function healthRoutes(
@@ -39,6 +40,9 @@ export function healthRoutes(
           : config.sponsor.privyAppId
             ? "jwks"
             : "not-configured",
+        privyJwksUrl: config.sponsor.privyAppId
+          ? config.sponsor.privyJwksUrl || privyJwksUrl(config.sponsor.privyAppId)
+          : null,
         sponsorFeePayer: config.sponsor.feePayerAddress || null,
       },
       realtime: realtime?.stats() ?? {
