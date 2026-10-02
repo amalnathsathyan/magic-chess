@@ -226,8 +226,9 @@ export function SolanaProgramProvider({
     const embeddedWallet = solanaWallet
       ? isPrivyEmbeddedWallet(solanaWallet)
       : false;
-    const backendSponsored =
-      embeddedWallet && solanaConfig.sponsorMode === "backend";
+    // The backend fee payer covers every wallet, embedded or external;
+    // players only ever pay their wager.
+    const backendSponsored = solanaConfig.sponsorMode === "backend";
     if (backendSponsored) baseProvider.sponsorPayer = getBackendFeePayer();
 
     // Anchor normally prepares fee payer + blockhash inside sendAndConfirm.

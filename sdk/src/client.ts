@@ -83,6 +83,15 @@ export class MagicChessClient {
     instruction: TransactionInstruction
   ): Promise<TransactionSignature> {
     const wallet = this.requireWallet("Transaction submission");
+    // Base-layer sends go through the provider so a configured gas sponsor
+    // pays the fee; rollup transactions are free and go straight to the ER.
+    const provider = this.program.provider;
+    if (connection === this.baseConnection && provider.sendAndConfirm) {
+      return provider.sendAndConfirm(new Transaction().add(instruction), [], {
+        commitment: "confirmed",
+        preflightCommitment: "confirmed",
+      });
+    }
     const latest = await connection.getLatestBlockhash("confirmed");
     const transaction = new Transaction({
       feePayer: wallet.publicKey,

@@ -551,3 +551,95 @@ test("rejects ATA rent for an unrelated owner", () => {
     )
   );
 });
+
+test("accepts a session token bundled with initialize_match", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const sessionSigner = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    initializeInstruction(sponsor.publicKey, player.publicKey, mint),
+    createSessionInstruction({
+      sponsor: sponsor.publicKey,
+      player: player.publicKey,
+      sessionSigner: sessionSigner.publicKey,
+      validUntil: BigInt(Math.floor(Date.now() / 1000) + 23 * 60 * 60),
+    })
+  );
+
+  const analyzed = analyzeSponsoredTransaction(
+    serializePartiallySigned(transaction, player, [sessionSigner]),
+    policy(sponsor.publicKey, player.publicKey, mint)
+  );
+  assert.equal(analyzed.costly, true);
+});
+
+test("rejects a session token bundled with a non-opening operation", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const sessionSigner = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    delegateInstruction(sponsor.publicKey, player.publicKey),
+    createSessionInstruction({
+      sponsor: sponsor.publicKey,
+      player: player.publicKey,
+      sessionSigner: sessionSigner.publicKey,
+    })
+  );
+
+  assert.throws(
+    () =>
+      validateSponsoredTransaction(
+        serializePartiallySigned(transaction, player, [sessionSigner]),
+        policy(sponsor.publicKey, player.publicKey, mint)
+      ),
+    /cannot be combined/
+  );
+});
+
+test("rejects two session tokens in one match transaction", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const first = Keypair.generate();
+  const second = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    initializeInstruction(sponsor.publicKey, player.publicKey, mint),
+    createSessionInstruction({ sponsor: sponsor.publicKey, player: player.publicKey, sessionSigner: first.publicKey }),
+    createSessionInstruction({ sponsor: sponsor.publicKey, player: player.publicKey, sessionSigner: second.publicKey })
+  );
+
+  assert.throws(
+    () =>
+      validateSponsoredTransaction(
+        serializePartiallySigned(transaction, player, [first, second]),
+        policy(sponsor.publicKey, player.publicKey, mint)
+      ),
+    /cannot be combined/
+  );
+});
+
+test("rejects session tokens valid for more than a day", () => {
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const sessionSigner = Keypair.generate();
+  const mint = Keypair.generate().publicKey;
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    createSessionInstruction({
+      sponsor: sponsor.publicKey,
+      player: player.publicKey,
+      sessionSigner: sessionSigner.publicKey,
+      validUntil: BigInt(Math.floor(Date.now() / 1000) + 25 * 60 * 60),
+    })
+  );
+
+  assert.throws(
+    () =>
+      validateSponsoredTransaction(
+        serializePartiallySigned(transaction, player, [sessionSigner]),
+        policy(sponsor.publicKey, player.publicKey, mint)
+      ),
+    /expiry violates sponsor policy/
+  );
+});
