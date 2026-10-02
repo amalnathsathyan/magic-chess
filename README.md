@@ -12,7 +12,7 @@
 
 <br/>
 
-**🎮 Live Demo:** [arena-dev.chessmagic.workers.dev](https://arena-dev.chessmagic.workers.dev/)
+**🎮 Live Demo:** [arena.chessmagic.workers.dev](https://arena.chessmagic.workers.dev/)
 
 <br/>
 
