@@ -25,6 +25,7 @@ import { PredictionPanel } from "@/components/predictions/PredictionPanel";
 import { useMatchRealtime } from "@/hooks/useMatchRealtime";
 import { useMoveTransactionNotifications } from "@/hooks/useMoveTransactionNotifications";
 import { api, type ApiMatchHistory } from "@/lib/api";
+import { useOnChainMoves } from "@/hooks/useOnChainMoves";
 import { copyToClipboard } from "@/lib/clipboard";
 import { absoluteUrl, playHref, spectateHref } from "@/lib/match-links";
 import { formatRemaining, isSquare, matchToFen, pliesPlayed } from "@/lib/match-board";
@@ -114,14 +115,27 @@ function SpectateView() {
   }, []);
 
   const fen = useMemo(() => (match ? matchToFen(match) : null), [match]);
-  const moves = useMemo(
-    () => history?.moves.map((move) => move.san ?? move.algebraicMove) ?? [],
-    [history]
-  );
-  const lastHistoryMove = history?.moves.at(-1);
+  const chainMoves = useOnChainMoves({
+    matchId,
+    enabled: Boolean(match?.isDelegated),
+    refreshKey: fen,
+  });
+  // Same rule as the player view: the indexer database or the rollup's own
+  // log, whichever lists more moves.
+  const confirmedMoves = useMemo(() => {
+    const historyMoves =
+      history?.moves.map((move) => ({
+        san: move.san ?? move.algebraicMove,
+        from: move.from,
+        to: move.to,
+      })) ?? [];
+    return chainMoves && chainMoves.length > historyMoves.length ? chainMoves : historyMoves;
+  }, [chainMoves, history]);
+  const moves = useMemo(() => confirmedMoves.map((move) => move.san), [confirmedMoves]);
+  const lastConfirmedMove = confirmedMoves.at(-1);
   const lastMove =
-    lastHistoryMove && isSquare(lastHistoryMove.from) && isSquare(lastHistoryMove.to)
-      ? { from: lastHistoryMove.from, to: lastHistoryMove.to }
+    lastConfirmedMove && isSquare(lastConfirmedMove.from) && isSquare(lastConfirmedMove.to)
+      ? { from: lastConfirmedMove.from, to: lastConfirmedMove.to }
       : null;
 
   const whiteAddress = match?.players[0]?.toBase58() ?? history?.whitePlayer ?? null;

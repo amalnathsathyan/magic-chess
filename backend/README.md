@@ -128,8 +128,11 @@ Frontend ──SDK──> Solana L1 / MagicBlock ER
 
 ## Env
 
+Use Supabase's **Session pooler** string (Connect → Session pooler). The
+direct `db.<ref>.supabase.co` host is IPv6-only and Render can't reach it.
+
 ```
-DATABASE_URL=postgresql://postgres:...@db.xxx.supabase.co:5432/postgres
+DATABASE_URL=postgresql://postgres.<ref>:...@aws-0-<region>.pooler.supabase.com:5432/postgres
 RPC_ENDPOINT=https://api.devnet.solana.com
 PROGRAM_ID=FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h
 PORT=3001

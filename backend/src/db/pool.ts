@@ -1,11 +1,20 @@
 import postgres from "postgres";
 import { config } from "../config.js";
 
-// ponytail: single pooled connection, no pgBouncer/HA needed for MVP
+// Supabase's transaction pooler (port 6543) can't hold prepared statements.
+function usesTransactionPooler(url: string): boolean {
+  try {
+    return new URL(url).port === "6543";
+  } catch {
+    return false;
+  }
+}
+
 export const sql = postgres(config.db.url, {
   max: 10,
   idle_timeout: 30,
   connect_timeout: 10,
+  prepare: !usesTransactionPooler(config.db.url),
   transform: postgres.camel,
 });
 

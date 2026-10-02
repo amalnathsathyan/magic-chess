@@ -57,6 +57,7 @@ import { cn } from "@/lib/utils";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { magicBlockTxUrl, solanaDevnetTxUrl } from "@/lib/explorer";
 import { useMoveTransactionNotifications } from "@/hooks/useMoveTransactionNotifications";
+import { useOnChainMoves } from "@/hooks/useOnChainMoves";
 import { syncMoveMade, syncPlayerJoined } from "@/lib/sync";
 import { PlayerRow } from "@/components/chess/PlayerRow";
 import { PredictionPanel } from "@/components/predictions/PredictionPanel";
@@ -120,6 +121,8 @@ function PlayView() {
   const [now, setNow] = useState(() => Date.now());
   const [optimisticFen, setOptimisticFen] = useState<string | null>(null);
   const [optimisticMove, setOptimisticMove] = useState<ChessMove | null>(null);
+  // Confirmed moves listed when the optimistic move was played.
+  const [optimisticBase, setOptimisticBase] = useState(0);
   const [pendingPromotion, setPendingPromotion] = useState<{
     from: Square;
     to: Square;
@@ -187,10 +190,17 @@ function PlayView() {
     return () => window.removeEventListener("resize", resize);
   }, []);
 
+  // The board follows the chain as soon as it changes. The optimistic Moves
+  // entry stays until a move source lists it (see confirmedMoves below).
   useEffect(() => {
     setOptimisticFen(null);
-    setOptimisticMove(null);
   }, [authoritativeFen]);
+
+  const chainMoves = useOnChainMoves({
+    matchId,
+    enabled: Boolean(match?.isDelegated),
+    refreshKey: authoritativeFen,
+  });
 
   const displayFen = optimisticFen ?? authoritativeFen;
   const whiteAddress = match?.players[0].toBase58() ?? null;
@@ -262,18 +272,37 @@ function PlayView() {
       !isBusy
   );
 
-  const historyMoves = history?.moves.map((move) => move.san ?? move.algebraicMove) ?? [];
-  const moves = optimisticMove
-    ? [...historyMoves, optimisticMove.san]
-    : historyMoves;
-  const lastHistoryMove = history?.moves.at(-1);
-  const lastMove = optimisticMove
+  // The indexer database and the rollup's own transaction log both list the
+  // confirmed moves; use whichever is further along, so the list survives the
+  // database being asleep or behind.
+  const historyMoves =
+    history?.moves.map((move) => ({
+      san: move.san ?? move.algebraicMove,
+      from: move.from,
+      to: move.to,
+    })) ?? [];
+  const confirmedMoves =
+    chainMoves && chainMoves.length > historyMoves.length ? chainMoves : historyMoves;
+  const showOptimisticMove = Boolean(
+    optimisticMove &&
+      confirmedMoves.length <= optimisticBase &&
+      (!match || pliesPlayed(match) <= optimisticBase + 1)
+  );
+  const moves = [
+    ...confirmedMoves.map((move) => move.san),
+    ...(showOptimisticMove && optimisticMove ? [optimisticMove.san] : []),
+  ];
+  const lastConfirmedMove = confirmedMoves.at(-1);
+  const lastMove = showOptimisticMove && optimisticMove
     ? { from: optimisticMove.from, to: optimisticMove.to }
-    : lastHistoryMove &&
-        isSquare(lastHistoryMove.from) &&
-        isSquare(lastHistoryMove.to)
-      ? { from: lastHistoryMove.from, to: lastHistoryMove.to }
+    : lastConfirmedMove &&
+        isSquare(lastConfirmedMove.from) &&
+        isSquare(lastConfirmedMove.to)
+      ? { from: lastConfirmedMove.from, to: lastConfirmedMove.to }
       : null;
+  const moveListBehind = Boolean(
+    match && !showOptimisticMove && confirmedMoves.length < pliesPlayed(match)
+  );
 
   const resetTransaction = () => {
     setTxStatus("idle");
@@ -488,6 +517,7 @@ function PlayView() {
 
     setOptimisticFen(chess.fen());
     setOptimisticMove(move);
+    setOptimisticBase(confirmedMoves.length);
     resetTransaction();
     setTxStatus("submitting");
     try {
@@ -1003,7 +1033,7 @@ function PlayView() {
                   }
                   className="min-h-56"
                 />
-                {historyUnavailable ? (
+                {(historyUnavailable && !chainMoves) || moveListBehind ? (
                   <p className="text-xs text-muted-foreground">
                     Move list is catching up. The board always comes straight from the on-chain match.
                   </p>

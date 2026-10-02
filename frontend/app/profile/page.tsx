@@ -67,6 +67,25 @@ function formatMatchDate(value: string): string {
   }).format(date);
 }
 
+function emptyStats(playerPubkey: string): ApiPlayerStats {
+  return {
+    playerPubkey,
+    totalGames: 0,
+    wins: 0,
+    losses: 0,
+    draws: 0,
+    winRate: 0,
+    winsByCheckmate: 0,
+    winsByResignation: 0,
+    winsByTimeout: 0,
+    currentStreak: 0,
+    longestWinStreak: 0,
+    totalWagered: "0",
+    totalWon: "0",
+    lastGameAt: null,
+  };
+}
+
 function ProfileSkeleton() {
   return (
     <div className="space-y-8" aria-label="Loading player profile">
@@ -113,14 +132,21 @@ export default function ProfilePage() {
     setLoading(true);
     setError(null);
     try {
-      const [statsResponse, matchesResponse] = await Promise.all([
+      // Show whichever half loaded; only fail when neither did.
+      const [statsResult, matchesResult] = await Promise.allSettled([
         api.getPlayerStats(walletAddress),
         api.getPlayerMatches(walletAddress, { page: 1, limit: 20 }),
       ]);
-      setStats(statsResponse);
-      setMatches(matchesResponse.matches);
-    } catch {
-      setError("We couldn't load this wallet's player activity.");
+      if (statsResult.status === "rejected" && matchesResult.status === "rejected") {
+        setError("We couldn't load this wallet's player activity.");
+        return;
+      }
+      setStats(
+        statsResult.status === "fulfilled"
+          ? statsResult.value
+          : emptyStats(walletAddress)
+      );
+      setMatches(matchesResult.status === "fulfilled" ? matchesResult.value.matches : []);
     } finally {
       setLoading(false);
     }
@@ -259,7 +285,9 @@ export default function ProfilePage() {
           </div>
 
           {/* ── Empty state for new players ── */}
-          {stats.totalGames === 0 ? (
+          {/* Stats only count finished games, so a player whose first match
+              is still running has matches but no stats yet. */}
+          {stats.totalGames === 0 && matches.length === 0 ? (
             <div className="glass-card flex flex-col items-center gap-4 px-6 py-14 text-center">
               <div className="flex h-14 w-14 items-center justify-center rounded-full border border-muted-foreground/20 bg-muted/30">
                 <Sword className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
