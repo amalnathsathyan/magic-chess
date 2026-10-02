@@ -237,7 +237,7 @@ export function ChessBoard({
           darkSquareStyle: { backgroundColor: "#1e1e1e" }, // dark charcoal
           lightSquareStyle: { backgroundColor: "#404040" }, // dark gray
           squareStyles,
-          arrows: arrows as any,
+          arrows,
         }}
       />
     </div>

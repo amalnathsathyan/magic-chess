@@ -246,7 +246,7 @@ function SpectateView() {
                   href={playHref(matchId)}
                   className="text-sm font-medium text-primary hover:underline"
                 >
-                  You're playing this game — open the player view
+                  You&apos;re playing this game — open the player view
                 </Link>
               ) : null}
             </section>

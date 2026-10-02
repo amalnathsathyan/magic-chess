@@ -46,7 +46,7 @@ export function OpenSource() {
             Built for the Ecosystem
           </h2>
           <p className="mt-3 font-body text-muted-foreground max-w-2xl mx-auto">
-            Magic Chess isn't just a game. It's a robust, open-source reference implementation for high-performance on-chain applications using Ephemeral Rollups.
+            Magic Chess isn&apos;t just a game. It&apos;s a robust, open-source reference implementation for high-performance on-chain applications using Ephemeral Rollups.
           </p>
         </motion.div>
 

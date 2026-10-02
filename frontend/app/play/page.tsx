@@ -901,7 +901,7 @@ function PlayView() {
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           Approve once: a temporary key that can only move your pieces in this game
-                          signs each move, so there's no popup per move.
+                          signs each move, so there&apos;s no popup per move.
                         </p>
                         {sessionError ? (
                           <p className="mt-2 text-xs text-destructive">{sessionError}</p>

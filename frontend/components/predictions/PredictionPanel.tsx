@@ -226,7 +226,7 @@ export function PredictionPanel({
           {totalOpen > 0
             ? `Spectators have ${totalOpen.toLocaleString()} points riding on upcoming moves (${nextPool.toLocaleString()} on the next one).`
             : "Spectators can predict your upcoming moves with play points."}{" "}
-          Players can't predict their own game.
+          Players can&apos;t predict their own game.
         </p>
       </section>
     );
