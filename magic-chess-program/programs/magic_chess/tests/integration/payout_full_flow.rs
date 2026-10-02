@@ -261,6 +261,8 @@ fn ix_move(p: &Pubkey, cm: &Pubkey, fr: u8, fc: u8, tr: u8, tc: u8, promo: Optio
     match promo { Some(pp) => { d.push(1u8); d.push(pp); } None => { d.push(0u8); } }
     Instruction { program_id: program_id(), accounts: vec![
         AccountMeta::new(*cm, false), AccountMeta::new(*p, true),
+        // Omitted optional session_token: Anchor's sentinel is the program id.
+        AccountMeta::new_readonly(program_id(), false),
     ], data: d }
 }
 
