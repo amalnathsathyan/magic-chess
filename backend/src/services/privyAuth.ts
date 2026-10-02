@@ -59,10 +59,30 @@ const jwksCache = new Map<string, JWTVerifyGetKey>();
 function jwksFor(url: string): JWTVerifyGetKey {
   let keySet = jwksCache.get(url);
   if (!keySet) {
-    keySet = createRemoteJWKSet(new URL(url), {
+    const remote = createRemoteJWKSet(new URL(url), {
       timeoutDuration: 10_000,
       [customFetch]: fetchJwks,
     });
+    // Only failing to fetch or read the key set is the backend's problem;
+    // picking a key for the token is about the token, so that passes through.
+    keySet = async (header, token) => {
+      try {
+        return await remote(header, token);
+      } catch (error) {
+        if (
+          error instanceof errors.JWKSNoMatchingKey ||
+          error instanceof errors.JWKSMultipleMatchingKeys
+        ) {
+          throw error;
+        }
+        throw new PrivyAuthError(
+          error instanceof errors.JWKSTimeout
+            ? `timed out loading Privy's signing keys at ${url}`
+            : `couldn't load Privy's signing keys at ${url} (${describeFailure(error)})`,
+          "config"
+        );
+      }
+    };
     jwksCache.set(url, keySet);
   }
   return keySet;
@@ -101,10 +121,7 @@ function explain(error: unknown, source: string, kid?: string): PrivyAuthError {
       "key"
     );
   }
-  if (error instanceof errors.JWKSTimeout) {
-    return new PrivyAuthError(`timed out loading ${source}`, "config");
-  }
-  return new PrivyAuthError(`couldn't load ${source} (${describeFailure(error)})`, "config");
+  return new PrivyAuthError(`the sign-in token was rejected (${describeFailure(error)})`);
 }
 
 /**
@@ -152,17 +169,42 @@ export async function verifyPrivyAccessToken(
     algorithms: [PRIVY_ALGORITHM],
     issuer: PRIVY_ISSUER,
     audience: appId,
+    requiredClaims: ["exp", "iat", "sub", "sid"],
+  };
+  const verifyAgainst = async (key: CryptoKey | JWTVerifyGetKey) => {
+    if (typeof key !== "function") return jwtVerify(token, key, verifyOptions);
+    try {
+      return await jwtVerify(token, key, verifyOptions);
+    } catch (error) {
+      if (!(error instanceof errors.JWKSMultipleMatchingKeys)) throw error;
+      // No kid and several candidate keys (e.g. mid-rotation): try each.
+      for await (const candidate of error) {
+        try {
+          return await jwtVerify(token, candidate, verifyOptions);
+        } catch (inner) {
+          if (!(inner instanceof errors.JWSSignatureVerificationFailed)) throw inner;
+        }
+      }
+      throw new errors.JWSSignatureVerificationFailed();
+    }
   };
   const verifyWith = async (key: CryptoKey | JWTVerifyGetKey, source: string) => {
     try {
-      const { payload } =
-        typeof key === "function"
-          ? await jwtVerify(token, key, verifyOptions)
-          : await jwtVerify(token, key, verifyOptions);
-      if (typeof payload.sub !== "string" || typeof payload.sid !== "string") {
-        throw new PrivyAuthError("the sign-in token is missing its user or session");
+      const { payload } = await verifyAgainst(key);
+      // The same shape checks Privy's server SDK applies.
+      const { aud, exp, iat, sub, sid } = payload;
+      if (
+        aud !== appId ||
+        typeof exp !== "number" ||
+        typeof iat !== "number" ||
+        typeof sub !== "string" ||
+        !sub ||
+        typeof sid !== "string" ||
+        !sid
+      ) {
+        throw new PrivyAuthError("the sign-in token's claims aren't a Privy access token's");
       }
-      return { userId: payload.sub, sessionId: payload.sid, appId };
+      return { userId: sub, sessionId: sid, appId };
     } catch (error) {
       throw explain(error, source, kid);
     }
