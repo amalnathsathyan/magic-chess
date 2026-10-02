@@ -30,7 +30,7 @@ jobs:
         run: cargo test -p magic_chess --lib
 
       - name: Build program (.so for LiteSVM)
-        run: cargo build-sbf --tools-version v1.52
+        run: cargo build-sbf --tools-version v1.52 --arch v0
 
       - name: LiteSVM integration tests
         run: cargo test -p magic_chess -- litesvm
