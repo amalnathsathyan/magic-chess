@@ -74,13 +74,16 @@ export function matchRoutes(app: FastifyInstance): void {
           match_id, white_player, black_player, game_status,
           total_pot, betting_token_mint, created_at, last_move_at,
           game_end_reason, move_timeout_seconds, current_fen,
-          bet_amount_per_player,
+          bet_amount_per_player, started_at, ended_at,
+          white_rating, black_rating, white_rating_change, black_rating_change,
+          (SELECT display_name FROM player_profiles p WHERE p.wallet = matches.white_player) AS white_name,
+          (SELECT display_name FROM player_profiles p WHERE p.wallet = matches.black_player) AS black_name,
           (SELECT COUNT(*) FROM moves WHERE moves.match_id = matches.match_id) AS move_count,
           (SELECT COUNT(*) FROM move_bets b
              WHERE b.match_id = matches.match_id AND b.status = 'open') AS open_predictions
         FROM matches
         ${where}
-        ORDER BY last_move_at DESC
+        ORDER BY ${status === "Completed" ? "ended_at DESC NULLS LAST," : ""} last_move_at DESC
         LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
         [...params, effectiveLimit, offset]
       );
@@ -100,6 +103,14 @@ export function matchRoutes(app: FastifyInstance): void {
         moveCount: Number(row.moveCount ?? 0),
         betAmountPerPlayer: String(row.betAmountPerPlayer ?? "0"),
         openPredictions: Number(row.openPredictions ?? 0),
+        startedAt: row.startedAt ?? null,
+        endedAt: row.endedAt ?? null,
+        whiteName: row.whiteName ?? null,
+        blackName: row.blackName ?? null,
+        whiteRating: row.whiteRating ?? null,
+        blackRating: row.blackRating ?? null,
+        whiteRatingChange: row.whiteRatingChange ?? null,
+        blackRatingChange: row.blackRatingChange ?? null,
       }));
 
       reply.send({
@@ -167,7 +178,16 @@ export function matchRoutes(app: FastifyInstance): void {
 
       // Verify match exists
       const match = await sql`
-        SELECT match_id, white_player, black_player FROM matches
+        SELECT
+          match_id, white_player, black_player, game_status, game_end_reason,
+          betting_token_mint, bet_amount_per_player, total_pot, move_timeout_seconds,
+          created_at, started_at, ended_at, payout_processed, current_fen,
+          white_rating, black_rating, white_rating_change, black_rating_change,
+          (SELECT display_name FROM player_profiles p WHERE p.wallet = m.white_player) AS white_name,
+          (SELECT display_name FROM player_profiles p WHERE p.wallet = m.black_player) AS black_name,
+          (SELECT avatar FROM player_profiles p WHERE p.wallet = m.white_player) AS white_avatar,
+          (SELECT avatar FROM player_profiles p WHERE p.wallet = m.black_player) AS black_avatar
+        FROM matches m
         WHERE match_id = ${matchId}
       `;
       if (match.length === 0) {
@@ -178,7 +198,8 @@ export function matchRoutes(app: FastifyInstance): void {
         SELECT
           move_number, player_color, player_pubkey,
           algebraic_move, from_row, from_col, to_row, to_col,
-          fen_after_move, is_check, is_checkmate, is_stalemate
+          fen_after_move, is_check, is_checkmate, is_stalemate,
+          COALESCE(confirmed_at, indexed_at) AS played_at
         FROM moves
         WHERE match_id = ${matchId}
         ORDER BY move_number ASC
@@ -198,10 +219,34 @@ export function matchRoutes(app: FastifyInstance): void {
         return san;
       });
 
+      const meta = match[0] as Record<string, unknown>;
       reply.send({
         matchId,
-        whitePlayer: match[0].whitePlayer,
-        blackPlayer: match[0].blackPlayer,
+        whitePlayer: meta.whitePlayer,
+        blackPlayer: meta.blackPlayer,
+        gameStatus: meta.gameStatus,
+        gameEndReason: meta.gameEndReason ?? null,
+        bettingTokenMint: meta.bettingTokenMint,
+        betAmountPerPlayer: String(meta.betAmountPerPlayer ?? "0"),
+        totalPot: String(meta.totalPot ?? "0"),
+        moveTimeoutSeconds: String(meta.moveTimeoutSeconds ?? "0"),
+        createdAt: meta.createdAt,
+        startedAt: meta.startedAt ?? null,
+        endedAt: meta.endedAt ?? null,
+        payoutProcessed: meta.payoutProcessed,
+        finalFen: meta.currentFen ?? null,
+        white: {
+          name: meta.whiteName ?? null,
+          avatar: meta.whiteAvatar ?? null,
+          rating: meta.whiteRating ?? null,
+          ratingChange: meta.whiteRatingChange ?? null,
+        },
+        black: {
+          name: meta.blackName ?? null,
+          avatar: meta.blackAvatar ?? null,
+          rating: meta.blackRating ?? null,
+          ratingChange: meta.blackRatingChange ?? null,
+        },
         moves: moves.map((m: Record<string, unknown>, index: number) => ({
           moveNumber: m.moveNumber,
           san: sans[index] ?? m.algebraicMove,
@@ -214,6 +259,7 @@ export function matchRoutes(app: FastifyInstance): void {
           isCheck: m.isCheck,
           isCheckmate: m.isCheckmate,
           isStalemate: m.isStalemate,
+          playedAt: m.playedAt ?? null,
         })),
         totalMoves: moves.length,
       });

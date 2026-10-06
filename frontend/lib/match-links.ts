@@ -15,3 +15,13 @@ export function absoluteUrl(path: string): string {
   if (typeof window === "undefined") return path;
   return new URL(path, window.location.origin).toString();
 }
+
+/** Finished games open in the review page: final board, moves and replay. */
+export function reviewHref(matchId: string, ply?: number): string {
+  const base = `/review?id=${encodeURIComponent(matchId)}`;
+  return ply === undefined ? base : `${base}&ply=${ply}`;
+}
+
+export function profileHref(wallet: string): string {
+  return `/profile?address=${encodeURIComponent(wallet)}`;
+}

@@ -8,6 +8,7 @@ import { useWallets } from "@privy-io/react-auth/solana";
 import { useMatches, usePlayerMatches } from "@magic-chess/sdk/react";
 import { GameStatus, type MatchInfo } from "@magic-chess/sdk";
 import { LiveGames } from "@/components/lobby/LiveGames";
+import { RecentGames } from "@/components/lobby/RecentGames";
 import { api, type ApiMatch } from "@/lib/api";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
 import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
@@ -195,10 +196,10 @@ export default function ArenaPage() {
       >
         <div>
           <div className="flex items-baseline gap-3">
-            <h1 className="font-heading text-3xl font-bold">Live lobby</h1>
+            <h1 className="font-display text-4xl sm:text-5xl">Lobby</h1>
           </div>
           <p className="mt-1 text-muted-foreground">
-            Join an open on-chain match or create your own.
+            Join an open match or create your own. Every move goes on the record.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -235,15 +236,15 @@ export default function ArenaPage() {
       <section className="mb-8" aria-labelledby="live-games-heading">
         <h2
           id="live-games-heading"
-          className="mb-3 flex items-center gap-2 font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+          className="mb-3 flex items-center gap-2 label"
         >
-          <span className="h-2 w-2 animate-pulse rounded-full bg-red-400" aria-hidden="true" />
-          Live now — watch &amp; predict
+          <span className="h-2 w-2 animate-pulse rounded-full bg-primary" aria-hidden="true" />
+          Live now · watch &amp; predict
         </h2>
         <LiveGames excludePlayer={walletAddress} />
       </section>
 
-      <h2 className="mb-3 font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+      <h2 className="mb-3 label">
         Open matches
       </h2>
 
@@ -336,7 +337,9 @@ export default function ArenaPage() {
         </div>
       )}
 
-      {/* ── Your Matches (Live + Past) ── */}
+      <RecentGames walletAddress={walletAddress} />
+
+      {/* ── Your live matches ── */}
       {walletAddress && (
         <section className="mt-10">
           {/* Tab bar */}
@@ -353,7 +356,7 @@ export default function ArenaPage() {
               <Activity className="h-4 w-4" aria-hidden="true" />
               Live matches
               {!playerMatchesLoading && (
-                <span className="rounded-full bg-accent/20 px-2 py-0.5 text-xs text-accent">
+                <span className=" bg-accent/20 px-2 py-0.5 text-xs text-accent">
                   {playerMatches.filter((m) => m.gameStatus === GameStatus.Active).length}
                 </span>
               )}
@@ -370,7 +373,7 @@ export default function ArenaPage() {
               <History className="h-4 w-4" aria-hidden="true" />
               Your past matches
               {!playerMatchesLoading && (
-                <span className="rounded-full bg-muted px-2 py-0.5 text-xs">
+                <span className=" bg-muted px-2 py-0.5 text-xs">
                   {playerMatches.filter((m) => m.gameStatus !== GameStatus.WaitingForOpponent && m.gameStatus !== GameStatus.Active).length}
                 </span>
               )}

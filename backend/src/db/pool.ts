@@ -22,7 +22,7 @@ export async function checkDbReadiness(): Promise<boolean> {
   try {
     const rows = await sql`
       SELECT EXISTS (
-        SELECT 1 FROM _migrations WHERE name = '006_move_predictions'
+        SELECT 1 FROM _migrations WHERE name = '007_profiles_ratings_history'
       ) AS ready
     `;
     return rows[0]?.ready === true;

@@ -834,7 +834,7 @@ function PlayView() {
                     <h1 id="match-heading" className="truncate font-heading text-sm font-semibold">
                       #{match.matchId}
                     </h1>
-                    <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
+                    <span className="shrink-0 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
                       {statusLabel(match.gameStatus)}
                     </span>
                   </div>
@@ -858,7 +858,7 @@ function PlayView() {
                       </dt>
                       <dd className={cn(
                         "font-mono font-bold tabular-nums",
-                        remainingMilliseconds !== null && formatRemaining(remainingMilliseconds).isLow && "animate-pulse text-red-400"
+                        remainingMilliseconds !== null && formatRemaining(remainingMilliseconds).isLow && "animate-pulse text-primary"
                       )}>
                         {remainingMilliseconds !== null
                           ? formatRemaining(remainingMilliseconds).text

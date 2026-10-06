@@ -71,8 +71,8 @@ export function LiveGames({ excludePlayer }: { excludePlayer?: string | null }) 
           </div>
           <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
             <div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-400">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" aria-hidden="true" />
+              <span className="inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" aria-hidden="true" />
                 LIVE · move {Math.ceil((game.moveCount + 1) / 2)}
               </span>
               <p className="mt-2 truncate font-mono text-xs">
@@ -83,7 +83,7 @@ export function LiveGames({ excludePlayer }: { excludePlayer?: string | null }) 
               </p>
             </div>
             <div className="flex items-center justify-between gap-2 text-xs">
-              <span className="inline-flex items-center gap-1 text-amber-300/90">
+              <span className="inline-flex items-center gap-1 text-accent/90">
                 <Sparkles className="h-3 w-3" aria-hidden="true" />
                 {game.openPredictions ?? 0} predictions
               </span>

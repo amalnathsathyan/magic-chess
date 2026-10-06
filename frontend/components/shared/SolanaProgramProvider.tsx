@@ -311,7 +311,7 @@ export function SolanaProgramProvider({
           uiOptions: {
             showWalletUIs: true,
             description: sponsored
-              ? "Magic Chess is sponsoring this Solana devnet transaction."
+              ? "ZUG is sponsoring this Solana devnet transaction."
               : "Review this Solana devnet transaction in your wallet.",
           },
         },

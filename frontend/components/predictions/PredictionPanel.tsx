@@ -72,7 +72,7 @@ function statusBadge(bet: MyBet, locked: boolean) {
       return <span className="text-muted-foreground">Refunded</span>;
     default:
       return locked ? (
-        <span className="inline-flex items-center gap-1 text-amber-300">
+        <span className="inline-flex items-center gap-1 text-accent">
           <Lock className="h-3.5 w-3.5" aria-hidden="true" />
           Settling
         </span>
@@ -194,20 +194,21 @@ export function PredictionPanel({
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2">
         <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
-        <h2 className="font-heading text-sm font-semibold">Predict the moves</h2>
+        <h2 className="font-heading text-sm font-semibold">Predict</h2>
+        <span className="stage-tag text-accent">Preview · play points</span>
         {isActive ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-400">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" aria-hidden="true" />
+          <span className="inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" aria-hidden="true" />
             LIVE
           </span>
         ) : null}
       </div>
       {balance !== null ? (
         <span
-          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card/60 px-2.5 py-1 font-mono text-xs"
+          className="inline-flex items-center gap-1.5 border border-border bg-card/60 px-2.5 py-1 font-mono text-xs"
           title="Play points — no real money"
         >
-          <Coins className="h-3.5 w-3.5 text-amber-300" aria-hidden="true" />
+          <Coins className="h-3.5 w-3.5 text-accent" aria-hidden="true" />
           {balance.toLocaleString()} pts
         </span>
       ) : null}
@@ -284,7 +285,7 @@ export function PredictionPanel({
                 {mine ? <span className="ml-1 text-primary">●</span> : null}
               </span>
               <span className="block font-mono text-[11px]">{plyLabel(ply)}</span>
-              <span className="block font-mono text-[11px] text-amber-300/80">{pool} pts</span>
+              <span className="block font-mono text-[11px] text-accent/80">{pool} pts</span>
             </button>
           );
         })}
@@ -420,7 +421,7 @@ export function PredictionPanel({
                 className={cn(
                   "min-w-12 rounded-md border px-2 py-1 font-mono text-xs transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-40",
                   stake === value
-                    ? "border-amber-300/60 bg-amber-300/10 text-amber-200"
+                    ? "border-accent/60 bg-accent/10 text-accent"
                     : "border-border hover:bg-card"
                 )}
               >
@@ -447,7 +448,7 @@ export function PredictionPanel({
               : !session.token
                 ? "Start predicting (free signature)"
                 : pickValid
-                  ? `Predict ${normalizedPick} · ${stake} pts · win ≈${Math.floor(stake * multiplier)}`
+                  ? `Predict ${normalizedPick} · ${stake} pts · pays ≈${Math.floor(stake * multiplier)}`
                   : "Pick a move"}
           </button>
         </>

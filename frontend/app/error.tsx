@@ -12,7 +12,7 @@ export default function Error({
   return (
     <div className="flex min-h-[calc(100vh-65px)] items-center justify-center px-4">
       <div className="glass-card flex max-w-md flex-col items-center gap-4 px-6 py-12 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full border border-destructive/20 bg-destructive/10">
+        <div className="flex h-14 w-14 items-center justify-center border border-destructive/20 bg-destructive/10">
           <AlertTriangle className="h-7 w-7 text-destructive" aria-hidden="true" />
         </div>
         <div className="space-y-1">

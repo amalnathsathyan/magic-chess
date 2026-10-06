@@ -32,17 +32,17 @@ export function TransactionStatus({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         className={cn(
-          "glass-card flex items-start gap-3 p-4 shadow-xl border-white/10 bg-[#14141f]/80 backdrop-blur-xl",
-          status === "success" && "border-emerald-500/30 shadow-[0_4px_20px_rgba(0,230,118,0.15)]",
+          "glass-card flex items-start gap-3 p-4 border-border bg-card",
+          status === "success" && "border-success/30",
           status === "error" && "border-destructive/30 shadow-[0_4px_20px_rgba(239,68,68,0.15)]",
           className
         )}
       >
         <div className="mt-0.5">
           {status === "submitting" || status === "confirming" ? (
-            <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
+            <Loader2 className="h-5 w-5 animate-spin text-success" />
           ) : status === "success" ? (
-            <CheckCircle className="h-5 w-5 text-emerald-400" />
+            <CheckCircle className="h-5 w-5 text-success" />
           ) : status === "error" ? (
             <XCircle className="h-5 w-5 text-destructive" />
           ) : null}
@@ -63,7 +63,7 @@ export function TransactionStatus({
               href={explorerHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-white/5 px-2 py-1 text-xs font-mono font-medium text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-card-hover px-2 py-1 text-xs font-mono font-medium text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               {signature.slice(0, 8)}...{signature.slice(-8)}
@@ -74,7 +74,7 @@ export function TransactionStatus({
         {onDismiss && (status === "success" || status === "error") && (
           <button
             onClick={onDismiss}
-            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground"
           >
             <X className="h-4 w-4" />
           </button>

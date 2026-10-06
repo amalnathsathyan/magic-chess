@@ -1,505 +1,558 @@
 "use client";
 
-import { useAppLogin } from "@/hooks/useAppLogin";
-import { playHref } from "@/lib/match-links";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   ArrowLeft,
   Check,
   Copy,
   Crown,
-  ExternalLink,
   Flame,
-  LoaderCircle,
   LogIn,
+  Pencil,
   RefreshCw,
   Sword,
   TrendingUp,
-  User,
+  Trophy,
   Wallet,
 } from "lucide-react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useWallets } from "@privy-io/react-auth/solana";
 import { toast } from "sonner";
+import { FinishedGameCard } from "@/components/lobby/FinishedGameCard";
+import { ProfileEditor } from "@/components/profile/ProfileEditor";
+import { RatingChart } from "@/components/profile/RatingChart";
+import { PlayerAvatar } from "@/components/shared/PlayerAvatar";
+import { useAppLogin } from "@/hooks/useAppLogin";
 import {
   api,
-  type ApiMatch,
-  type ApiPlayerStats,
+  type ApiOutcome,
+  type ApiPlayerMatch,
+  type ApiPlayerProfile,
+  type ApiTally,
 } from "@/lib/api";
+import { formatEndReason, timeAgo } from "@/lib/game-result";
+import { playHref, spectateHref } from "@/lib/match-links";
+import { playerLabel } from "@/lib/players";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
-import { shortenAddress } from "@/lib/chess";
 import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
 import { cn } from "@/lib/utils";
 
-type PlayerMatch = ApiMatch & { playerColor: string };
-type MatchResult = "win" | "loss" | "draw" | "pending";
+const FILTERS = [
+  { key: "all", label: "All" },
+  { key: "win", label: "Wins" },
+  { key: "loss", label: "Losses" },
+  { key: "draw", label: "Draws" },
+] as const;
 
-function normalizedStatus(status: string): string {
-  return status.replace(/[_\s-]/g, "").toLowerCase();
-}
-
-function getMatchResult(match: PlayerMatch): MatchResult {
-  const status = normalizedStatus(match.gameStatus);
-  if (status === "draw") return "draw";
-  if (status === "whitewins") {
-    return match.playerColor.toLowerCase() === "white" ? "win" : "loss";
-  }
-  if (status === "blackwins") {
-    return match.playerColor.toLowerCase() === "black" ? "win" : "loss";
-  }
-  return "pending";
-}
-
-function isTerminalStatus(status: string): boolean {
-  return ["whitewins", "blackwins", "draw", "aborted"].includes(
-    normalizedStatus(status)
-  );
-}
-
-function formatMatchDate(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Date unavailable";
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(date);
-}
-
-function emptyStats(playerPubkey: string): ApiPlayerStats {
-  return {
-    playerPubkey,
-    totalGames: 0,
-    wins: 0,
-    losses: 0,
-    draws: 0,
-    winRate: 0,
-    winsByCheckmate: 0,
-    winsByResignation: 0,
-    winsByTimeout: 0,
-    currentStreak: 0,
-    longestWinStreak: 0,
-    totalWagered: "0",
-    totalWon: "0",
-    lastGameAt: null,
-  };
-}
-
-function ProfileSkeleton() {
-  return (
-    <div className="space-y-8" aria-label="Loading player profile">
-      {/* Profile header skeleton */}
-      <div className="space-y-6">
-        <div className="flex items-center gap-4">
-          <div className="h-16 w-16 shrink-0 animate-pulse rounded-full bg-muted" />
-          <div className="flex-1 space-y-2">
-            <div className="h-7 w-28 animate-pulse rounded bg-muted" />
-            <div className="h-4 w-40 animate-pulse rounded bg-muted" />
-          </div>
-        </div>
-        <div className="glass-card h-16 animate-pulse" />
-      </div>
-      {/* Stats cards skeleton */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="glass-card h-32 animate-pulse" />
-        ))}
-      </div>
-      {/* Match history skeleton */}
-      <div className="space-y-3">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <div key={index} className="glass-card h-20 animate-pulse" />
-        ))}
-      </div>
-    </div>
-  );
-}
+type Filter = (typeof FILTERS)[number]["key"];
 
 export default function ProfilePage() {
+  return (
+    <Suspense fallback={<ProfileSkeleton />}>
+      <ProfileView />
+    </Suspense>
+  );
+}
+
+function ProfileView() {
+  const requested = useSearchParams().get("address");
   const { ready, authenticated } = usePrivy();
   const login = useAppLogin();
   const { ready: walletsReady, wallets } = useWallets();
-  const walletAddress = selectSolanaWallet(wallets)?.address ?? null;
-  const [stats, setStats] = useState<ApiPlayerStats | null>(null);
-  const [matches, setMatches] = useState<PlayerMatch[]>([]);
+  const myWallet = selectSolanaWallet(wallets)?.address ?? null;
+  const wallet = requested ?? myWallet;
+  const isOwnProfile = Boolean(wallet && wallet === myWallet);
+
+  const [profile, setProfile] = useState<ApiPlayerProfile | null>(null);
+  const [matches, setMatches] = useState<ApiPlayerMatch[]>([]);
+  const [filter, setFilter] = useState<Filter>("all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [copied, setCopied] = useState(false);
 
-  const loadProfile = useCallback(async () => {
-    if (!walletAddress) return;
-
+  const load = useCallback(async () => {
+    if (!wallet) return;
     setLoading(true);
     setError(null);
     try {
-      // Show whichever half loaded; only fail when neither did.
-      const [statsResult, matchesResult] = await Promise.allSettled([
-        api.getPlayerStats(walletAddress),
-        api.getPlayerMatches(walletAddress, { page: 1, limit: 20 }),
+      const [profileResult, matchesResult] = await Promise.allSettled([
+        api.getPlayerProfile(wallet),
+        api.getPlayerMatches(wallet, {
+          limit: 25,
+          ...(filter === "all" ? {} : { result: filter as ApiOutcome }),
+        }),
       ]);
-      if (statsResult.status === "rejected" && matchesResult.status === "rejected") {
-        setError("We couldn't load this wallet's player activity.");
-        return;
+      if (profileResult.status === "rejected") {
+        setError("We couldn't load this player's profile.");
+      } else {
+        setProfile(profileResult.value);
       }
-      setStats(
-        statsResult.status === "fulfilled"
-          ? statsResult.value
-          : emptyStats(walletAddress)
-      );
       setMatches(matchesResult.status === "fulfilled" ? matchesResult.value.matches : []);
     } finally {
       setLoading(false);
     }
-  }, [walletAddress]);
+  }, [filter, wallet]);
 
   useEffect(() => {
-    if (authenticated && walletAddress) {
-      void loadProfile();
-    } else {
-      setStats(null);
+    if (wallet) void load();
+    else {
+      setProfile(null);
       setMatches([]);
-      setError(null);
     }
-  }, [authenticated, walletAddress, loadProfile]);
+  }, [load, wallet]);
 
-  const [copied, setCopied] = useState(false);
-
-  const handleCopyAddress = useCallback(async () => {
-    if (!walletAddress) return;
+  const copyAddress = async () => {
+    if (!wallet) return;
     try {
-      await navigator.clipboard.writeText(walletAddress);
+      await navigator.clipboard.writeText(wallet);
       setCopied(true);
-      toast.success("Address copied to clipboard");
-      setTimeout(() => setCopied(false), 2000);
+      toast.success("Address copied");
+      window.setTimeout(() => setCopied(false), 2_000);
     } catch {
-      toast.error("Failed to copy address");
+      toast.error("Your browser blocked clipboard access.");
     }
-  }, [walletAddress]);
+  };
 
-  const authLoading = !ready || !walletsReady;
+  const liveMatches = useMemo(
+    () => matches.filter((match) => match.gameStatus === "Active"),
+    [matches]
+  );
+  const finishedMatches = useMemo(
+    () => matches.filter((match) => match.gameStatus !== "Active" && match.gameStatus !== "WaitingForOpponent"),
+    [matches]
+  );
 
-  return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <Link
-        href="/arena"
-        className="mb-6 inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        Back to Arena
-      </Link>
-
-      {authLoading ? (
+  // A public profile needs no sign-in; only "my profile" waits for the wallet.
+  if (!requested && (!ready || !walletsReady)) {
+    return (
+      <ProfileShell>
         <ProfileSkeleton />
-      ) : !authenticated ? (
+      </ProfileShell>
+    );
+  }
+
+  if (!wallet) {
+    return (
+      <ProfileShell>
         <div className="glass-card flex flex-col items-center gap-4 px-6 py-12 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
-            <User className="h-7 w-7 text-primary" aria-hidden="true" />
+          <div className="flex h-14 w-14 items-center justify-center border border-primary/20 bg-primary/10">
+            <Trophy className="h-7 w-7 text-primary" aria-hidden="true" />
           </div>
           <div className="space-y-1">
-            <h1 className="font-heading text-2xl font-bold">Sign in to view your profile</h1>
+            <h1 className="font-heading text-2xl font-bold">Sign in to see your profile</h1>
             <p className="text-sm text-muted-foreground">
-              Your profile is linked to your authenticated Solana wallet.
+              Your rating, game history and replays live on your wallet.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => login()}
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          >
-            <LogIn className="h-4 w-4" aria-hidden="true" />
-            Sign in
-          </button>
+          {!authenticated ? (
+            <button
+              type="button"
+              onClick={() => login()}
+              className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-5 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <LogIn className="h-4 w-4" aria-hidden="true" />
+              Sign in
+            </button>
+          ) : null}
         </div>
-      ) : !walletAddress ? (
-        <div className="glass-card flex flex-col items-center gap-3 px-6 py-12 text-center">
-          <AlertCircle className="h-8 w-8 text-amber-400" aria-hidden="true" />
-          <h1 className="font-heading text-xl font-semibold">Solana wallet unavailable</h1>
-          <p className="max-w-md text-sm text-muted-foreground">
-            Your account is signed in, but no Solana wallet is available yet. Reopen the wallet menu and connect or create one.
-          </p>
-        </div>
-      ) : loading && !stats ? (
+      </ProfileShell>
+    );
+  }
+
+  if (loading && !profile) {
+    return (
+      <ProfileShell>
         <ProfileSkeleton />
-      ) : error ? (
+      </ProfileShell>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <ProfileShell>
         <div className="glass-card flex flex-col items-start gap-4 p-6">
           <div className="flex items-center gap-2 text-destructive">
             <AlertCircle className="h-5 w-5" aria-hidden="true" />
             <h1 className="font-heading text-lg font-semibold">Profile unavailable</h1>
           </div>
-          <p className="text-sm text-muted-foreground">{error} Try again in a moment.</p>
+          <p className="text-sm text-muted-foreground">{error ?? "Nothing to show yet."}</p>
           <button
             type="button"
-            onClick={() => void loadProfile()}
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            onClick={() => void load()}
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-medium hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             Try again
           </button>
         </div>
-      ) : stats ? (
-        <>
-          {/* ── A. Profile header with wallet address ── */}
-          <div className="mb-8 space-y-6">
-            <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
-                <User className="h-8 w-8 text-primary" aria-hidden="true" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h1 className="font-heading text-2xl font-bold">Profile</h1>
-                {stats.lastGameAt ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Last match {formatMatchDate(stats.lastGameAt)}
-                  </p>
-                ) : null}
-              </div>
-              <Link
-                href="/arena"
-                className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              >
-                <Sword className="h-4 w-4" aria-hidden="true" />
-                Play now
-              </Link>
-            </div>
+      </ProfileShell>
+    );
+  }
 
-            {/* Wallet address with copy */}
-            <div className="glass-card flex items-center gap-3 rounded-xl p-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                <Wallet className="h-5 w-5 text-primary" aria-hidden="true" />
-              </div>
-              <span className="min-w-0 flex-1 break-all font-mono text-sm font-medium">
-                {walletAddress}
-              </span>
+  const { stats } = profile;
+
+  return (
+    <ProfileShell>
+      {/* ── Identity ── */}
+      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start">
+        <PlayerAvatar wallet={profile.wallet} avatar={profile.avatar} size="xl" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="font-heading text-2xl font-bold">
+              {playerLabel(profile.wallet, profile.displayName)}
+            </h1>
+            <span className="inline-flex items-center gap-1.5 border border-primary/20 bg-primary/10 px-3 py-1 font-mono text-sm font-semibold text-primary">
+              {profile.rating}
+              {profile.provisional ? (
+                <span className="text-[11px] font-normal text-primary/70">provisional</span>
+              ) : null}
+            </span>
+            {profile.rank ? (
+              <span className="text-xs text-muted-foreground">#{profile.rank} by rating</span>
+            ) : null}
+          </div>
+          {profile.bio ? <p className="mt-2 max-w-xl text-sm">{profile.bio}</p> : null}
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <button
+              type="button"
+              onClick={() => void copyAddress()}
+              className="inline-flex items-center gap-1.5 font-mono transition-colors hover:text-foreground"
+            >
+              {profile.wallet}
+              {copied ? (
+                <Check className="h-3.5 w-3.5 text-success" aria-hidden="true" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+              )}
+            </button>
+            {profile.memberSince ? <span>Joined {timeAgo(profile.memberSince)}</span> : null}
+            {stats.lastGameAt ? <span>Last game {timeAgo(stats.lastGameAt)}</span> : null}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {isOwnProfile ? (
               <button
                 type="button"
-                onClick={handleCopyAddress}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                aria-label={copied ? "Address copied" : "Copy wallet address"}
+                onClick={() => setEditing((current) => !current)}
+                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
               >
-                {copied ? (
-                  <Check className="h-4 w-4 text-emerald-400" aria-hidden="true" />
-                ) : (
-                  <Copy className="h-4 w-4" aria-hidden="true" />
-                )}
+                <Pencil className="h-4 w-4" aria-hidden="true" />
+                Edit profile
               </button>
-            </div>
+            ) : null}
+            <Link
+              href="/arena"
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Sword className="h-4 w-4" aria-hidden="true" />
+              {isOwnProfile ? "Play now" : "Challenge in the arena"}
+            </Link>
           </div>
+        </div>
+      </header>
 
-          {/* ── Empty state for new players ── */}
-          {/* Stats only count finished games, so a player whose first match
-              is still running has matches but no stats yet. */}
-          {stats.totalGames === 0 && matches.length === 0 ? (
-            <div className="glass-card flex flex-col items-center gap-4 px-6 py-14 text-center">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-muted-foreground/20 bg-muted/30">
-                <Sword className="h-7 w-7 text-muted-foreground" aria-hidden="true" />
-              </div>
-              <div className="space-y-1">
-                <h2 className="font-heading text-lg font-semibold">No games played yet</h2>
-                <p className="max-w-sm text-sm text-muted-foreground">
-                  Head to the arena to create or join your first match. Your stats and history will appear here.
-                </p>
-              </div>
-              <Link
-                href="/arena"
-                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              >
-                <Sword className="h-4 w-4" aria-hidden="true" />
-                Enter the arena
-              </Link>
-            </div>
+      {editing && isOwnProfile ? (
+        <div className="mb-6">
+          <ProfileEditor
+            profile={profile}
+            onSaved={setProfile}
+            onClose={() => setEditing(false)}
+          />
+        </div>
+      ) : null}
+
+      {/* ── Form and rating ── */}
+      <section className="mb-6 grid gap-4 lg:grid-cols-[1fr_280px]" aria-labelledby="rating-heading">
+        <div className="glass-card p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="rating-heading" className="flex items-center gap-2 font-heading text-sm font-semibold">
+              <TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" />
+              Rating
+            </h2>
+            <span className="font-mono text-xs text-muted-foreground">
+              peak {profile.peakRating} · {profile.ratedGames} rated
+            </span>
+          </div>
+          {profile.ratingHistory.length > 1 ? (
+            <RatingChart points={profile.ratingHistory} className="mt-3" />
           ) : (
-            <>
-              {/* ── B. Stats summary cards ── */}
-              <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                {/* Games Played */}
-                <div className="glass-card p-5">
-                  <div className="mb-3 flex items-center gap-2">
-                    <Sword className="h-4 w-4 text-primary" aria-hidden="true" />
-                    <span className="font-heading text-sm font-semibold">Games Played</span>
-                  </div>
-                  <p className="font-mono text-3xl font-bold tabular-nums">
-                    {stats.totalGames}
-                  </p>
-                  <div className="mt-2 flex items-center gap-3 text-xs tabular-nums">
-                    <span className="inline-flex items-center gap-1 text-emerald-400">
-                      <span className="font-semibold">{stats.wins}</span>W
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-destructive">
-                      <span className="font-semibold">{stats.losses}</span>L
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-amber-400">
-                      <span className="font-semibold">{stats.draws}</span>D
-                    </span>
-                  </div>
-                </div>
-
-                {/* Win Rate */}
-                <div className="glass-card p-5">
-                  <div className="mb-3 flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" />
-                    <span className="font-heading text-sm font-semibold">Win Rate</span>
-                  </div>
-                  <p
+            <p className="mt-3 text-sm text-muted-foreground">
+              Ratings start at 1200 and settle after a few games. Play a rated game to start the curve.
+            </p>
+          )}
+          {profile.recentForm.length > 0 ? (
+            <div className="mt-4 flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Recent form</span>
+              <div className="flex gap-1">
+                {profile.recentForm.map((game) => (
+                  <span
+                    key={game.matchId}
+                    title={game.result}
                     className={cn(
-                      "font-mono text-3xl font-bold tabular-nums",
-                      stats.winRate >= 0.5 ? "text-emerald-400" : "text-destructive"
+                      "flex h-6 w-6 items-center justify-center rounded font-mono text-[11px] font-bold",
+                      game.result === "win" && "bg-success/15 text-success",
+                      game.result === "loss" && "bg-destructive/15 text-destructive",
+                      game.result === "draw" && "bg-accent/15 text-accent"
                     )}
                   >
-                    {Math.round(stats.winRate * 100)}%
-                  </p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    {stats.wins}W &middot; {stats.losses}L &middot; {stats.draws}D
-                  </p>
-                </div>
-
-                {/* Total Wagered / Won */}
-                <div className="glass-card p-5">
-                  <div className="mb-3 flex items-center gap-2">
-                    <Wallet className="h-4 w-4 text-primary" aria-hidden="true" />
-                    <span className="font-heading text-sm font-semibold">
-                      {solanaConfig.wagerSymbol}
-                    </span>
-                  </div>
-                  <div className="space-y-2.5">
-                    <div>
-                      <span className="text-xs text-muted-foreground">Wagered</span>
-                      <p className="font-mono text-lg font-bold tabular-nums">
-                        {formatTokenAmount(stats.totalWagered)}
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground">Won</span>
-                      <p
-                        className={cn(
-                          "font-mono text-lg font-bold tabular-nums",
-                          BigInt(stats.totalWon) > 0n ? "text-emerald-400" : "text-muted-foreground"
-                        )}
-                      >
-                        {formatTokenAmount(stats.totalWon)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                    {game.result === "win" ? "W" : game.result === "loss" ? "L" : "D"}
+                  </span>
+                ))}
               </div>
+            </div>
+          ) : null}
+        </div>
 
-              {/* Streak pill badges */}
-              <div className="mb-8 flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-500/20 bg-orange-500/10 px-3 py-1.5 text-xs font-medium text-orange-400">
-                  <Flame className="h-3.5 w-3.5" aria-hidden="true" />
-                  Current streak: {stats.currentStreak}
-                </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400">
-                  <Crown className="h-3.5 w-3.5" aria-hidden="true" />
-                  Best streak: {stats.longestWinStreak}
-                </span>
-              </div>
+        <div className="glass-card flex flex-col justify-between gap-4 p-5">
+          <div>
+            <h2 className="font-heading text-sm font-semibold">Record</h2>
+            <p className="mt-2 font-mono text-3xl font-bold tabular-nums">{stats.totalGames}</p>
+            <p className="text-xs text-muted-foreground">games played</p>
+            <div className="mt-2 flex items-center gap-3 font-mono text-xs tabular-nums">
+              <span className="text-success">{stats.wins}W</span>
+              <span className="text-destructive">{stats.losses}L</span>
+              <span className="text-accent">{stats.draws}D</span>
+              <span className="text-muted-foreground">
+                {Math.round(stats.winRate * 100)}%
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-1.5 border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs text-primary">
+              <Flame className="h-3.5 w-3.5" aria-hidden="true" />
+              Streak {stats.currentStreak}
+            </span>
+            <span className="inline-flex items-center gap-1.5 border border-accent/20 bg-accent/10 px-2.5 py-1 text-xs text-accent">
+              <Crown className="h-3.5 w-3.5" aria-hidden="true" />
+              Best {stats.longestWinStreak}
+            </span>
+          </div>
+        </div>
+      </section>
 
-              {/* ── C. Match history ── */}
-              <section aria-labelledby="match-history-heading">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <h2 id="match-history-heading" className="font-heading text-lg font-semibold">
-                    Match history
-                  </h2>
-                  {loading ? (
-                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                      Updating
-                    </span>
-                  ) : null}
-                </div>
+      {/* ── Breakdowns ── */}
+      <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label="Playing record in detail">
+        <div className="glass-card p-5">
+          <h2 className="font-heading text-sm font-semibold">By colour</h2>
+          <ColorRow label="As White" tally={profile.byColor.white} />
+          <ColorRow label="As Black" tally={profile.byColor.black} />
+        </div>
 
-                {matches.length === 0 ? (
-                  <div className="glass-card flex flex-col items-center gap-3 px-6 py-10 text-center">
-                    <Sword className="h-9 w-9 text-muted-foreground" aria-hidden="true" />
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">No matches yet</p>
-                      <p className="text-xs text-muted-foreground">
-                        Create or join a match to start building your history.
-                      </p>
-                    </div>
-                    <Link
-                      href="/arena"
-                      className="inline-flex min-h-10 items-center rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                    >
-                      Enter the arena
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {matches.map((match) => {
-                      const result = getMatchResult(match);
-                      const opponent =
-                        match.playerColor.toLowerCase() === "white"
-                          ? match.blackPlayer
-                          : match.whitePlayer;
-                      const terminal = isTerminalStatus(match.gameStatus);
-                      const matchHref = playHref(match.matchId);
-
-                      return (
-                        <div
-                          key={match.matchId}
-                          className={cn(
-                            "glass-card flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between",
-                            result === "win" && "border-l-2 border-l-emerald-500/60",
-                            result === "loss" && "border-l-2 border-l-destructive/60",
-                            result === "draw" && "border-l-2 border-l-amber-500/60"
-                          )}
-                        >
-                          <div className="flex min-w-0 items-center gap-4">
-                            <div
-                              className={cn(
-                                "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border font-mono text-sm font-bold",
-                                result === "win" &&
-                                  "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
-                                result === "loss" &&
-                                  "border-destructive/20 bg-destructive/10 text-destructive",
-                                result === "draw" &&
-                                  "border-amber-500/20 bg-amber-500/10 text-amber-400",
-                                result === "pending" &&
-                                  "border-border bg-muted text-muted-foreground"
-                              )}
-                              aria-label={`Result: ${result}`}
-                            >
-                              {result === "win"
-                                ? "W"
-                                : result === "loss"
-                                  ? "L"
-                                  : result === "draw"
-                                    ? "D"
-                                    : "…"}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="truncate font-mono text-sm font-medium">
-                                vs {opponent ? shortenAddress(opponent) : "Waiting for opponent"}
-                              </p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {formatMatchDate(match.createdAt)} · {match.moveCount} moves
-                              </p>
-                              <Link
-                                href={matchHref}
-                                className="mt-1 inline-block font-mono text-xs text-muted-foreground transition-colors hover:text-foreground"
-                                title={match.matchId}
-                              >
-                                {shortenAddress(match.matchId, 6)}
-                              </Link>
-                            </div>
-                          </div>
-                          <Link
-                            href={matchHref}
-                            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                          >
-                            {terminal ? "Spectate" : "Open match"}
-                            <ExternalLink className="h-4 w-4" aria-hidden="true" />
-                          </Link>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-            </>
+        <div className="glass-card p-5">
+          <h2 className="font-heading text-sm font-semibold">How games end</h2>
+          {profile.endings.length === 0 ? (
+            <p className="mt-3 text-sm text-muted-foreground">No finished games yet.</p>
+          ) : (
+            <ul className="mt-3 space-y-1.5 text-sm">
+              {profile.endings.slice(0, 5).map((ending) => (
+                <li key={`${ending.outcome}-${ending.reason}`} className="flex justify-between gap-3">
+                  <span className="truncate text-muted-foreground">
+                    {ending.outcome === "win" ? "Won" : ending.outcome === "loss" ? "Lost" : "Drew"} by{" "}
+                    {formatEndReason(ending.reason)?.toLowerCase() ?? "unknown"}
+                  </span>
+                  <span className="font-mono tabular-nums">{ending.count}</span>
+                </li>
+              ))}
+            </ul>
           )}
-        </>
-      ) : null}
+        </div>
+
+        <div className="glass-card p-5">
+          <h2 className="font-heading text-sm font-semibold">Favourite openings</h2>
+          {profile.openings.white.length === 0 && profile.openings.black.length === 0 ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Openings appear once a few games are finished.
+            </p>
+          ) : (
+            <div className="mt-3 space-y-3 text-sm">
+              <OpeningList title="White" openings={profile.openings.white} />
+              <OpeningList title="Black" openings={profile.openings.black} />
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* ── Wagering ── */}
+      <section className="glass-card mb-8 flex flex-wrap items-center gap-6 p-5">
+        <Wallet className="h-5 w-5 text-primary" aria-hidden="true" />
+        <div>
+          <p className="text-xs text-muted-foreground">Wagered</p>
+          <p className="font-mono text-lg font-bold tabular-nums">
+            {formatTokenAmount(stats.totalWagered)} {solanaConfig.wagerSymbol}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground">Won</p>
+          <p
+            className={cn(
+              "font-mono text-lg font-bold tabular-nums",
+              BigInt(stats.totalWon) > 0n ? "text-success" : "text-muted-foreground"
+            )}
+          >
+            {formatTokenAmount(stats.totalWon)} {solanaConfig.wagerSymbol}
+          </p>
+        </div>
+        {profile.activeGames > 0 ? (
+          <div>
+            <p className="text-xs text-muted-foreground">In progress</p>
+            <p className="font-mono text-lg font-bold tabular-nums">{profile.activeGames}</p>
+          </div>
+        ) : null}
+      </section>
+
+      {/* ── Games ── */}
+      <section aria-labelledby="games-heading">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h2 id="games-heading" className="font-heading text-lg font-semibold">
+            Games
+          </h2>
+          <div className="flex gap-1 rounded-lg border border-border p-0.5">
+            {FILTERS.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setFilter(option.key)}
+                aria-pressed={filter === option.key}
+                className={cn(
+                  "min-h-9 rounded-md px-3 text-xs font-semibold transition-colors",
+                  filter === option.key
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {liveMatches.length > 0 && filter === "all" ? (
+          <div className="mb-3 grid gap-2">
+            {liveMatches.map((match) => (
+              <Link
+                key={match.matchId}
+                href={isOwnProfile ? playHref(match.matchId) : spectateHref(match.matchId)}
+                className="glass-card flex items-center justify-between gap-3 p-3 transition-colors hover:border-border-hover"
+              >
+                <span className="inline-flex items-center gap-2 text-sm">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" aria-hidden="true" />
+                  Live vs{" "}
+                  {playerLabel(
+                    match.playerColor === "white" ? match.blackPlayer : match.whitePlayer,
+                    match.playerColor === "white" ? match.blackName : match.whiteName
+                  )}
+                </span>
+                <span className="text-xs font-semibold text-primary">
+                  {isOwnProfile ? "Resume" : "Watch"}
+                </span>
+              </Link>
+            ))}
+          </div>
+        ) : null}
+
+        {finishedMatches.length === 0 ? (
+          <div className="glass-card flex flex-col items-center gap-2 px-6 py-10 text-center">
+            <Sword className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+            <p className="text-sm font-medium">
+              {filter === "all" ? "No finished games yet" : `No ${filter}s yet`}
+            </p>
+            <p className="max-w-sm text-xs text-muted-foreground">
+              Finished games can be replayed move by move from here.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {finishedMatches.map((match) => (
+              <FinishedGameCard key={match.matchId} match={match} viewer={profile.wallet} />
+            ))}
+          </div>
+        )}
+      </section>
+    </ProfileShell>
+  );
+}
+
+function ProfileShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+      <Link
+        href="/arena"
+        className="mb-6 inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+        Back to Arena
+      </Link>
+      {children}
+    </div>
+  );
+}
+
+function ColorRow({ label, tally }: { label: string; tally: ApiTally }) {
+  const width = (value: number) => (tally.games > 0 ? (value / tally.games) * 100 : 0);
+  return (
+    <div className="mt-3">
+      <div className="flex justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-mono tabular-nums">
+          {tally.wins}/{tally.draws}/{tally.losses}
+        </span>
+      </div>
+      <div className="mt-1 flex h-2 overflow-hidden bg-card" aria-hidden="true">
+        <span className="bg-success/70" style={{ width: `${width(tally.wins)}%` }} />
+        <span className="bg-accent/70" style={{ width: `${width(tally.draws)}%` }} />
+        <span className="bg-destructive/70" style={{ width: `${width(tally.losses)}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function OpeningList({
+  title,
+  openings,
+}: {
+  title: string;
+  openings: Array<ApiTally & { move: string }>;
+}) {
+  if (openings.length === 0) return null;
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{title}</p>
+      <ul className="mt-1 space-y-1">
+        {openings.map((opening) => (
+          <li key={opening.move} className="flex justify-between gap-3">
+            <span className="truncate font-mono">{opening.move}</span>
+            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+              {opening.games} · {Math.round((opening.wins / opening.games) * 100)}%
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ProfileSkeleton() {
+  return (
+    <div className="space-y-6" aria-label="Loading profile">
+      <div className="flex items-center gap-4">
+        <div className="h-20 w-20 shrink-0 animate-pulse bg-muted" />
+        <div className="flex-1 space-y-2">
+          <div className="h-7 w-40 animate-pulse rounded bg-muted" />
+          <div className="h-4 w-64 animate-pulse rounded bg-muted" />
+        </div>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
+        <div className="glass-card h-48 animate-pulse" />
+        <div className="glass-card h-48 animate-pulse" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {[0, 1, 2].map((key) => (
+          <div key={key} className="glass-card h-40 animate-pulse" />
+        ))}
+      </div>
     </div>
   );
 }

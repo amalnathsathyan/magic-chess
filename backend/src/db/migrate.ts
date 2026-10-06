@@ -1,5 +1,6 @@
 import type { Sql } from "postgres";
 import { sql } from "./pool.js";
+import { INITIAL_RATING, rateGame, whiteScoreFor } from "../services/rating.js";
 
 // ponytail: simple numbered migration runner. No migration framework needed.
 // Each migration is idempotent (IF NOT EXISTS).
@@ -334,6 +335,102 @@ const migrations: Array<{ name: string; run: (s: Sql) => Promise<void> }> = [
       `);
       for (const table of ["prediction_accounts", "move_bets", "move_markets"]) {
         await s.unsafe(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+      }
+    },
+  },
+  {
+    name: "007_profiles_ratings_history",
+    run: async (s) => {
+      await s.unsafe(`
+        CREATE TABLE IF NOT EXISTS player_profiles (
+          wallet        VARCHAR(44)  PRIMARY KEY,
+          display_name  VARCHAR(20),
+          bio           VARCHAR(160),
+          avatar        VARCHAR(16),
+          created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+          updated_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+        )
+      `);
+      await s.unsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_player_profiles_name
+          ON player_profiles (LOWER(display_name))
+          WHERE display_name IS NOT NULL
+      `);
+      await s.unsafe("ALTER TABLE player_profiles ENABLE ROW LEVEL SECURITY");
+
+      await s.unsafe(`
+        ALTER TABLE player_stats
+          ADD COLUMN IF NOT EXISTS rating      INTEGER NOT NULL DEFAULT ${INITIAL_RATING},
+          ADD COLUMN IF NOT EXISTS peak_rating INTEGER NOT NULL DEFAULT ${INITIAL_RATING},
+          ADD COLUMN IF NOT EXISTS rated_games INTEGER NOT NULL DEFAULT 0
+      `);
+      await s.unsafe(`
+        CREATE INDEX IF NOT EXISTS idx_player_stats_rating
+          ON player_stats (rating DESC)
+      `);
+      // Ratings each side had going into the game, and what it won or lost.
+      await s.unsafe(`
+        ALTER TABLE matches
+          ADD COLUMN IF NOT EXISTS white_rating        INTEGER,
+          ADD COLUMN IF NOT EXISTS black_rating        INTEGER,
+          ADD COLUMN IF NOT EXISTS white_rating_change INTEGER,
+          ADD COLUMN IF NOT EXISTS black_rating_change INTEGER
+      `);
+      // Finished games, newest first: the lobby's public game history.
+      await s.unsafe(`
+        CREATE INDEX IF NOT EXISTS idx_matches_finished
+          ON matches (ended_at DESC)
+          WHERE game_status IN ('WhiteWins', 'BlackWins', 'Draw')
+      `);
+
+      // Rate every game already played, in the order the games ended.
+      const games = await s`
+        SELECT match_id, white_player, black_player, game_status
+        FROM matches
+        WHERE game_status IN ('WhiteWins', 'BlackWins', 'Draw')
+          AND black_player IS NOT NULL
+        ORDER BY ended_at ASC NULLS FIRST, created_at ASC
+      `;
+      const players = new Map<string, { rating: number; games: number; peak: number }>();
+      const player = (wallet: string) => {
+        let entry = players.get(wallet);
+        if (!entry) {
+          entry = { rating: INITIAL_RATING, games: 0, peak: INITIAL_RATING };
+          players.set(wallet, entry);
+        }
+        return entry;
+      };
+      for (const game of games) {
+        const score = whiteScoreFor(String(game.gameStatus));
+        if (score === null) continue;
+        const white = player(String(game.whitePlayer));
+        const black = player(String(game.blackPlayer));
+        const change = rateGame(white, black, score);
+        await s`
+          UPDATE matches
+          SET white_rating = ${white.rating},
+              black_rating = ${black.rating},
+              white_rating_change = ${change.white},
+              black_rating_change = ${change.black}
+          WHERE match_id = ${game.matchId}
+        `;
+        for (const [entry, delta] of [
+          [white, change.white],
+          [black, change.black],
+        ] as const) {
+          entry.rating += delta;
+          entry.games += 1;
+          entry.peak = Math.max(entry.peak, entry.rating);
+        }
+      }
+      for (const [wallet, entry] of players) {
+        await s`
+          UPDATE player_stats
+          SET rating = ${entry.rating},
+              peak_rating = ${entry.peak},
+              rated_games = ${entry.games}
+          WHERE player_pubkey = ${wallet}
+        `;
       }
     },
   },

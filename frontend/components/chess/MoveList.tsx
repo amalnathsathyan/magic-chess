@@ -10,6 +10,8 @@ interface MoveListProps {
   fen?: string;
   currentMoveIndex?: number;
   result?: string; // "1-0" | "0-1" | "1/2-1/2" | undefined
+  /** Makes each move clickable, e.g. to jump there in a replay. */
+  onSelectMove?: (moveIndex: number) => void;
   className?: string;
 }
 
@@ -18,16 +20,19 @@ export function MoveList({
   fen,
   currentMoveIndex = -1,
   result,
+  onSelectMove,
   className,
 }: MoveListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to the latest move
+  // Follow the selected move; without one, stay at the latest.
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [moves]);
+    const container = scrollRef.current;
+    if (!container) return;
+    const active = container.querySelector("[data-active-move='true']");
+    if (active) active.scrollIntoView({ block: "nearest" });
+    else container.scrollTop = container.scrollHeight;
+  }, [moves, currentMoveIndex]);
 
   const copyText = async (text: string, label: string) => {
     try {
@@ -158,25 +163,19 @@ export function MoveList({
                   <td className="py-1 pr-2 text-right text-xs text-muted-foreground">
                     {pair.number}.
                   </td>
-                  <td
-                    className={cn(
-                      "py-1 pr-3",
-                      currentMoveIndex === whiteIdx &&
-                        "rounded bg-primary/20 font-bold text-primary"
-                    )}
-                  >
-                    {pair.white}
-                  </td>
-                  <td
-                    className={cn(
-                      "py-1",
-                      pair.black &&
-                        currentMoveIndex === blackIdx &&
-                        "rounded bg-primary/20 font-bold text-primary"
-                    )}
-                  >
-                    {pair.black ?? ""}
-                  </td>
+                  <MoveCell
+                    san={pair.white}
+                    index={whiteIdx}
+                    active={currentMoveIndex === whiteIdx}
+                    onSelectMove={onSelectMove}
+                    className="pr-3"
+                  />
+                  <MoveCell
+                    san={pair.black}
+                    index={blackIdx}
+                    active={Boolean(pair.black) && currentMoveIndex === blackIdx}
+                    onSelectMove={onSelectMove}
+                  />
                 </tr>
               );
             })}
@@ -189,5 +188,43 @@ export function MoveList({
         )}
       </div>
     </div>
+  );
+}
+
+function MoveCell({
+  san,
+  index,
+  active,
+  onSelectMove,
+  className,
+}: {
+  san?: string;
+  index: number;
+  active: boolean;
+  onSelectMove?: (moveIndex: number) => void;
+  className?: string;
+}) {
+  return (
+    <td className={cn("py-1", className)} data-active-move={active || undefined}>
+      {san ? (
+        onSelectMove ? (
+          <button
+            type="button"
+            onClick={() => onSelectMove(index)}
+            className={cn(
+              "w-full rounded px-1 text-left transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary",
+              active && "bg-primary/20 font-bold text-primary"
+            )}
+            aria-current={active ? "step" : undefined}
+          >
+            {san}
+          </button>
+        ) : (
+          <span className={cn("px-1", active && "rounded bg-primary/20 font-bold text-primary")}>
+            {san}
+          </span>
+        )
+      ) : null}
+    </td>
   );
 }
