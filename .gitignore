@@ -1,40 +1,37 @@
+# Dependencies and build output
 node_modules/
 target/
+dist/
 .next/
+out/
+.anchor/
+test-ledger/
+.surfpool/
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment and secrets
 .env
 .env.local
-*.log
+.env.*.local
+*-keypair.json
+.test-wallets/
+
+# OS and editor
 .DS_Store
-test-ledger/
-dist/
-.anchor/
-agent-findings/
-*-session.jsonl
+*.log
 
-# Planning documents (not ready for official docs)
-docs/planning/
-
-# Frontend generated content
-frontend/node_modules/
-frontend/.next/
-
-# Backend generated content
-backend/node_modules/
-backend/dist/
-
-# Program build artifacts
-magic-chess-program/target/
-
-# Surfpool logs and state
-.surfpool/
-
-# Claude Code local settings (user-specific permissions)
+# Local AI/agent tooling (per-developer, not part of the project)
+.agents/
 .claude/settings.local.json
 .claude/skills/
+.claude/scheduled_tasks.json
+.gemini/
+.superstack/
+.mcp.json
 skills-lock.json
+*-session.jsonl
 
-# Auto-downloaded agent skills
-.agents/skills/
-
-# Marketing campaign (X posts, drafts — public-build content)
+# Private planning and marketing drafts
+docs/planning/
 marketing/

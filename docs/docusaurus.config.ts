@@ -6,8 +6,8 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Magic Chess',
-  tagline: 'Decentralized chess on Solana',
-  favicon: 'img/favicon.ico',
+  tagline: 'Fully on-chain chess on Solana, with gasless moves on MagicBlock Ephemeral Rollups',
+  favicon: 'img/favicon.png',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
   future: {
@@ -27,6 +27,11 @@ const config: Config = {
 
   onBrokenLinks: 'throw',
 
+  markdown: {
+    mermaid: true,
+  },
+  themes: ['@docusaurus/theme-mermaid'],
+
   // Even if you don't use internationalization, you can use this field to set
   // useful metadata like html lang. For example, if your site is Chinese, you
   // may want to replace "en" with "zh-Hans".
@@ -44,7 +49,7 @@ const config: Config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
-            'https://github.com/amalnathsathyan/magic-chess/tree/dev/docs/',
+            'https://github.com/amalnathsathyan/magic-chess/tree/main/docs/',
         },
         blog: false, // Disable blog
         theme: {
@@ -55,24 +60,32 @@ const config: Config = {
   ],
 
   themeConfig: {
-    // Replace with your project's social card
-    image: 'img/docusaurus-social-card.jpg',
+    image: 'img/social-card.png',
     colorMode: {
       defaultMode: 'dark',
       respectPrefersColorScheme: true,
+    },
+    mermaid: {
+      theme: {light: 'neutral', dark: 'dark'},
     },
     navbar: {
       title: 'Magic Chess',
       logo: {
         alt: 'Magic Chess Logo',
-        src: 'img/logo.svg',
+        src: 'img/logo-light.svg',
+        srcDark: 'img/logo.svg',
       },
       items: [
         {
           type: 'docSidebar',
           sidebarId: 'docsSidebar',
           position: 'left',
-          label: 'Documentation',
+          label: 'Docs',
+        },
+        {
+          href: 'https://arena.chessmagic.workers.dev',
+          label: 'Play',
+          position: 'right',
         },
         {
           href: 'https://github.com/amalnathsathyan/magic-chess',
@@ -87,36 +100,22 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-            {
-              label: 'Introduction',
-              to: '/docs/overview/',
-            },
+            {label: 'Introduction', to: '/docs/'},
+            {label: 'How to play', to: '/docs/getting-started/how-to-play'},
+            {label: 'Architecture', to: '/docs/architecture/overview'},
+            {label: 'SDK', to: '/docs/build/sdk'},
           ],
         },
         {
-          title: 'Community',
+          title: 'Project',
           items: [
-            {
-              label: 'Discord',
-              href: 'https://discord.gg/magicchess',
-            },
-            {
-              label: 'Twitter',
-              href: 'https://twitter.com/magicchess',
-            },
-          ],
-        },
-        {
-          title: 'More',
-          items: [
-            {
-              label: 'GitHub',
-              href: 'https://github.com/amalnathsathyan/magic-chess',
-            },
+            {label: 'Play ZUG Arena', href: 'https://arena.chessmagic.workers.dev'},
+            {label: 'GitHub', href: 'https://github.com/amalnathsathyan/magic-chess'},
+            {label: 'Report a vulnerability', href: 'https://github.com/amalnathsathyan/magic-chess/security/advisories/new'},
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} Magic Chess. Built with Docusaurus.`,
+      copyright: `© ${new Date().getFullYear()} Magic Chess contributors. MIT licensed.`,
     },
     prism: {
       theme: prismThemes.github,

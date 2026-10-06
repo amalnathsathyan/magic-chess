@@ -422,7 +422,7 @@ There is one branch (`dev`) and one deployment.
 
 | Piece | Where | Source |
 |---|---|---|
-| Frontend | Cloudflare Worker `arena-dev` → https://arena-dev.chessmagic.workers.dev | `frontend/` on `dev`, config in `frontend/wrangler.toml` |
+| Frontend | Cloudflare Worker → https://arena.chessmagic.workers.dev | `frontend/` on `dev`, config in `frontend/wrangler.toml` |
 | Backend | Render → https://magic-chess-dev.onrender.com | `backend/` |
 
 Every push to `dev` rebuilds the frontend through Cloudflare Workers Builds

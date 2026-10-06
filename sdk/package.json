@@ -1,12 +1,13 @@
 {
   "name": "@magic-chess/sdk",
   "version": "0.1.0",
-  "description": "TypeScript SDK for Magic Chess — on-chain chess with wagering",
+  "description": "TypeScript SDK for Magic Chess \u2014 on-chain chess with wagering",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
     "sync-idl": "cp ../magic-chess-program/target/types/magic_chess.ts src/idl/magic_chess.ts && cp ../magic-chess-program/target/idl/magic_chess.json src/idl/magic_chess.json",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.mjs"
   },
   "exports": {
     ".": "./src/index.ts",
@@ -31,5 +32,11 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.0.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/amalnathsathyan/magic-chess.git",
+    "directory": "sdk"
   }
 }

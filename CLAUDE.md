@@ -7,13 +7,13 @@ On-chain FIDE chess engine on Solana with MagicBlock Ephemeral Rollups for gasle
 ```
 magic-chess/
 ├── magic-chess-program/        # Anchor workspace (Rust program + tests)
-│   ├── programs/magic_chess/   # On-chain chess engine (22 instructions)
+│   ├── programs/magic_chess/   # On-chain chess engine (21 instructions)
 │   │   └── src/
 │   │       ├── lib.rs          # Instruction dispatch
 │   │       ├── constants.rs    # PDA seeds, validation limits
-│   │       ├── errors/         # 40 error variants
-│   │       ├── events/         # 6 event types
-│   │       ├── instructions/   # 22 instruction handlers
+│   │       ├── errors/         # 58 error variants (6000–6057)
+│   │       ├── events/         # 8 event types
+│   │       ├── instructions/   # instruction handlers
 │   │       ├── state/          # ChessMatch, CastlingRights, Piece, Enums, PredictionPool
 │   │       └── utils/          # chess_logic.rs (full engine), payout_logic.rs
 │   └── tests/                  # Unit + LiteSVM + Mollusk CU + Anchor TS
@@ -25,13 +25,13 @@ magic-chess/
 │       ├── react/index.ts      # React hooks (useMatch, useMatches, usePlayerMatches)
 │       ├── utils/fen.ts        # boardToFen, fenToBoard
 │       └── magicblock.ts       # MagicBlock endpoints, delegation helpers
-├── frontend/                   # Next.js 15 PWA (scaffolded)
-├── backend/                    # Fastify + Redis (planned)
-├── docs/                       # Architecture, deployment, design docs
-├── agent-findings/             # 18 agent research reports (historical)
-├── .agents/skills/             # Agent skills: magicblock, solana-audit, solana-incident-response
-├── .claude/                    # Claude Code settings
-└── skills-lock.json            # Skill version lockfile
+├── frontend/                   # ZUG Arena: Next.js 15 static export on a Cloudflare Worker
+├── backend/                    # Fastify + Postgres: indexer, SSE, gas sponsor, ratings
+├── docs/                       # Docusaurus site (GitHub Pages, deploys from main)
+├── research/                   # Earlier R&D notes + agent-findings/ reports (reference, unmaintained)
+└── .claude/                    # Claude Code settings
+
+Local only (gitignored): .agents/skills/, .claude/skills/, skills-lock.json, marketing/
 ```
 
 ## Key Technical Details
@@ -57,7 +57,7 @@ L1 holds tokens + settlement. ER handles gameplay (make_move, session keys, cran
 
 ```bash
 # Unit tests (pure Rust, ~0s)
-cargo test -p magic_chess
+cargo test -p magic_chess --lib --test unit_tests
 
 # LiteSVM integration (in-process, SPL token flows)
 cd magic-chess-program/programs/magic_chess && cargo test -- litesvm
@@ -80,16 +80,17 @@ anchor deploy --provider.cluster devnet
 
 ## Active Skills
 
+Installed locally (not tracked in git; reinstall from `skills-lock.json`):
+
 - `magicblock` — MagicBlock integration (delegation, ER, session keys, crank)
 - `solana-audit` — Security audit workflows and vulnerability taxonomies
 - `solana-incident-response` — Incident triage and post-mortem
 
 ## Current State
 
-205 tests across 4 harnesses (182 unit + 23 LiteSVM + 8 Mollusk CU + 12 Anchor TS).
-Prediction market infrastructure in place (`prediction_enabled` flag, 5 instructions).
-Frontend scaffolded (Next.js 15, Tailwind 4, shadcn/ui, Jotai).
-Backend planned (Fastify + Redis + Helius webhooks).
+Program tests: 182 unit (`--test unit_tests`) + 59 LiteSVM + 15 payout flow + 11 Mollusk CU, all run in CI.
+Prediction market instructions live on-chain (`prediction_enabled` flag, 5 instructions); no outcome-pool UI yet.
+Frontend (ZUG Arena) and backend are live on devnet; see `docs/docs/deployment.md`.
 
 ## Gameplay: status and next steps
 
