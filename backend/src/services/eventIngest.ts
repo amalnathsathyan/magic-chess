@@ -3,6 +3,12 @@ import { sql } from "../db/pool.js";
 import { initMatch, removeMatch } from "./boardCache.js";
 import type { VerifiedProgramEvent } from "./transactionVerifier.js";
 import type { MatchNotification } from "./matchRealtime.js";
+import {
+  INITIAL_RATING,
+  rateGame,
+  whiteScoreFor,
+  type RatedPlayer,
+} from "./rating.js";
 
 /**
  * Applies verified Magic Chess program events to Postgres.
@@ -369,16 +375,34 @@ async function updatePlayerStats(
     match[0] as Record<string, string>;
   const bet = String(betAmountPerPlayer ?? "0");
   const pot = String(totalPot ?? "0");
+  const whiteScore = whiteScoreFor(status);
+  if (!blackPlayer || whiteScore === null) return;
 
-  let winnerPubkey: string | null = null;
-  let loserPubkey: string | null = null;
-  if (status === "whiteWins") {
-    winnerPubkey = whitePlayer;
-    loserPubkey = blackPlayer;
-  } else if (status === "blackWins") {
-    winnerPubkey = blackPlayer;
-    loserPubkey = whitePlayer;
-  }
+  // Lock both rows (in a fixed order) so concurrent results rate sequentially.
+  const current = await s`
+    SELECT player_pubkey, rating, rated_games FROM player_stats
+    WHERE player_pubkey IN (${whitePlayer}, ${blackPlayer})
+    ORDER BY player_pubkey
+    FOR UPDATE
+  `;
+  const rated = (wallet: string): RatedPlayer => {
+    const row = current.find((r) => r.playerPubkey === wallet);
+    return {
+      rating: row ? Number(row.rating) : INITIAL_RATING,
+      games: row ? Number(row.ratedGames) : 0,
+    };
+  };
+  const white = rated(whitePlayer);
+  const black = rated(blackPlayer);
+  const change = rateGame(white, black, whiteScore);
+  await s`
+    UPDATE matches
+    SET white_rating = ${white.rating},
+        black_rating = ${black.rating},
+        white_rating_change = ${change.white},
+        black_rating_change = ${change.black}
+    WHERE match_id = ${matchId}
+  `;
 
   const reasonCol =
     reason === "resignation"
@@ -387,71 +411,80 @@ async function updatePlayerStats(
         ? "wins_by_timeout"
         : "wins_by_checkmate";
 
-  if (winnerPubkey) {
-    await s.unsafe(
-      `
-      INSERT INTO player_stats (
-        player_pubkey, total_games, wins, ${reasonCol},
-        current_streak, longest_win_streak, total_wagered, total_won, last_game_at
-      ) VALUES ($1, 1, 1, 1, 1, 1, $2, $3, NOW())
-      ON CONFLICT (player_pubkey) DO UPDATE SET
-        total_games = player_stats.total_games + 1,
-        wins = player_stats.wins + 1,
-        ${reasonCol} = player_stats.${reasonCol} + 1,
-        longest_win_streak = GREATEST(
-          player_stats.longest_win_streak,
-          CASE WHEN player_stats.current_streak >= 0
-            THEN player_stats.current_streak + 1 ELSE 1 END
-        ),
-        current_streak = CASE WHEN player_stats.current_streak >= 0
-          THEN player_stats.current_streak + 1 ELSE 1 END,
-        total_wagered = player_stats.total_wagered + EXCLUDED.total_wagered,
-        total_won = player_stats.total_won + EXCLUDED.total_won,
-        last_game_at = NOW(),
-        updated_at = NOW()
-    `,
-      [winnerPubkey, bet, pot]
-    );
-  }
-
-  if (loserPubkey) {
-    await s.unsafe(
-      `
-      INSERT INTO player_stats (
-        player_pubkey, total_games, losses, current_streak,
-        total_wagered, last_game_at
-      ) VALUES ($1, 1, 1, -1, $2, NOW())
-      ON CONFLICT (player_pubkey) DO UPDATE SET
-        total_games = player_stats.total_games + 1,
-        losses = player_stats.losses + 1,
-        current_streak = CASE WHEN player_stats.current_streak <= 0
-          THEN player_stats.current_streak - 1 ELSE -1 END,
-        total_wagered = player_stats.total_wagered + EXCLUDED.total_wagered,
-        last_game_at = NOW(),
-        updated_at = NOW()
-    `,
-      [loserPubkey, bet]
-    );
-  }
-
-  if (status === "draw") {
-    for (const pubkey of [whitePlayer, blackPlayer]) {
-      if (!pubkey) continue;
+  const sides = [
+    { wallet: whitePlayer, score: whiteScore, before: white.rating, delta: change.white },
+    { wallet: blackPlayer, score: 1 - whiteScore, before: black.rating, delta: change.black },
+  ];
+  for (const side of sides) {
+    const rating = side.before + side.delta;
+    if (side.score === 1) {
+      await s.unsafe(
+        `
+        INSERT INTO player_stats (
+          player_pubkey, total_games, wins, ${reasonCol},
+          current_streak, longest_win_streak, total_wagered, total_won, last_game_at,
+          rating, peak_rating, rated_games
+        ) VALUES ($1, 1, 1, 1, 1, 1, $2, $3, NOW(), $4, GREATEST($4, ${INITIAL_RATING}), 1)
+        ON CONFLICT (player_pubkey) DO UPDATE SET
+          total_games = player_stats.total_games + 1,
+          wins = player_stats.wins + 1,
+          ${reasonCol} = player_stats.${reasonCol} + 1,
+          longest_win_streak = GREATEST(
+            player_stats.longest_win_streak,
+            CASE WHEN player_stats.current_streak >= 0
+              THEN player_stats.current_streak + 1 ELSE 1 END
+          ),
+          current_streak = CASE WHEN player_stats.current_streak >= 0
+            THEN player_stats.current_streak + 1 ELSE 1 END,
+          total_wagered = player_stats.total_wagered + EXCLUDED.total_wagered,
+          total_won = player_stats.total_won + EXCLUDED.total_won,
+          last_game_at = NOW(),
+          rating = EXCLUDED.rating,
+          peak_rating = GREATEST(player_stats.peak_rating, EXCLUDED.rating),
+          rated_games = player_stats.rated_games + 1,
+          updated_at = NOW()
+      `,
+        [side.wallet, bet, pot, rating]
+      );
+    } else if (side.score === 0) {
+      await s.unsafe(
+        `
+        INSERT INTO player_stats (
+          player_pubkey, total_games, losses, current_streak,
+          total_wagered, last_game_at, rating, peak_rating, rated_games
+        ) VALUES ($1, 1, 1, -1, $2, NOW(), $3, GREATEST($3, ${INITIAL_RATING}), 1)
+        ON CONFLICT (player_pubkey) DO UPDATE SET
+          total_games = player_stats.total_games + 1,
+          losses = player_stats.losses + 1,
+          current_streak = CASE WHEN player_stats.current_streak <= 0
+            THEN player_stats.current_streak - 1 ELSE -1 END,
+          total_wagered = player_stats.total_wagered + EXCLUDED.total_wagered,
+          last_game_at = NOW(),
+          rating = EXCLUDED.rating,
+          rated_games = player_stats.rated_games + 1,
+          updated_at = NOW()
+      `,
+        [side.wallet, bet, rating]
+      );
+    } else {
       await s.unsafe(
         `
         INSERT INTO player_stats (
           player_pubkey, total_games, draws, current_streak,
-          total_wagered, last_game_at
-        ) VALUES ($1, 1, 1, 0, $2, NOW())
+          total_wagered, last_game_at, rating, peak_rating, rated_games
+        ) VALUES ($1, 1, 1, 0, $2, NOW(), $3, GREATEST($3, ${INITIAL_RATING}), 1)
         ON CONFLICT (player_pubkey) DO UPDATE SET
           total_games = player_stats.total_games + 1,
           draws = player_stats.draws + 1,
           current_streak = 0,
           total_wagered = player_stats.total_wagered + EXCLUDED.total_wagered,
           last_game_at = NOW(),
+          rating = EXCLUDED.rating,
+          peak_rating = GREATEST(player_stats.peak_rating, EXCLUDED.rating),
+          rated_games = player_stats.rated_games + 1,
           updated_at = NOW()
       `,
-        [pubkey, bet]
+        [side.wallet, bet, rating]
       );
     }
   }
