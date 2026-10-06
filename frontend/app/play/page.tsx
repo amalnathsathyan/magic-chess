@@ -58,6 +58,7 @@ import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { magicBlockTxUrl, solanaDevnetTxUrl } from "@/lib/explorer";
 import { useMoveTransactionNotifications } from "@/hooks/useMoveTransactionNotifications";
 import { useOnChainMoves } from "@/hooks/useOnChainMoves";
+import { useMoveLog } from "@/hooks/useMoveLog";
 import { syncMoveMade, syncPlayerJoined } from "@/lib/sync";
 import { PlayerRow } from "@/components/chess/PlayerRow";
 import { PredictionPanel } from "@/components/predictions/PredictionPanel";
@@ -115,7 +116,6 @@ function PlayView() {
   const { prepareMatchSession } = useMagicSession();
 
   const [history, setHistory] = useState<ApiMatchHistory | null>(null);
-  const [historyUnavailable, setHistoryUnavailable] = useState(false);
   const [orientation, setOrientation] = useState<"white" | "black">("white");
   const [boardWidth, setBoardWidth] = useState(320);
   const [now, setNow] = useState(() => Date.now());
@@ -136,9 +136,8 @@ function PlayView() {
     if (!matchId) return;
     try {
       setHistory(await api.getMatchHistory(matchId));
-      setHistoryUnavailable(false);
     } catch {
-      setHistoryUnavailable(true);
+      // The live board and the rollup log keep the Moves list going.
     }
   }, [matchId]);
 
@@ -275,14 +274,22 @@ function PlayView() {
   // The indexer database and the rollup's own transaction log both list the
   // confirmed moves; use whichever is further along, so the list survives the
   // database being asleep or behind.
-  const historyMoves =
-    history?.moves.map((move) => ({
-      san: move.san ?? move.algebraicMove,
-      from: move.from,
-      to: move.to,
-    })) ?? [];
-  const confirmedMoves =
-    chainMoves && chainMoves.length > historyMoves.length ? chainMoves : historyMoves;
+  // The live board, the indexer database and the rollup's transaction log
+  // all feed one list, so it neither waits on nor depends on the database.
+  const historyMoves = useMemo(
+    () =>
+      history?.moves.map((move) => ({
+        san: move.san ?? move.algebraicMove,
+        from: move.from as Square,
+        to: move.to as Square,
+      })) ?? [],
+    [history]
+  );
+  const confirmedMoves = useMoveLog({
+    matchId,
+    fen: authoritativeFen,
+    sources: [historyMoves, chainMoves],
+  });
   const showOptimisticMove = Boolean(
     optimisticMove &&
       confirmedMoves.length <= optimisticBase &&
@@ -531,10 +538,11 @@ function PlayView() {
       setTxExplorerHref(
         magicBlockTxUrl(submission.signature, submission.rpcEndpoint)
       );
-      setTxStatus("confirming");
-      await Promise.all([refetch(), loadHistory()]);
+      // submitMove resolves once the rollup confirms the move; the board
+      // itself arrives over the match stream, so nothing else to wait for.
       setTxStatus("success");
       sounds.playMoveSound(move.san);
+      refreshAfterMove();
     } catch (moveError) {
       const message =
         moveError instanceof Error ? moveError.message : "Move was rejected.";
@@ -1033,7 +1041,7 @@ function PlayView() {
                   }
                   className="min-h-56"
                 />
-                {(historyUnavailable && !chainMoves) || moveListBehind ? (
+                {moveListBehind ? (
                   <p className="text-xs text-muted-foreground">
                     Move list is catching up. The board always comes straight from the on-chain match.
                   </p>

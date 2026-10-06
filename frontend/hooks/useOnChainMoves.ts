@@ -26,6 +26,9 @@ interface RawMove {
 }
 
 const SIGNATURE_PAGE = 1_000;
+// A transaction the rollup won't serve is retried on this many scans, then
+// skipped so one missing entry can't stall the whole list.
+const MAX_FETCH_ATTEMPTS = 3;
 
 const PROMOTIONS: Record<string, RawMove["promotion"]> = {
   queen: "q",
@@ -86,6 +89,7 @@ export function useOnChainMoves(input: {
   const scanning = useRef(false);
   const rerun = useRef(false);
   const latestScan = useRef<() => Promise<void>>(async () => undefined);
+  const fetchAttempts = useRef(new Map<string, number>());
 
   useEffect(() => {
     if (cache.current?.matchId !== input.matchId) {
@@ -103,6 +107,16 @@ export function useOnChainMoves(input: {
     if (!input.enabled || !input.matchId) return;
     const [matchPda] = findChessMatchPda(input.matchId, client.programId);
     const parser = new EventParser(client.programId, client.program.coder);
+    const attempts = fetchAttempts.current;
+
+    const parseMoveEvents = (logs: string[]) => {
+      try {
+        return [...parser.parseLogs(logs)];
+      } catch {
+        // Not an Anchor-shaped log (rollup system transactions).
+        return [];
+      }
+    };
 
     const readMoves = async (connection: Connection, signatures: { signature: string; slot: number }[]) => {
       const found: RawMove[] = [];
@@ -111,10 +125,17 @@ export function useOnChainMoves(input: {
           commitment: "confirmed",
           maxSupportedTransactionVersion: 0,
         });
-        // Not served yet: retry on the next scan rather than skip the move.
-        if (!transaction) throw new Error(`Transaction ${signature} not available yet`);
+        if (!transaction) {
+          // Not served yet: retry on the next scan, unless it never will be.
+          const tries = (attempts.get(signature) ?? 0) + 1;
+          attempts.set(signature, tries);
+          if (tries < MAX_FETCH_ATTEMPTS) {
+            throw new Error(`Transaction ${signature} not available yet`);
+          }
+          continue;
+        }
         if (transaction.meta?.err || !transaction.meta?.logMessages) continue;
-        for (const event of parser.parseLogs(transaction.meta.logMessages)) {
+        for (const event of parseMoveEvents(transaction.meta.logMessages)) {
           if (event.name !== "MoveMadeEvent") continue;
           const data = event.data as {
             matchId?: string;
