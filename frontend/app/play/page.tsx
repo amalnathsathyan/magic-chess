@@ -60,6 +60,7 @@ import { magicBlockTxUrl, solanaDevnetTxUrl } from "@/lib/explorer";
 import { useMoveTransactionNotifications } from "@/hooks/useMoveTransactionNotifications";
 import { useOnChainMoves } from "@/hooks/useOnChainMoves";
 import { useMoveLog } from "@/hooks/useMoveLog";
+import { useMintDetails, formatOnChainTokenAmount } from "@/hooks/useMintDetails";
 import { syncMoveMade, syncPlayerJoined } from "@/lib/sync";
 import { PlayerRow } from "@/components/chess/PlayerRow";
 import { PredictionPanel } from "@/components/predictions/PredictionPanel";
@@ -188,6 +189,10 @@ function PlayView() {
     enableFastPlay,
   } = useMagicBlock();
   const { prepareMatchSession } = useMagicSession();
+  
+  const wagerMintAddress = match?.bettingTokenMint?.toBase58();
+  const mintDetailsMap = useMintDetails(useMemo(() => (wagerMintAddress ? [wagerMintAddress] : []), [wagerMintAddress]));
+  const wagerTokenDetail = wagerMintAddress ? mintDetailsMap.get(wagerMintAddress) : undefined;
 
   const [history, setHistory] = useState<ApiMatchHistory | null>(null);
   const [orientation, setOrientation] = useState<"white" | "black">("white");
@@ -999,13 +1004,21 @@ function PlayView() {
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-muted-foreground">Wager</dt>
                       <dd className="font-mono font-medium">
-                        {formatTokenAmount(match.betAmountPlayerOne)} {solanaConfig.wagerSymbol}
+                        {match.betAmountPlayerOne === 0n ? (
+                          "Free"
+                        ) : (
+                          formatOnChainTokenAmount(match.betAmountPlayerOne, wagerTokenDetail)
+                        )}
                       </dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-muted-foreground">Total pot</dt>
                       <dd className="font-mono font-medium">
-                        {formatTokenAmount(match.totalPot)} {solanaConfig.wagerSymbol}
+                        {match.totalPot === 0n ? (
+                          "0"
+                        ) : (
+                          formatOnChainTokenAmount(match.totalPot, wagerTokenDetail)
+                        )}
                       </dd>
                     </div>
                     <div className="flex items-center justify-between gap-3">
@@ -1043,7 +1056,7 @@ function PlayView() {
                       {isBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
                       {match.betAmountPlayerOne === 0n
                         ? "Join free match"
-                        : `Join for ${formatTokenAmount(match.betAmountPlayerOne)} ${solanaConfig.wagerSymbol}`}
+                        : `Join for ${formatOnChainTokenAmount(match.betAmountPlayerOne, wagerTokenDetail)}`}
                     </button>
                   ) : null}
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getMint } from "@solana/spl-token";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { solanaConfig } from "@/lib/solana-config";
+import { fetchTokenMeta } from "@/lib/token-metadata";
 
 export interface MintDetails {
   address: string;
@@ -59,10 +60,11 @@ export function useMintDetails(addresses: string[]): Map<string, MintDetails> {
         const fallback = fallbackDetails(address);
         try {
           const mint = await getMint(connection, new PublicKey(address), "confirmed");
+          const meta = await fetchTokenMeta(address).catch(() => null);
           return {
             address,
             decimals: mint.decimals,
-            symbol: fallback.symbol,
+            symbol: meta?.symbol || fallback.symbol,
             verifiedOnChain: true,
           } satisfies Omit<MintDetails, "loading">;
         } catch {

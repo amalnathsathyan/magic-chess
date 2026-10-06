@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { solanaConfig, WRAPPED_SOL_MINT } from "@/lib/solana-config";
+import { fetchTokenMetas } from "@/lib/token-metadata";
 
 export interface TokenBalance {
   mint: string;
@@ -54,15 +55,22 @@ export function useTokenBalances(walletAddress: string | null | undefined) {
           "confirmed"
         );
 
+        const mintsToFetch = tokenAccounts.value
+          .map(({ account }) => account.data.parsed.info.mint)
+          .filter(Boolean);
+        const metadataMap = await fetchTokenMetas(mintsToFetch);
+
         for (const { account } of tokenAccounts.value) {
           const info = account.data.parsed.info;
           const amount = BigInt(info.tokenAmount.amount);
           if (amount <= 0n) continue; // Skip zero-balance tokens
 
+          const meta = metadataMap.get(info.mint);
+
           results.push({
             mint: info.mint,
-            symbol: info.tokenAmount.symbol || "???",
-            name: info.tokenAmount.symbol || "Unknown Token",
+            symbol: meta?.symbol || info.tokenAmount.symbol || "???",
+            name: meta?.name || info.tokenAmount.name || "Unknown Token",
             amount,
             decimals: info.tokenAmount.decimals,
             uiAmount: info.tokenAmount.uiAmount,
@@ -70,7 +78,7 @@ export function useTokenBalances(walletAddress: string | null | undefined) {
         }
 
         if (!cancelled) setBalances(results);
-      } catch {
+      } catch (e) {
         // Silently fail — token list will fall back to defaults
       } finally {
         if (!cancelled) setLoading(false);
