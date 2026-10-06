@@ -77,26 +77,31 @@ class SoundManager {
     const unlock = () => {
       this.loadPreference();
       if (this.enabled) {
-        const audio = this.getAudio(SOUND_PATHS.move);
-        const volume = audio.volume;
-        audio.volume = 0;
-        void audio.play().then(() => {
-          audio.pause();
-          audio.currentTime = 0;
-          audio.volume = volume;
-        }).catch(() => {
-          audio.volume = volume;
-        });
+        // Phones only let an element play later (after a network round trip,
+        // or for the opponent's move) if it first played during a tap, so
+        // prime every sound, not just one.
+        for (const path of Object.values(SOUND_PATHS)) {
+          const audio = this.getAudio(path);
+          audio.muted = true;
+          void audio.play().then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+          }).catch(() => undefined).finally(() => {
+            audio.muted = false;
+          });
+        }
       }
       cleanup();
     };
     const cleanup = () => {
       window.removeEventListener("pointerdown", unlock, true);
+      window.removeEventListener("touchend", unlock, true);
       window.removeEventListener("keydown", unlock, true);
       this.unlockCleanup = null;
     };
 
     window.addEventListener("pointerdown", unlock, true);
+    window.addEventListener("touchend", unlock, true);
     window.addEventListener("keydown", unlock, true);
     this.unlockCleanup = cleanup;
     return cleanup;

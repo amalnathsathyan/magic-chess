@@ -53,6 +53,7 @@ const GAMEPLAY_DISCRIMINATORS = new Set(
     [81, 192, 32, 110, 104, 116, 144, 151], // revoke_session_key
     [201, 80, 148, 145, 9, 196, 225, 56], // commit_state
     [142, 117, 126, 27, 242, 11, 103, 14], // undelegate_match
+    [175, 234, 101, 151, 53, 30, 177, 137], // claim_timeout_win
   ].map((bytes) => Buffer.from(bytes).toString("hex"))
 );
 
