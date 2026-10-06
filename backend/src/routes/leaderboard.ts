@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { sql } from "../db/pool.js";
+import { levelFor } from "../services/xp.js";
 
 interface LeaderboardQuery {
   sortBy?: string;
@@ -24,6 +25,9 @@ export function leaderboardRoutes(app: FastifyInstance): void {
         case "rating":
           orderClause = "ORDER BY rating DESC, wins DESC";
           break;
+        case "xp":
+          orderClause = "ORDER BY xp DESC, rating DESC";
+          break;
         case "totalGames":
           orderClause = "ORDER BY total_games DESC";
           break;
@@ -36,7 +40,7 @@ export function leaderboardRoutes(app: FastifyInstance): void {
       const rows = await sql.unsafe(
         `SELECT
           player_pubkey, total_games, wins, losses, draws,
-          current_streak, longest_win_streak, rating, peak_rating, rated_games,
+          current_streak, longest_win_streak, rating, peak_rating, rated_games, xp,
           (SELECT display_name FROM player_profiles p WHERE p.wallet = player_pubkey) AS display_name,
           (SELECT avatar FROM player_profiles p WHERE p.wallet = player_pubkey) AS avatar
         FROM player_stats
@@ -62,6 +66,9 @@ export function leaderboardRoutes(app: FastifyInstance): void {
             rating: Number(row.rating) || 0,
             peakRating: Number(row.peakRating) || 0,
             ratedGames: Number(row.ratedGames) || 0,
+            xp: Number(row.xp) || 0,
+            level: levelFor(Number(row.xp) || 0).level,
+            tier: levelFor(Number(row.xp) || 0).tier,
             displayName: (row.displayName as string | null) ?? null,
             avatar: (row.avatar as string | null) ?? null,
           };

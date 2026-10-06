@@ -1,0 +1,18 @@
+name: Backend keep-alive
+
+# Render's free plan stops the backend after 15 idle minutes, and the chain
+# indexer stops with it: games played while it sleeps reach the index late,
+# and their moves can be lost once the rollup drops its transaction history.
+# A ping every 10 minutes keeps it running (one service fits the free hours).
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Ping backend
+        run: curl -fsS --max-time 90 --retry 2 https://magic-chess-dev.onrender.com/health

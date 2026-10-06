@@ -1,6 +1,8 @@
-# Magic Speed Chess — CLAUDE.md
+# ZUG Arena (Magic Chess) — CLAUDE.md
 
 On-chain FIDE chess engine on Solana with MagicBlock Ephemeral Rollups for gasless gameplay.
+The product is branded **ZUG Arena** ("Every move matters."). It is live on devnet at
+https://arena.chessmagic.workers.dev. `dev` is the only branch, and feature PRs target `dev`.
 
 ## Project Layout
 
@@ -25,8 +27,12 @@ magic-chess/
 │       ├── react/index.ts      # React hooks (useMatch, useMatches, usePlayerMatches)
 │       ├── utils/fen.ts        # boardToFen, fenToBoard
 │       └── magicblock.ts       # MagicBlock endpoints, delegation helpers
-├── frontend/                   # Next.js 15 PWA (scaffolded)
-├── backend/                    # Fastify + Redis (planned)
+├── frontend/                   # Next.js 15 static export on a Cloudflare Worker (ZUG brand)
+│   ├── app/                    # arena (lobby), play, spectate, review, profile, leaderboard (Ladder)
+│   ├── components/brand/       # ZugLogo (symbol, wordmark, lockup)
+│   └── public/brand/           # Logo SVG/PNGs, OG image, 2:1 Privy logos
+├── backend/                    # Fastify + Postgres (Supabase) on Render
+│   └── src/services/           # chainIndexer, matchReconciler, eventIngest, rating, xp, solanaSponsor
 ├── docs/                       # Architecture, deployment, design docs
 ├── agent-findings/             # 18 agent research reports (historical)
 ├── .agents/skills/             # Agent skills: magicblock, solana-audit, solana-incident-response
@@ -53,6 +59,29 @@ State machine: `WaitingForOpponent` → `Active` → Terminal (`WhiteWins` | `Bl
 
 L1 holds tokens + settlement. ER handles gameplay (make_move, session keys, crank). Tokens never leave L1.
 
+### Off-chain data flow
+
+- **Chain is the source of truth.** The frontend reads open games and "your past matches" straight from
+  the chain through the SDK. Live games, the global Recent games list, review/replay, profiles, the
+  Ladder and XP are all served by the backend from Postgres.
+- **Two writers keep Postgres in sync, and both are idempotent:**
+  1. `chainIndexer.ts` follows transaction logs (base layer for create/join/settle, the rollup for moves)
+     and applies program events through `eventIngest.ts`. This is the only source of individual moves.
+  2. `matchReconciler.ts` (new) sweeps every `ChessMatch` account every 60s, both program-owned on base and
+     delegated ones read from the rollup. It inserts missing games and applies joins, results, the final
+     position and payouts. This recovers games played while the server slept or the DB was down. Moves
+     can't be recovered this way, so such games show the final board with a note that moves are missing.
+- Results from either path go through `updatePlayerStats` (Elo + stats + XP) behind a status guard, so a
+  game is never counted twice.
+- **Elo** (`rating.ts`): starts at 1200; K=40 for a player's first 30 rated games, then 20.
+- **XP** (`xp.ts`, `xpLedger.ts`): every award is a row in `xp_events` (player, match, kind), and the
+  running total is `player_stats.xp`. Per game: 10 for playing, +20 for a win or +8 for a draw, +1 per full
+  move past move 10 (max +15), and +25 for the first win of the UTC day. A game under 6 plies earns 2 XP;
+  after 5 games against the same opponent on the same day, games earn nothing. Level L→L+1 costs
+  100+25·(L−1) XP. Tiers: Pawn 1, Knight 5, Bishop 10, Rook 15, Queen 20, King 30.
+- **Migrations** run on backend start (`backend/src/db/migrate.ts`, 001–008). `/api/health` reports DB
+  readiness, the DB error with a fix hint, stored row counts, and indexer/reconciler status.
+
 ## Testing
 
 ```bash
@@ -67,6 +96,12 @@ cargo test --features integration-tests -p magic_chess --test cu_benchmarks
 
 # Anchor TypeScript tests (requires local validator)
 cd magic-chess-program && anchor test
+
+# Backend (DB tests run only when TEST_DATABASE_URL points at a scratch Postgres)
+cd backend && npm run typecheck && TEST_DATABASE_URL=postgres://... npm test
+
+# Frontend
+cd frontend && npx tsc --noEmit && npm run lint && npm run build
 ```
 
 ## Deploy
@@ -84,12 +119,40 @@ anchor deploy --provider.cluster devnet
 - `solana-audit` — Security audit workflows and vulnerability taxonomies
 - `solana-incident-response` — Incident triage and post-mortem
 
-## Current State
+## Project status (2026-10-06)
 
-205 tests across 4 harnesses (182 unit + 23 LiteSVM + 8 Mollusk CU + 12 Anchor TS).
-Prediction market infrastructure in place (`prediction_enabled` flag, 5 instructions).
-Frontend scaffolded (Next.js 15, Tailwind 4, shadcn/ui, Jotai).
-Backend planned (Fastify + Redis + Helius webhooks).
+Shipped on `dev`:
+- Gasless play: the backend sponsor relay pays all fees and rent. MagicBlock session keys give instant
+  moves on the rollup, and boards stream live over the rollup websocket.
+- Public match history: the lobby lists everyone's finished games, `/review?id=` shows the final board,
+  moves and replay controls, and `/profile?address=` is a public profile with an editable name, bio and
+  avatar, signed by the wallet.
+- Elo ratings, the Ladder, and the ZUG brand across the app (PR #47).
+- XP, levels and tiers; account reconciliation; `/api/health` diagnostics; a GitHub Actions ping that keeps
+  the Render backend awake (`.github/workflows/backend-keepalive.yml`).
+
+Known infrastructure facts:
+- `DATABASE_URL` on Render must be Supabase's **Session pooler** string (`…pooler.supabase.com:5432`). The
+  direct `db.<ref>.supabase.co` host is IPv6-only and Render can't reach it (ENETUNREACH). Until
+  2026-10-06 this left the DB empty. Never commit the password.
+- The program deployed on devnet is older than the source here. The backend decoders read only fields
+  that both layouts share, and read the wager tail best-effort.
+- `NEXT_PUBLIC_*` values are baked in at build time (`frontend/.env.production`), not read from Worker vars.
+- Tests: Rust 205 (unit, LiteSVM, Mollusk, Anchor TS); backend 67 (node:test, including Postgres
+  integration tests).
+
+## Next steps
+
+1. Confirm the DB fix on the live app: `/api/health` should show `"db":"connected"` and growing `stored`
+   counts, and `indexer.accounts.lastSuccessAt` should be recent. Then check that the lobby's Live and
+   Recent games lists fill.
+2. Games played before the fix come back through reconciliation without their moves. Consider whether to
+   keep them or hide them from the Recent games list.
+3. Settle finished games automatically: re-enable the task-scheduler crank or settle from the backend, so
+   players don't have to claim timeouts or press "Finalize and settle payout".
+4. XP polish: show "+N XP" on the game-over screen, add achievements and seasonal Ladder resets.
+5. Upgrade the devnet program to the current source. Then remove the best-effort decoding.
+6. PWA (issue #28, deferred).
 
 ## Gameplay: status and next steps
 

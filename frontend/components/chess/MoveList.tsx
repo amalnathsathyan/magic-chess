@@ -12,6 +12,8 @@ interface MoveListProps {
   result?: string; // "1-0" | "0-1" | "1/2-1/2" | undefined
   /** Makes each move clickable, e.g. to jump there in a replay. */
   onSelectMove?: (moveIndex: number) => void;
+  /** Shown instead of the default when there are no moves. */
+  emptyText?: string;
   className?: string;
 }
 
@@ -21,6 +23,7 @@ export function MoveList({
   currentMoveIndex = -1,
   result,
   onSelectMove,
+  emptyText = "No moves yet. White has the first move.",
   className,
 }: MoveListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -109,7 +112,7 @@ export function MoveList({
           </h3>
         </div>
         <p className="text-sm text-muted-foreground">
-          No moves yet. White has the first move.
+          {emptyText}
         </p>
       </div>
     );

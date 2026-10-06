@@ -22,6 +22,7 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useWallets } from "@privy-io/react-auth/solana";
 import { toast } from "sonner";
 import { FinishedGameCard } from "@/components/lobby/FinishedGameCard";
+import { LevelCard } from "@/components/profile/LevelCard";
 import { ProfileEditor } from "@/components/profile/ProfileEditor";
 import { RatingChart } from "@/components/profile/RatingChart";
 import { PlayerAvatar } from "@/components/shared/PlayerAvatar";
@@ -211,6 +212,11 @@ function ProfileView() {
                 <span className="text-[11px] font-normal text-primary/70">provisional</span>
               ) : null}
             </span>
+            {profile.xp ? (
+              <span className="inline-flex items-center border border-border px-3 py-1 font-mono text-xs uppercase tracking-widest text-muted-foreground">
+                Lv {profile.xp.level} · {profile.xp.tier}
+              </span>
+            ) : null}
             {profile.rank ? (
               <span className="text-xs text-muted-foreground">#{profile.rank} by rating</span>
             ) : null}
@@ -263,6 +269,8 @@ function ProfileView() {
           />
         </div>
       ) : null}
+
+      {profile.xp ? <LevelCard level={profile.xp} recent={profile.recentXp ?? []} /> : null}
 
       {/* ── Form and rating ── */}
       <section className="mb-6 grid gap-4 lg:grid-cols-[1fr_280px]" aria-labelledby="rating-heading">

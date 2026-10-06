@@ -14,7 +14,7 @@ type Predictor = Awaited<ReturnType<typeof predictionsApi.leaderboard>>["leaderb
 
 export default function LeaderboardPage() {
   const [entries, setEntries] = useState<ApiLeaderboardEntry[]>([]);
-  const [sortBy, setSortBy] = useState<"rating" | "wins" | "winRate" | "totalGames">("rating");
+  const [sortBy, setSortBy] = useState<"rating" | "xp" | "wins" | "winRate" | "totalGames">("rating");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [predictors, setPredictors] = useState<Predictor[] | null>(null);
@@ -46,13 +46,13 @@ export default function LeaderboardPage() {
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="font-display text-4xl sm:text-5xl">Ladder</h1>
         <p className="mt-1 text-muted-foreground">
-          Top players by Elo rating. Everyone starts at 1200.
+          Rating measures strength: everyone starts at 1200. XP rewards playing: every finished game earns it.
         </p>
       </motion.div>
 
       {/* Sort controls */}
-      <div className="mt-6 flex gap-2">
-        {(["rating", "wins", "winRate", "totalGames"] as const).map((s) => (
+      <div className="mt-6 flex flex-wrap gap-2">
+        {(["rating", "xp", "wins", "winRate", "totalGames"] as const).map((s) => (
           <button
             key={s}
             onClick={() => setSortBy(s)}
@@ -64,7 +64,9 @@ export default function LeaderboardPage() {
           >
             {s === "rating"
               ? "Rating"
-              : s === "wins"
+              : s === "xp"
+                ? "XP"
+                : s === "wins"
                 ? "Most Wins"
                 : s === "winRate"
                   ? "Win Rate"
@@ -91,11 +93,12 @@ export default function LeaderboardPage() {
                 <th className="py-3 pl-4 pr-2">#</th>
                 <th className="py-3 px-2">Player</th>
                 <th className="py-3 px-2 text-right">Rating</th>
-                <th className="py-3 px-2 text-right">Games</th>
+                <th className="py-3 px-2 text-right">Level</th>
+                <th className="hidden py-3 px-2 text-right sm:table-cell">Games</th>
                 <th className="py-3 px-2 text-right">Wins</th>
-                <th className="py-3 px-2 text-right">Losses</th>
-                <th className="py-3 px-2 text-right">Draws</th>
-                <th className="py-3 pr-4 pl-2 text-right">Win Rate</th>
+                <th className="hidden py-3 px-2 text-right sm:table-cell">Losses</th>
+                <th className="hidden py-3 px-2 text-right sm:table-cell">Draws</th>
+                <th className="hidden py-3 pr-4 pl-2 text-right sm:table-cell">Win Rate</th>
               </tr>
             </thead>
             <tbody>
@@ -119,11 +122,20 @@ export default function LeaderboardPage() {
                   <td className="py-3 px-2 text-right font-mono text-sm font-semibold tabular-nums">
                     {entry.rating ?? "—"}
                   </td>
-                  <td className="py-3 px-2 text-right text-sm">{entry.totalGames}</td>
+                  <td className="py-3 px-2 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                    {entry.level ? (
+                      <span title={`${entry.xp ?? 0} XP`}>
+                        {entry.level} <span className="hidden sm:inline">{entry.tier}</span>
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="hidden py-3 px-2 text-right text-sm sm:table-cell">{entry.totalGames}</td>
                   <td className="py-3 px-2 text-right text-sm text-success">{entry.wins}</td>
-                  <td className="py-3 px-2 text-right text-sm text-destructive">{entry.losses}</td>
-                  <td className="py-3 px-2 text-right text-sm text-muted-foreground">{entry.draws}</td>
-                  <td className="py-3 pr-4 pl-2 text-right text-sm font-medium">
+                  <td className="hidden py-3 px-2 text-right text-sm text-destructive sm:table-cell">{entry.losses}</td>
+                  <td className="hidden py-3 px-2 text-right text-sm text-muted-foreground sm:table-cell">{entry.draws}</td>
+                  <td className="hidden py-3 pr-4 pl-2 text-right text-sm font-medium sm:table-cell">
                     {(entry.winRate * 100).toFixed(0)}%
                   </td>
                 </tr>

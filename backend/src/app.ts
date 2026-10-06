@@ -7,7 +7,7 @@ import { matchRoutes } from "./routes/matches.js";
 import { playerRoutes } from "./routes/players.js";
 import { leaderboardRoutes } from "./routes/leaderboard.js";
 import { syncRoutes } from "./routes/sync.js";
-import { sql } from "./db/pool.js";
+import { checkDbReadiness, sql } from "./db/pool.js";
 import { realtimeRoutes } from "./routes/realtime.js";
 import { MatchRealtimeHub } from "./services/matchRealtime.js";
 import { loadMatchRealtimeSnapshot } from "./services/matchSnapshot.js";
@@ -15,9 +15,17 @@ import { transactionRoutes } from "./routes/transactions.js";
 import { predictionRoutes } from "./routes/predictions.js";
 import { ingestEvent, type IngestHooks } from "./services/eventIngest.js";
 import { ChainIndexer } from "./services/chainIndexer.js";
+import { MatchReconciler } from "./services/matchReconciler.js";
 import { MovePredictionService } from "./services/movePredictions.js";
 import { PredictionSessions } from "./services/predictionSession.js";
 import { readLiveMatchState } from "./services/matchState.js";
+
+async function waitForDb(): Promise<void> {
+  for (let attempt = 0; ; attempt += 1) {
+    if (await checkDbReadiness()) return;
+    await new Promise((resolve) => setTimeout(resolve, Math.min(60_000, 5_000 * 2 ** attempt)));
+  }
+}
 
 async function main(): Promise<void> {
   const app = Fastify({
@@ -70,8 +78,6 @@ async function main(): Promise<void> {
     onGameEnded: (args) => predictions.onGameEnded(args),
   };
 
-  // Routes
-  healthRoutes(app, realtime);
   matchRoutes(app);
   realtimeRoutes(app, realtime);
   playerRoutes(app);
@@ -91,7 +97,27 @@ async function main(): Promise<void> {
     matchIntervalMs: config.indexer.matchIntervalMs,
     programIntervalMs: config.indexer.programIntervalMs,
   });
-  if (config.indexer.enabled) indexer.start();
+  // Rebuilds rows from on-chain match accounts, so games played while the
+  // server slept or the database was down still reach the index.
+  const reconciler = new MatchReconciler({
+    intervalMs: config.indexer.reconcileIntervalMs,
+    log: app.log,
+    onChanged: async (matchId) => {
+      await realtime.refresh(matchId).catch(() => undefined);
+    },
+    onMissingMoves: (matchId) => indexer.scanMatchNow(matchId),
+  });
+  if (config.indexer.enabled) {
+    indexer.start();
+    // Wait for the schema before the first sweep writes to it.
+    void waitForDb().then(() => reconciler.start());
+  }
+
+  // Routes
+  healthRoutes(app, realtime, {
+    indexer: config.indexer.enabled ? () => indexer.stats() : undefined,
+    reconciler: config.indexer.enabled ? () => reconciler.stats() : undefined,
+  });
 
   // Safety net for settlements a missed hook left open.
   const sweep = setInterval(() => {
@@ -104,6 +130,7 @@ async function main(): Promise<void> {
   app.addHook("onClose", async () => {
     clearInterval(sweep);
     indexer.close();
+    reconciler.close();
     realtime.close();
   });
 
