@@ -26,6 +26,7 @@ import { useMatchRealtime } from "@/hooks/useMatchRealtime";
 import { useMoveTransactionNotifications } from "@/hooks/useMoveTransactionNotifications";
 import { api, type ApiMatchHistory } from "@/lib/api";
 import { useOnChainMoves } from "@/hooks/useOnChainMoves";
+import { useMoveLog } from "@/hooks/useMoveLog";
 import { copyToClipboard } from "@/lib/clipboard";
 import { absoluteUrl, playHref, spectateHref } from "@/lib/match-links";
 import { formatRemaining, isSquare, matchToFen, pliesPlayed } from "@/lib/match-board";
@@ -122,15 +123,21 @@ function SpectateView() {
   });
   // Same rule as the player view: the indexer database or the rollup's own
   // log, whichever lists more moves.
-  const confirmedMoves = useMemo(() => {
-    const historyMoves =
+  // Same list as the player view: live board, database and rollup log.
+  const historyMoves = useMemo(
+    () =>
       history?.moves.map((move) => ({
         san: move.san ?? move.algebraicMove,
-        from: move.from,
-        to: move.to,
-      })) ?? [];
-    return chainMoves && chainMoves.length > historyMoves.length ? chainMoves : historyMoves;
-  }, [chainMoves, history]);
+        from: move.from as Square,
+        to: move.to as Square,
+      })) ?? [],
+    [history]
+  );
+  const confirmedMoves = useMoveLog({
+    matchId,
+    fen,
+    sources: [historyMoves, chainMoves],
+  });
   const moves = useMemo(() => confirmedMoves.map((move) => move.san), [confirmedMoves]);
   const lastConfirmedMove = confirmedMoves.at(-1);
   const lastMove =

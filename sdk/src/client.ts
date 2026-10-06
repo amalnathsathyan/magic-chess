@@ -38,6 +38,42 @@ import { formatRawTokenAmount, isFreeWager } from "./wager";
 
 const TOKEN_PROGRAM = TOKEN_PROGRAM_ID;
 
+const CONFIRM_POLL_MS = 150;
+const CONFIRM_TIMEOUT_MS = 30_000;
+
+/**
+ * Wait for a signature by polling its status. web3.js' confirmTransaction
+ * waits on a websocket notification and, when that never arrives, only gives
+ * up once the blockhash expires; on a rollup that confirms in milliseconds
+ * a short status poll is both faster and more reliable.
+ */
+async function confirmSignature(
+  connection: Connection,
+  signature: TransactionSignature,
+  label = "Transaction"
+): Promise<void> {
+  const deadline = Date.now() + CONFIRM_TIMEOUT_MS;
+  for (;;) {
+    const { value } = await connection.getSignatureStatuses([signature]);
+    const status = value[0];
+    if (status?.err) {
+      throw new Error(`${label} ${signature} failed: ${JSON.stringify(status.err)}`);
+    }
+    if (
+      status &&
+      (status.confirmationStatus === "confirmed" ||
+        status.confirmationStatus === "finalized" ||
+        status.confirmations === null)
+    ) {
+      return;
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`${label} ${signature} was not confirmed within ${CONFIRM_TIMEOUT_MS / 1000}s`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, CONFIRM_POLL_MS));
+  }
+}
+
 /** Extra instructions bundled into the same transaction (one signature). */
 export interface TransactionExtras {
   preInstructions?: TransactionInstruction[];
@@ -106,20 +142,12 @@ export class MagicChessClient {
       );
     }
 
+    // Simulated just above, so skip the duplicate preflight round trip.
     const signature = await connection.sendRawTransaction(signed.serialize(), {
-      skipPreflight: false,
-      preflightCommitment: "confirmed",
+      skipPreflight: true,
       maxRetries: 3,
     });
-    const confirmation = await connection.confirmTransaction(
-      { signature, ...latest },
-      "confirmed"
-    );
-    if (confirmation.value.err) {
-      throw new Error(
-        `Transaction ${signature} failed: ${JSON.stringify(confirmation.value.err)}`
-      );
-    }
+    await confirmSignature(connection, signature);
     return signature;
   }
 
@@ -145,20 +173,62 @@ export class MagicChessClient {
       );
     }
     const signature = await connection.sendRawTransaction(transaction.serialize(), {
-      skipPreflight: false,
-      preflightCommitment: "confirmed",
+      skipPreflight: true,
       maxRetries: 3,
     });
-    const confirmation = await connection.confirmTransaction(
-      { signature, ...latest },
-      "confirmed"
-    );
-    if (confirmation.value.err) {
-      throw new Error(
-        `Fast-play transaction ${signature} failed: ${JSON.stringify(confirmation.value.err)}`
-      );
-    }
+    await confirmSignature(connection, signature, "Fast-play transaction");
     return signature;
+  }
+
+  /** Rollup connection per match, so each move skips the base-layer lookup. */
+  private readonly rollupConnections = new Map<string, Connection>();
+
+  private async moveConnection(matchId: string): Promise<{ connection: Connection; cached: boolean }> {
+    const cached = this.rollupConnections.get(matchId);
+    if (cached) return { connection: cached, cached: true };
+    const runtime = await this.runtimeForMatch(matchId);
+    if (runtime.runtime === "ephemeral") {
+      this.rollupConnections.set(matchId, runtime.connection);
+    }
+    return { connection: runtime.connection, cached: false };
+  }
+
+  private decodeMatch(data: Buffer): ChessMatch {
+    return normalizeChessMatch(this.program.coder.accounts.decode("chessMatch", data));
+  }
+
+  /**
+   * Stream a match's account. Delegated matches are watched on their rollup,
+   * which pushes every move the moment it lands. Returns an unsubscribe
+   * function; resolves to a no-op when the match doesn't exist.
+   */
+  async subscribeToMatch(
+    matchId: string,
+    onUpdate: (match: ChessMatch) => void
+  ): Promise<() => void> {
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+    const runtime = await resolveAccountRuntime(
+      this.baseConnection,
+      chessMatchPda,
+      this.programId,
+      this.routerEndpoint
+    );
+    if (!runtime) return () => undefined;
+    const { connection } = runtime;
+    const id = connection.onAccountChange(
+      chessMatchPda,
+      (info) => {
+        try {
+          onUpdate(this.decodeMatch(info.data));
+        } catch {
+          // Not a ChessMatch layout (e.g. mid-undelegation); polling covers it.
+        }
+      },
+      { commitment: "confirmed" }
+    );
+    return () => {
+      void connection.removeAccountChangeListener(id).catch(() => undefined);
+    };
   }
 
   private async runtimeForMatch(matchId: string) {
@@ -326,19 +396,26 @@ export class MagicChessClient {
         sessionToken: session?.token ?? null,
       } as never)
       .instruction();
-    const runtime = await this.runtimeForMatch(matchId);
-    if (session && runtime.runtime !== "ephemeral") {
+    const { connection, cached } = await this.moveConnection(matchId);
+    if (session && connection === this.baseConnection) {
       throw new Error("Fast-play sessions can only submit moves to a delegated match.");
     }
-    const sig = session
-      ? await this.sendInstructionWithSession(runtime.connection, ix, session)
-      : await this.sendInstruction(runtime.connection, ix);
+    let sig: TransactionSignature;
+    try {
+      sig = session
+        ? await this.sendInstructionWithSession(connection, ix, session)
+        : await this.sendInstruction(connection, ix);
+    } catch (error) {
+      // The match may have left the rollup; look it up afresh next time.
+      if (cached) this.rollupConnections.delete(matchId);
+      throw error;
+    }
 
-    // After the transaction, fetch the updated match to determine result
-    const match = await this.getMatch(matchId);
-    const result = determineMoveResult(match);
+    // Read the result from the same runtime: one round trip, no lookup.
+    const info = await connection.getAccountInfo(chessMatchPda, "confirmed").catch(() => null);
+    const result = determineMoveResult(info ? this.decodeMatch(info.data) : null);
 
-    return { result, signature: sig, rpcEndpoint: runtime.connection.rpcEndpoint };
+    return { result, signature: sig, rpcEndpoint: connection.rpcEndpoint };
   }
 
   /**

@@ -114,6 +114,28 @@ export function useMatch(matchId: string | null): UseMatchResult {
     fetch();
   }, [fetch]);
 
+  // Stream the account so moves show up the moment they land. Resubscribe
+  // when the match moves onto (or off) its rollup.
+  const isDelegated = match?.isDelegated ?? null;
+  useEffect(() => {
+    if (!client || !matchId || isDelegated === null) return;
+    let stopped = false;
+    let unsubscribe: (() => void) | undefined;
+    client
+      .subscribeToMatch(matchId, (next) => {
+        if (!stopped) setMatch(next);
+      })
+      .then((cleanup) => {
+        if (stopped) cleanup();
+        else unsubscribe = cleanup;
+      })
+      .catch(() => undefined);
+    return () => {
+      stopped = true;
+      unsubscribe?.();
+    };
+  }, [client, matchId, isDelegated]);
+
   return { match, loading, error, refetch: fetch };
 }
 
