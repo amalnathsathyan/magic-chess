@@ -9,13 +9,13 @@ https://arena.chessmagic.workers.dev. `dev` is the only branch, and feature PRs 
 ```
 magic-chess/
 ├── magic-chess-program/        # Anchor workspace (Rust program + tests)
-│   ├── programs/magic_chess/   # On-chain chess engine (22 instructions)
+│   ├── programs/magic_chess/   # On-chain chess engine (21 instructions)
 │   │   └── src/
 │   │       ├── lib.rs          # Instruction dispatch
 │   │       ├── constants.rs    # PDA seeds, validation limits
-│   │       ├── errors/         # 40 error variants
-│   │       ├── events/         # 6 event types
-│   │       ├── instructions/   # 22 instruction handlers
+│   │       ├── errors/         # 58 error variants (6000–6057)
+│   │       ├── events/         # 8 event types
+│   │       ├── instructions/   # instruction handlers
 │   │       ├── state/          # ChessMatch, CastlingRights, Piece, Enums, PredictionPool
 │   │       └── utils/          # chess_logic.rs (full engine), payout_logic.rs
 │   └── tests/                  # Unit + LiteSVM + Mollusk CU + Anchor TS
@@ -27,17 +27,13 @@ magic-chess/
 │       ├── react/index.ts      # React hooks (useMatch, useMatches, usePlayerMatches)
 │       ├── utils/fen.ts        # boardToFen, fenToBoard
 │       └── magicblock.ts       # MagicBlock endpoints, delegation helpers
-├── frontend/                   # Next.js 15 static export on a Cloudflare Worker (ZUG brand)
-│   ├── app/                    # arena (lobby), play, spectate, review, profile, leaderboard (Ladder)
-│   ├── components/brand/       # ZugLogo (symbol, wordmark, lockup)
-│   └── public/brand/           # Logo SVG/PNGs, OG image, 2:1 Privy logos
-├── backend/                    # Fastify + Postgres (Supabase) on Render
-│   └── src/services/           # chainIndexer, matchReconciler, eventIngest, rating, xp, solanaSponsor
-├── docs/                       # Architecture, deployment, design docs
-├── agent-findings/             # 18 agent research reports (historical)
-├── .agents/skills/             # Agent skills: magicblock, solana-audit, solana-incident-response
-├── .claude/                    # Claude Code settings
-└── skills-lock.json            # Skill version lockfile
+├── frontend/                   # ZUG Arena: Next.js 15 static export on a Cloudflare Worker
+├── backend/                    # Fastify + Postgres: indexer, SSE, gas sponsor, ratings
+├── docs/                       # Docusaurus site (GitHub Pages, deploys from dev)
+├── research/                   # Earlier R&D notes + agent-findings/ reports (reference, unmaintained)
+└── .claude/                    # Claude Code settings
+
+Local only (gitignored): .agents/skills/, .claude/skills/, skills-lock.json, marketing/
 ```
 
 ## Key Technical Details
@@ -86,7 +82,7 @@ L1 holds tokens + settlement. ER handles gameplay (make_move, session keys, cran
 
 ```bash
 # Unit tests (pure Rust, ~0s)
-cargo test -p magic_chess
+cargo test -p magic_chess --lib --test unit_tests
 
 # LiteSVM integration (in-process, SPL token flows)
 cd magic-chess-program/programs/magic_chess && cargo test -- litesvm
@@ -115,44 +111,17 @@ anchor deploy --provider.cluster devnet
 
 ## Active Skills
 
+Installed locally (not tracked in git; reinstall from `skills-lock.json`):
+
 - `magicblock` — MagicBlock integration (delegation, ER, session keys, crank)
 - `solana-audit` — Security audit workflows and vulnerability taxonomies
 - `solana-incident-response` — Incident triage and post-mortem
 
-## Project status (2026-10-06)
+## Current State
 
-Shipped on `dev`:
-- Gasless play: the backend sponsor relay pays all fees and rent. MagicBlock session keys give instant
-  moves on the rollup, and boards stream live over the rollup websocket.
-- Public match history: the lobby lists everyone's finished games, `/review?id=` shows the final board,
-  moves and replay controls, and `/profile?address=` is a public profile with an editable name, bio and
-  avatar, signed by the wallet.
-- Elo ratings, the Ladder, and the ZUG brand across the app (PR #47).
-- XP, levels and tiers; account reconciliation; `/api/health` diagnostics; a GitHub Actions ping that keeps
-  the Render backend awake (`.github/workflows/backend-keepalive.yml`).
-
-Known infrastructure facts:
-- `DATABASE_URL` on Render must be Supabase's **Session pooler** string (`…pooler.supabase.com:5432`). The
-  direct `db.<ref>.supabase.co` host is IPv6-only and Render can't reach it (ENETUNREACH). Until
-  2026-10-06 this left the DB empty. Never commit the password.
-- The program deployed on devnet is older than the source here. The backend decoders read only fields
-  that both layouts share, and read the wager tail best-effort.
-- `NEXT_PUBLIC_*` values are baked in at build time (`frontend/.env.production`), not read from Worker vars.
-- Tests: Rust 205 (unit, LiteSVM, Mollusk, Anchor TS); backend 67 (node:test, including Postgres
-  integration tests).
-
-## Next steps
-
-1. Confirm the DB fix on the live app: `/api/health` should show `"db":"connected"` and growing `stored`
-   counts, and `indexer.accounts.lastSuccessAt` should be recent. Then check that the lobby's Live and
-   Recent games lists fill.
-2. Games played before the fix come back through reconciliation without their moves. Consider whether to
-   keep them or hide them from the Recent games list.
-3. Settle finished games automatically: re-enable the task-scheduler crank or settle from the backend, so
-   players don't have to claim timeouts or press "Finalize and settle payout".
-4. XP polish: show "+N XP" on the game-over screen, add achievements and seasonal Ladder resets.
-5. Upgrade the devnet program to the current source. Then remove the best-effort decoding.
-6. PWA (issue #28, deferred).
+Program tests: 182 unit (`--test unit_tests`) + 59 LiteSVM + 15 payout flow + 11 Mollusk CU, all run in CI.
+Prediction market instructions live on-chain (`prediction_enabled` flag, 5 instructions); no outcome-pool UI yet.
+Frontend (ZUG Arena) and backend are live on devnet; see `docs/docs/deployment.md`.
 
 ## Gameplay: status and next steps
 

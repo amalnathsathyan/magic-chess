@@ -27,7 +27,7 @@ jobs:
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
       - name: Unit tests
-        run: cargo test -p magic_chess --lib
+        run: cargo test -p magic_chess --lib --test unit_tests
 
       - name: Build program (.so for LiteSVM)
         run: cargo build-sbf --tools-version v1.52 --arch v0
@@ -77,10 +77,43 @@ jobs:
         working-directory: sdk
         run: npm install
 
-      - name: Install peer dependencies (needed for typecheck)
-        working-directory: sdk
-        run: npm install --no-save @solana/web3.js@^1.95.4 @anchor-lang/core@^1.0.0 react@^19.0.0 react-dom@^19.0.0 @solana/spl-token@^0.4.0 @magicblock-labs/ephemeral-rollups-kit@^0.6.0 || true
-
       - name: Typecheck
         working-directory: sdk
-        run: npx tsc --noEmit || true
+        run: npx tsc --noEmit
+
+      - name: Test
+        working-directory: sdk
+        run: npm test
+
+  # ── Backend Typecheck + Tests ───────────────────────────────────
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+
+  # ── Docs build (deploys from dev via deploy-docs.yml) ──────────
+  docs:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+      - run: npm run build

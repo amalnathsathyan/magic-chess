@@ -1,0 +1,40 @@
+name: Bug report
+description: Something is broken in the program, backend, SDK or app.
+labels: [bug]
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options: [Program (Anchor), Backend, SDK, Frontend, Docs]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a match with ...
+        2. ...
+  - type: input
+    id: tx
+    attributes:
+      label: Match ID or transaction signature
+      description: Helps us find it on devnet or the rollup.
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      placeholder: Browser/OS, wallet (Privy embedded, Phantom, ...), commit SHA
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      render: shell
