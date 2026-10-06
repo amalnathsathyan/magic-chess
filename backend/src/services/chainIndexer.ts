@@ -54,6 +54,12 @@ export class ChainIndexer {
   private timers: NodeJS.Timeout[] = [];
   private programScanRunning = false;
   private matchScanRunning = false;
+  private readonly status = {
+    lastScanAt: null as string | null,
+    lastSuccessAt: null as string | null,
+    lastError: null as string | null,
+    eventsApplied: 0,
+  };
 
   constructor(private readonly options: ChainIndexerOptions) {}
 
@@ -77,6 +83,10 @@ export class ChainIndexer {
     this.timers = [];
   }
 
+  stats() {
+    return { ...this.status };
+  }
+
   /** Index a single match right away (e.g. when someone opens it). */
   async scanMatchNow(matchId: string): Promise<void> {
     await this.scanMatch(matchId);
@@ -86,9 +96,15 @@ export class ChainIndexer {
     const flag = kind === "program" ? "programScanRunning" : "matchScanRunning";
     if (this[flag]) return;
     this[flag] = true;
+    if (kind === "program") this.status.lastScanAt = new Date().toISOString();
     try {
       await run();
+      if (kind === "program") {
+        this.status.lastSuccessAt = new Date().toISOString();
+        this.status.lastError = null;
+      }
     } catch (error) {
+      this.status.lastError = String(error);
       this.options.log.warn({ error: String(error), kind }, "Chain indexer scan failed");
     } finally {
       this[flag] = false;
@@ -184,6 +200,7 @@ export class ChainIndexer {
         blockTime: transaction.blockTime ?? null,
       });
       if (result.status === "applied") {
+        this.status.eventsApplied += 1;
         await this.options.onApplied?.(event.matchId, result);
       } else if (result.status === "deferred") {
         pending = true;

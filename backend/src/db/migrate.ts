@@ -1,5 +1,6 @@
 import type { Sql } from "postgres";
 import { sql } from "./pool.js";
+import { awardGameXp } from "../services/xpLedger.js";
 import { INITIAL_RATING, rateGame, whiteScoreFor } from "../services/rating.js";
 
 // ponytail: simple numbered migration runner. No migration framework needed.
@@ -432,6 +433,61 @@ const migrations: Array<{ name: string; run: (s: Sql) => Promise<void> }> = [
           WHERE player_pubkey = ${wallet}
         `;
       }
+    },
+  },
+  {
+    name: "008_xp_and_reconciliation",
+    run: async (s) => {
+      // XP: a ledger of every award (auditable, idempotent per game and kind)
+      // plus the running total on player_stats for fast ladder sorting.
+      await s.unsafe(`
+        CREATE TABLE IF NOT EXISTS xp_events (
+          player_pubkey VARCHAR(44)  NOT NULL,
+          match_id      VARCHAR(32)  NOT NULL REFERENCES matches(match_id) ON DELETE CASCADE,
+          kind          VARCHAR(16)  NOT NULL,
+          amount        INTEGER      NOT NULL,
+          earned_at     TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (player_pubkey, match_id, kind)
+        )
+      `);
+      await s.unsafe(`
+        CREATE INDEX IF NOT EXISTS idx_xp_events_player_day
+          ON xp_events (player_pubkey, kind, earned_at)
+      `);
+      await s.unsafe("ALTER TABLE xp_events ENABLE ROW LEVEL SECURITY");
+      await s.unsafe(`
+        ALTER TABLE player_stats
+          ADD COLUMN IF NOT EXISTS xp INTEGER NOT NULL DEFAULT 0
+      `);
+      await s.unsafe(`
+        CREATE INDEX IF NOT EXISTS idx_player_stats_xp ON player_stats (xp DESC)
+      `);
+
+      // Per-game XP for each side, the game's length, and where the row came
+      // from: chain events, or rebuilt from the on-chain match account.
+      await s.unsafe(`
+        ALTER TABLE matches
+          ADD COLUMN IF NOT EXISTS white_xp      INTEGER,
+          ADD COLUMN IF NOT EXISTS black_xp      INTEGER,
+          ADD COLUMN IF NOT EXISTS ply_count     INTEGER,
+          ADD COLUMN IF NOT EXISTS index_source  VARCHAR(12) NOT NULL DEFAULT 'events',
+          ADD COLUMN IF NOT EXISTS reconciled_at TIMESTAMPTZ
+      `);
+      await s.unsafe(`
+        UPDATE matches m
+        SET ply_count = sub.n
+        FROM (SELECT match_id, MAX(move_number) AS n FROM moves GROUP BY match_id) sub
+        WHERE sub.match_id = m.match_id AND m.ply_count IS NULL
+      `);
+
+      // Award XP for games already played, in the order they ended.
+      const games = await s`
+        SELECT match_id FROM matches
+        WHERE game_status IN ('WhiteWins', 'BlackWins', 'Draw')
+          AND black_player IS NOT NULL
+        ORDER BY ended_at ASC NULLS FIRST, match_id ASC
+      `;
+      for (const game of games) await awardGameXp(s, String(game.matchId));
     },
   },
 ];

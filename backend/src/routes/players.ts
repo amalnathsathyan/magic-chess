@@ -171,9 +171,10 @@ export function playerRoutes(app: FastifyInstance): void {
           bet_amount_per_player, move_timeout_seconds, current_fen,
           created_at, ended_at, last_move_at,
           white_rating, black_rating, white_rating_change, black_rating_change,
+          white_xp, black_xp,
           (SELECT display_name FROM player_profiles p WHERE p.wallet = matches.white_player) AS white_name,
           (SELECT display_name FROM player_profiles p WHERE p.wallet = matches.black_player) AS black_name,
-          (SELECT COUNT(*) FROM moves WHERE moves.match_id = matches.match_id) AS move_count
+          GREATEST(COALESCE(ply_count, 0), (SELECT COUNT(*) FROM moves WHERE moves.match_id = matches.match_id)) AS move_count
         FROM matches
         ${where}
         ORDER BY COALESCE(ended_at, last_move_at, created_at) DESC
@@ -203,6 +204,8 @@ export function playerRoutes(app: FastifyInstance): void {
           blackRating: m.blackRating ?? null,
           whiteRatingChange: m.whiteRatingChange ?? null,
           blackRatingChange: m.blackRatingChange ?? null,
+          whiteXp: m.whiteXp ?? null,
+          blackXp: m.blackXp ?? null,
           playerColor:
             m.whitePlayer === pubkey ? "white" : "black",
         })),

@@ -3,6 +3,7 @@ import { sql } from "../db/pool.js";
 import { initMatch, removeMatch } from "./boardCache.js";
 import type { VerifiedProgramEvent } from "./transactionVerifier.js";
 import type { MatchNotification } from "./matchRealtime.js";
+import { awardGameXp } from "./xpLedger.js";
 import {
   INITIAL_RATING,
   rateGame,
@@ -217,7 +218,12 @@ async function applyEvent(tx: Sql, input: IngestInput): Promise<IngestResult> {
           AND white_player = ${event.playerOne}
         RETURNING match_id
       `;
-      if (rows.length === 0) throw new Deferred("Match is not indexed or already joined");
+      if (rows.length === 0) {
+        if (await alreadyIn(tx, event.matchId, "black_player = $2", [event.playerTwo])) {
+          return { status: "duplicate" };
+        }
+        throw new Deferred("Match is not indexed or already joined");
+      }
       return {
         status: "applied",
         notification: {
@@ -243,7 +249,12 @@ async function applyEvent(tx: Sql, input: IngestInput): Promise<IngestResult> {
           AND white_player = ${event.creator}
         RETURNING match_id
       `;
-      if (rows.length === 0) throw new Deferred("Match is not indexed or cannot be aborted");
+      if (rows.length === 0) {
+        if (await alreadyIn(tx, event.matchId, "game_status = 'Aborted'", [])) {
+          return { status: "duplicate" };
+        }
+        throw new Deferred("Match is not indexed or cannot be aborted");
+      }
       return {
         status: "applied",
         notification: { type: "match-aborted", creator: event.creator, signature },
@@ -288,6 +299,7 @@ async function applyEvent(tx: Sql, input: IngestInput): Promise<IngestResult> {
             last_move_signature = ${signature},
             last_move_event_index = ${input.eventIndex},
             last_move_at = ${confirmedAt(input.blockTime)},
+            ply_count = GREATEST(COALESCE(ply_count, 0), ${ply}),
             last_webhook_slot = ${slot},
             last_webhook_sig = ${signature}
         WHERE match_id = ${event.matchId}
@@ -323,7 +335,13 @@ async function applyEvent(tx: Sql, input: IngestInput): Promise<IngestResult> {
           AND game_status = 'Active'
         RETURNING match_id
       `;
-      if (rows.length === 0) throw new Deferred("Match is not active in the index yet");
+      if (rows.length === 0) {
+        // The reconciler may have recorded the result from the match account.
+        if (await alreadyIn(tx, event.matchId, "game_status = $2", [dbStatus])) {
+          return { status: "duplicate" };
+        }
+        throw new Deferred("Match is not active in the index yet");
+      }
       await updatePlayerStats(tx, event.matchId, event.status, event.reason);
       return {
         status: "applied",
@@ -350,7 +368,12 @@ async function applyEvent(tx: Sql, input: IngestInput): Promise<IngestResult> {
           AND game_status IN ('WhiteWins', 'BlackWins', 'Draw')
         RETURNING match_id
       `;
-      if (rows.length === 0) throw new Deferred("Match result is not indexed yet");
+      if (rows.length === 0) {
+        if (await alreadyIn(tx, event.matchId, "payout_processed = TRUE", [])) {
+          return { status: "duplicate" };
+        }
+        throw new Deferred("Match result is not indexed yet");
+      }
       return {
         status: "applied",
         notification: { type: "payout-processed", signature },
@@ -359,7 +382,21 @@ async function applyEvent(tx: Sql, input: IngestInput): Promise<IngestResult> {
   }
 }
 
-async function updatePlayerStats(
+/** True when the match row already reflects what an event would record. */
+async function alreadyIn(
+  tx: Sql,
+  matchId: string,
+  condition: string,
+  params: string[]
+): Promise<boolean> {
+  const rows = await tx.unsafe(
+    `SELECT 1 FROM matches WHERE match_id = $1 AND ${condition}`,
+    [matchId, ...params]
+  );
+  return rows.length > 0;
+}
+
+export async function updatePlayerStats(
   s: Sql,
   matchId: string,
   status: string,
@@ -488,4 +525,5 @@ async function updatePlayerStats(
       );
     }
   }
+  await awardGameXp(s, matchId);
 }

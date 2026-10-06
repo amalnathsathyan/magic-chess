@@ -93,6 +93,12 @@ function ReviewView() {
     replay.goTo(Number.isFinite(startPly) && startPly > 0 ? startPly : moves.length);
   }, [jumped, moves.length, replay, startPly]);
 
+  // Games rebuilt from the on-chain account may be missing some moves: the
+  // final position still comes from the chain, so show it at the end.
+  const movesMissing = history?.movesComplete === false;
+  const boardFen =
+    movesMissing && replay.atEnd && history?.finalFen ? history.finalFen : replay.fen;
+
   const sans = useMemo(
     () => moves.map((move) => move.san ?? move.algebraicMove),
     [moves]
@@ -155,7 +161,7 @@ function ReviewView() {
             <section className="flex flex-col items-center gap-3" aria-label="Game replay">
               <ReviewPlayer color={topColor} {...side(topColor)} />
               <ChessBoard
-                fen={replay.fen}
+                fen={boardFen}
                 orientation={orientation}
                 boardWidth={boardWidth}
                 arePiecesDraggable={false}
@@ -185,7 +191,9 @@ function ReviewView() {
                 <dl className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
                   <div className="rounded-md bg-card/60 p-2">
                     <dt className="text-muted-foreground">Moves</dt>
-                    <dd className="font-mono text-sm font-semibold tabular-nums">{moves.length}</dd>
+                    <dd className="font-mono text-sm font-semibold tabular-nums">
+                      {Math.ceil((history.plyCount ?? moves.length) / 2)}
+                    </dd>
                   </div>
                   <div className="rounded-md bg-card/60 p-2">
                     <dt className="inline-flex items-center gap-1 text-muted-foreground">
@@ -206,6 +214,13 @@ function ReviewView() {
                     </dd>
                   </div>
                 </dl>
+                {movesMissing ? (
+                  <p className="mt-3 border border-border px-3 py-2 text-xs text-muted-foreground">
+                    {moves.length === 0
+                      ? "This game's moves weren't recorded, so it can't be replayed. The board shows the final position."
+                      : "Some of this game's moves weren't recorded. The board shows the final position at the end."}
+                  </p>
+                ) : null}
                 <p className="mt-3 text-xs text-muted-foreground">
                   Played {timeAgo(history.endedAt ?? history.createdAt)} · #{matchId}
                 </p>
@@ -221,10 +236,11 @@ function ReviewView() {
 
               <MoveList
                 moves={sans}
-                fen={replay.fen}
+                fen={boardFen}
                 currentMoveIndex={replay.ply - 1}
                 onSelectMove={(index) => replay.goTo(index + 1)}
                 result={pgnResult(status)}
+                emptyText={movesMissing ? "The moves of this game weren't recorded." : undefined}
                 className="min-h-64"
               />
               {error ? (
@@ -252,7 +268,13 @@ function ReviewPlayer({
 }: {
   color: "white" | "black";
   address: string | null;
-  meta?: { name: string | null; avatar: string | null; rating: number | null; ratingChange: number | null };
+  meta?: {
+    name: string | null;
+    avatar: string | null;
+    rating: number | null;
+    ratingChange: number | null;
+    xp?: number | null;
+  };
 }) {
   const delta = formatRatingChange(meta?.ratingChange);
   return (
@@ -287,6 +309,7 @@ function ReviewPlayer({
               {delta}
             </span>
           ) : null}
+          {meta.xp ? <span className="ml-2 text-xs text-primary">+{meta.xp} XP</span> : null}
         </span>
       ) : null}
     </div>

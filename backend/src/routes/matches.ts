@@ -76,9 +76,10 @@ export function matchRoutes(app: FastifyInstance): void {
           game_end_reason, move_timeout_seconds, current_fen,
           bet_amount_per_player, started_at, ended_at,
           white_rating, black_rating, white_rating_change, black_rating_change,
+          white_xp, black_xp,
           (SELECT display_name FROM player_profiles p WHERE p.wallet = matches.white_player) AS white_name,
           (SELECT display_name FROM player_profiles p WHERE p.wallet = matches.black_player) AS black_name,
-          (SELECT COUNT(*) FROM moves WHERE moves.match_id = matches.match_id) AS move_count,
+          GREATEST(COALESCE(ply_count, 0), (SELECT COUNT(*) FROM moves WHERE moves.match_id = matches.match_id)) AS move_count,
           (SELECT COUNT(*) FROM move_bets b
              WHERE b.match_id = matches.match_id AND b.status = 'open') AS open_predictions
         FROM matches
@@ -111,6 +112,8 @@ export function matchRoutes(app: FastifyInstance): void {
         blackRating: row.blackRating ?? null,
         whiteRatingChange: row.whiteRatingChange ?? null,
         blackRatingChange: row.blackRatingChange ?? null,
+        whiteXp: row.whiteXp ?? null,
+        blackXp: row.blackXp ?? null,
       }));
 
       reply.send({
@@ -133,7 +136,7 @@ export function matchRoutes(app: FastifyInstance): void {
           total_pot, platform_fee_bps, move_timeout_seconds,
           created_at, started_at, ended_at, last_move_at,
           payout_processed, payout_tx_signature, current_fen,
-          (SELECT COUNT(*) FROM moves WHERE moves.match_id = m.match_id) AS move_count
+          GREATEST(COALESCE(m.ply_count, 0), (SELECT COUNT(*) FROM moves WHERE moves.match_id = m.match_id)) AS move_count
         FROM matches m
         WHERE match_id = ${matchId}
       `;
@@ -183,6 +186,7 @@ export function matchRoutes(app: FastifyInstance): void {
           betting_token_mint, bet_amount_per_player, total_pot, move_timeout_seconds,
           created_at, started_at, ended_at, payout_processed, current_fen,
           white_rating, black_rating, white_rating_change, black_rating_change,
+          white_xp, black_xp, ply_count,
           (SELECT display_name FROM player_profiles p WHERE p.wallet = m.white_player) AS white_name,
           (SELECT display_name FROM player_profiles p WHERE p.wallet = m.black_player) AS black_name,
           (SELECT avatar FROM player_profiles p WHERE p.wallet = m.white_player) AS white_avatar,
@@ -240,12 +244,14 @@ export function matchRoutes(app: FastifyInstance): void {
           avatar: meta.whiteAvatar ?? null,
           rating: meta.whiteRating ?? null,
           ratingChange: meta.whiteRatingChange ?? null,
+          xp: meta.whiteXp ?? null,
         },
         black: {
           name: meta.blackName ?? null,
           avatar: meta.blackAvatar ?? null,
           rating: meta.blackRating ?? null,
           ratingChange: meta.blackRatingChange ?? null,
+          xp: meta.blackXp ?? null,
         },
         moves: moves.map((m: Record<string, unknown>, index: number) => ({
           moveNumber: m.moveNumber,
@@ -262,6 +268,9 @@ export function matchRoutes(app: FastifyInstance): void {
           playedAt: m.playedAt ?? null,
         })),
         totalMoves: moves.length,
+        // Games rebuilt from the match account can be missing their moves.
+        plyCount: Math.max(Number(meta.plyCount ?? 0), moves.length),
+        movesComplete: moves.length >= Number(meta.plyCount ?? 0),
       });
     }
   );

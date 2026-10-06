@@ -60,6 +60,9 @@ export interface ApiMatch {
   blackRating?: number | null;
   whiteRatingChange?: number | null;
   blackRatingChange?: number | null;
+  /** XP each side earned from the game. */
+  whiteXp?: number | null;
+  blackXp?: number | null;
 }
 
 export interface ApiPlayerMatch extends ApiMatch {
@@ -97,6 +100,7 @@ export interface ApiHistorySide {
   avatar: string | null;
   rating: number | null;
   ratingChange: number | null;
+  xp?: number | null;
 }
 
 export interface ApiMatchHistory {
@@ -118,6 +122,20 @@ export interface ApiMatchHistory {
   black: ApiHistorySide;
   moves: ApiMove[];
   totalMoves: number;
+  /** Half-moves in the game; above totalMoves when some moves weren't recorded. */
+  plyCount?: number;
+  movesComplete?: boolean;
+}
+
+export type ApiTier = "Pawn" | "Knight" | "Bishop" | "Rook" | "Queen" | "King";
+
+export interface ApiLevel {
+  xp: number;
+  level: number;
+  tier: ApiTier;
+  /** XP earned inside the current level, out of levelSpan. */
+  levelXp: number;
+  levelSpan: number;
 }
 
 export type ApiOutcome = "win" | "loss" | "draw";
@@ -140,6 +158,8 @@ export interface ApiPlayerProfile {
   ratedGames: number;
   provisional: boolean;
   rank: number | null;
+  xp?: ApiLevel;
+  recentXp?: Array<{ matchId: string; amount: number; earnedAt: string | null; kinds: string[] }>;
   activeGames: number;
   stats: {
     totalGames: number;
@@ -199,6 +219,9 @@ export interface ApiLeaderboardEntry {
   rating?: number;
   peakRating?: number;
   ratedGames?: number;
+  xp?: number;
+  level?: number;
+  tier?: ApiTier;
   displayName?: string | null;
   avatar?: string | null;
 }

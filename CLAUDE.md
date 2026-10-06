@@ -1,6 +1,8 @@
-# Magic Speed Chess — CLAUDE.md
+# ZUG Arena (Magic Chess) — CLAUDE.md
 
 On-chain FIDE chess engine on Solana with MagicBlock Ephemeral Rollups for gasless gameplay.
+The product is branded **ZUG Arena** ("Every move matters."). It is live on devnet at
+https://arena.chessmagic.workers.dev. `dev` is the only branch, and feature PRs target `dev`.
 
 ## Project Layout
 
@@ -53,6 +55,29 @@ State machine: `WaitingForOpponent` → `Active` → Terminal (`WhiteWins` | `Bl
 
 L1 holds tokens + settlement. ER handles gameplay (make_move, session keys, crank). Tokens never leave L1.
 
+### Off-chain data flow
+
+- **Chain is the source of truth.** The frontend reads open games and "your past matches" straight from
+  the chain through the SDK. Live games, the global Recent games list, review/replay, profiles, the
+  Ladder and XP are all served by the backend from Postgres.
+- **Two writers keep Postgres in sync, and both are idempotent:**
+  1. `chainIndexer.ts` follows transaction logs (base layer for create/join/settle, the rollup for moves)
+     and applies program events through `eventIngest.ts`. This is the only source of individual moves.
+  2. `matchReconciler.ts` (new) sweeps every `ChessMatch` account every 60s, both program-owned on base and
+     delegated ones read from the rollup. It inserts missing games and applies joins, results, the final
+     position and payouts. This recovers games played while the server slept or the DB was down. Moves
+     can't be recovered this way, so such games show the final board with a note that moves are missing.
+- Results from either path go through `updatePlayerStats` (Elo + stats + XP) behind a status guard, so a
+  game is never counted twice.
+- **Elo** (`rating.ts`): starts at 1200; K=40 for a player's first 30 rated games, then 20.
+- **XP** (`xp.ts`, `xpLedger.ts`): every award is a row in `xp_events` (player, match, kind), and the
+  running total is `player_stats.xp`. Per game: 10 for playing, +20 for a win or +8 for a draw, +1 per full
+  move past move 10 (max +15), and +25 for the first win of the UTC day. A game under 6 plies earns 2 XP;
+  after 5 games against the same opponent on the same day, games earn nothing. Level L→L+1 costs
+  100+25·(L−1) XP. Tiers: Pawn 1, Knight 5, Bishop 10, Rook 15, Queen 20, King 30.
+- **Migrations** run on backend start (`backend/src/db/migrate.ts`, 001–008). `/api/health` reports DB
+  readiness, the DB error with a fix hint, stored row counts, and indexer/reconciler status.
+
 ## Testing
 
 ```bash
@@ -67,6 +92,12 @@ cargo test --features integration-tests -p magic_chess --test cu_benchmarks
 
 # Anchor TypeScript tests (requires local validator)
 cd magic-chess-program && anchor test
+
+# Backend (DB tests run only when TEST_DATABASE_URL points at a scratch Postgres)
+cd backend && npm run typecheck && TEST_DATABASE_URL=postgres://... npm test
+
+# Frontend
+cd frontend && npx tsc --noEmit && npm run lint && npm run build
 ```
 
 ## Deploy

@@ -91,6 +91,7 @@ export const config = {
     enabled: process.env.CHAIN_INDEXER_ENABLED !== "false",
     matchIntervalMs: Number(process.env.CHAIN_INDEXER_MATCH_INTERVAL_MS || "3000"),
     programIntervalMs: Number(process.env.CHAIN_INDEXER_PROGRAM_INTERVAL_MS || "15000"),
+    reconcileIntervalMs: Number(process.env.CHAIN_RECONCILE_INTERVAL_MS || "60000"),
   },
 
   predictions: {

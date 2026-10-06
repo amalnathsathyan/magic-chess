@@ -1,6 +1,7 @@
 import { sql } from "../db/pool.js";
 import { INITIAL_FEN, sanFromUci } from "./movePredictions.js";
 import { INITIAL_RATING } from "./rating.js";
+import { levelFor } from "./xp.js";
 
 /** Avatars are chess pieces, so no image hosting or moderation is needed. */
 export const AVATARS = ["king", "queen", "rook", "bishop", "knight", "pawn"] as const;
@@ -105,14 +106,14 @@ function add(tally: Tally, outcome: Outcome): void {
 
 /** Everything the profile page shows, read from the indexer database. */
 export async function loadPlayerProfile(wallet: string) {
-  const [profileRows, statsRows, finished, activeRows, rankRows] = await Promise.all([
+  const [profileRows, statsRows, finished, activeRows, rankRows, xpRows] = await Promise.all([
     sql`SELECT display_name, bio, avatar, created_at FROM player_profiles WHERE wallet = ${wallet}`,
     sql`SELECT * FROM player_stats WHERE player_pubkey = ${wallet}`,
     sql`
       SELECT
         m.match_id, m.white_player, m.black_player, m.game_status, m.game_end_reason,
         m.created_at, m.ended_at, m.white_rating, m.black_rating,
-        m.white_rating_change, m.black_rating_change,
+        m.white_rating_change, m.black_rating_change, m.white_xp, m.black_xp,
         first.algebraic_move AS first_uci,
         reply.algebraic_move AS reply_uci,
         first.fen_after_move AS first_fen
@@ -137,6 +138,14 @@ export async function loadPlayerProfile(wallet: string) {
           (SELECT rating FROM player_stats WHERE player_pubkey = ${wallet}),
           ${INITIAL_RATING}
         )
+    `,
+    sql`
+      SELECT match_id, SUM(amount)::int AS amount, MAX(earned_at) AS earned_at,
+             ARRAY_AGG(kind ORDER BY kind) AS kinds
+      FROM xp_events WHERE player_pubkey = ${wallet}
+      GROUP BY match_id
+      ORDER BY MAX(earned_at) DESC
+      LIMIT 10
     `,
   ]);
 
@@ -217,6 +226,13 @@ export async function loadPlayerProfile(wallet: string) {
     ratedGames,
     provisional: ratedGames < 30,
     rank: ratedGames > 0 ? Number(rankRows[0]?.rank ?? 0) : null,
+    xp: levelFor(Number(s?.xp) || 0),
+    recentXp: (xpRows as Array<Record<string, unknown>>).map((row) => ({
+      matchId: String(row.matchId),
+      amount: Number(row.amount),
+      earnedAt: row.earnedAt,
+      kinds: (row.kinds as string[]) ?? [],
+    })),
     activeGames: Number(active?.active ?? 0),
     stats: {
       totalGames: total,
