@@ -23,6 +23,7 @@ import { buildWagerInstruction, getTransactionPayer } from "@/lib/wager";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { useTokenBalances, type TokenBalance } from "@/lib/token-balances";
 import { syncMatchCreated } from "@/lib/sync";
+import { solanaDevnetTxUrl } from "@/lib/explorer";
 
 interface CreateMatchFormProps {
   isOpen: boolean;
@@ -145,7 +146,16 @@ export function CreateMatchForm({
       void syncMatchCreated({ matchId, signature });
 
       toast.success("Match created on Solana", {
-        description: `${signature.slice(0, 8)}…${signature.slice(-8)}`,
+        description: (
+          <a
+            href={solanaDevnetTxUrl(signature)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline text-primary hover:text-primary-hover"
+          >
+            {signature.slice(0, 8)}…{signature.slice(-8)} ↗
+          </a>
+        ),
       });
       onClose();
       router.push(playHref(matchId));
