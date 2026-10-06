@@ -50,8 +50,7 @@ CI runs the program, frontend and SDK checks on every pull request.
 2. Keep pull requests focused. One fix or feature per PR.
 3. Write commits in [Conventional Commits](https://www.conventionalcommits.org/)
    style: `fix(play): ...`, `feat(backend): ...`, `docs: ...`.
-4. Open the PR against `dev` and fill in the template. `main` tracks releases
-   and is what the docs site deploys from.
+4. Open the PR against `dev` (the default branch) and fill in the template.
 
 ## Program changes
 

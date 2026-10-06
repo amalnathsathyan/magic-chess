@@ -27,7 +27,7 @@ magic-chess/
 │       └── magicblock.ts       # MagicBlock endpoints, delegation helpers
 ├── frontend/                   # ZUG Arena: Next.js 15 static export on a Cloudflare Worker
 ├── backend/                    # Fastify + Postgres: indexer, SSE, gas sponsor, ratings
-├── docs/                       # Docusaurus site (GitHub Pages, deploys from main)
+├── docs/                       # Docusaurus site (GitHub Pages, deploys from dev)
 ├── research/                   # Earlier R&D notes + agent-findings/ reports (reference, unmaintained)
 └── .claude/                    # Claude Code settings
 

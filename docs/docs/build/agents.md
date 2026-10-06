@@ -886,4 +886,4 @@ Agents should implement backoff when:
 - [MagicBlock integration](../architecture/magicblock.md): delegation, session keys, ER lifecycle
 - [Prediction market](../features/prediction-market.md): parimutuel math and settlement
 - [SDK reference](./sdk.md): `MagicChessClient`, React hooks and helpers
-- [play-full-match.ts](https://github.com/amalnathsathyan/magic-chess/blob/main/magic-chess-program/scripts/play-full-match.ts): a reference script that plays a full devnet game with session keys
+- [play-full-match.ts](https://github.com/amalnathsathyan/magic-chess/blob/dev/magic-chess-program/scripts/play-full-match.ts): a reference script that plays a full devnet game with session keys

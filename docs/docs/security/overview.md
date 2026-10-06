@@ -10,7 +10,7 @@ Magic Chess has not had an external audit. It runs on devnet with test tokens. D
 
 ## Reporting a vulnerability
 
-Report it privately through [GitHub security advisories](https://github.com/amalnathsathyan/magic-chess/security/advisories/new). Do not open a public issue. Scope and response times are in [SECURITY.md](https://github.com/amalnathsathyan/magic-chess/blob/main/SECURITY.md).
+Report it privately through [GitHub security advisories](https://github.com/amalnathsathyan/magic-chess/security/advisories/new). Do not open a public issue. Scope and response times are in [SECURITY.md](https://github.com/amalnathsathyan/magic-chess/blob/dev/SECURITY.md).
 
 ## Trust model
 

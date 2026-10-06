@@ -28,4 +28,4 @@ These come from the [2026-10-01 audit](./security/audit-2026-10-01.md) and need 
 - Run several backend replicas behind a shared pub/sub for the SSE hub.
 - Before mainnet: an external audit, mainnet RPC and validator configuration, and a decision on fees and tokens (see [Proposals](./proposals/fee-split.md)).
 
-Want to work on one of these? See [CONTRIBUTING.md](https://github.com/amalnathsathyan/magic-chess/blob/main/CONTRIBUTING.md).
+Want to work on one of these? See [CONTRIBUTING.md](https://github.com/amalnathsathyan/magic-chess/blob/dev/CONTRIBUTING.md).
