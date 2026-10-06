@@ -90,3 +90,17 @@ anchor deploy --provider.cluster devnet
 Prediction market infrastructure in place (`prediction_enabled` flag, 5 instructions).
 Frontend scaffolded (Next.js 15, Tailwind 4, shadcn/ui, Jotai).
 Backend planned (Fastify + Redis + Helius webhooks).
+
+## Gameplay: status and next steps
+
+Fixed after jason's live test (2026-10-06):
+- The page no longer jumps on phones: `MoveList` scrolled the whole page with `scrollIntoView` on every re-render (once a second), which also cancelled touch drags.
+- "Confirming transaction…" no longer hangs: `runTransaction` in `frontend/app/play/page.tsx` stopped awaiting the backend history call (the DB can be asleep). That pending state also locked the board, which is why moves failed.
+- Create and join confirm faster: the gas sponsor (`backend/src/services/solanaSponsor.ts`, `confirmFast`) polls the signature status instead of waiting only on the RPC websocket. An open match also polls every 1.5s so the creator sees the join.
+- Finished games say who won and why (timeout, resignation, checkmate, draws) above the board.
+- When the side to move runs out of time, both players see it. An embedded (Privy) wallet claims the timeout win itself, without a popup (`claim_timeout_win` is in the quiet-signing list). External wallets get the "Claim timeout win" button.
+- Sounds play for the opponent's moves and for game start and end, and all sounds are unlocked on the first tap so phones play them.
+
+Next steps:
+- Timeouts still need a claim and "Finalize and settle payout" still needs a press, because the task-scheduler crank is disabled. Re-enabling the crank (or settling from the backend) would end games with no action from players.
+- Not verified on a real phone yet; retest drag and tap moves, sound and the bottom nav on iOS Safari and Android Chrome.

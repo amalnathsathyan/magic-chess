@@ -25,14 +25,23 @@ export function MoveList({
 }: MoveListProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Follow the selected move; without one, stay at the latest.
+  // Follow the selected move; without one, stay at the latest. Only the
+  // list's own box scrolls: scrollIntoView would also scroll the page, which
+  // on phones yanked the view (and any piece being dragged) every re-render.
+  const moveCount = moves.length;
   useEffect(() => {
     const container = scrollRef.current;
     if (!container) return;
-    const active = container.querySelector("[data-active-move='true']");
-    if (active) active.scrollIntoView({ block: "nearest" });
-    else container.scrollTop = container.scrollHeight;
-  }, [moves, currentMoveIndex]);
+    const active = container.querySelector<HTMLElement>("[data-active-move='true']");
+    if (!active) {
+      container.scrollTop = container.scrollHeight;
+      return;
+    }
+    const box = container.getBoundingClientRect();
+    const item = active.getBoundingClientRect();
+    if (item.top < box.top) container.scrollTop -= box.top - item.top;
+    else if (item.bottom > box.bottom) container.scrollTop += item.bottom - box.bottom;
+  }, [moveCount, currentMoveIndex]);
 
   const copyText = async (text: string, label: string) => {
     try {

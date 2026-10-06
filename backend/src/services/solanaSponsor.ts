@@ -497,6 +497,50 @@ export interface RelaySponsoredTransactionInput {
   lastValidBlockHeight: number;
 }
 
+const STATUS_POLL_INTERVAL_MS = 400;
+
+/**
+ * Confirms at "confirmed" as soon as the RPC reports it. web3.js waits on a
+ * websocket notification that public devnet RPCs often deliver late or not at
+ * all (then it waits out the blockhash, up to a minute), so poll the
+ * signature status alongside it and take whichever answers first.
+ */
+export async function confirmFast(
+  connection: Pick<Connection, "confirmTransaction" | "getSignatureStatuses">,
+  strategy: { signature: string; blockhash: string; lastValidBlockHeight: number },
+  pollIntervalMs = STATUS_POLL_INTERVAL_MS
+): Promise<{ value: { err: unknown } }> {
+  let settled = false;
+  const poll = async (): Promise<{ value: { err: unknown } }> => {
+    while (!settled) {
+      try {
+        const { value } = await connection.getSignatureStatuses([strategy.signature]);
+        const status = value[0];
+        if (
+          status &&
+          (status.err ||
+            status.confirmationStatus === "confirmed" ||
+            status.confirmationStatus === "finalized")
+        ) {
+          return { value: { err: status.err } };
+        }
+      } catch {
+        // The websocket path below still answers.
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+    }
+    return new Promise(() => undefined);
+  };
+  const subscription = connection.confirmTransaction(strategy, "confirmed");
+  // If polling wins, a later rejection here must not go unhandled.
+  subscription.catch(() => undefined);
+  try {
+    return await Promise.race([subscription, poll()]);
+  } finally {
+    settled = true;
+  }
+}
+
 export class SolanaSponsorService {
   private readonly connection: Connection;
   private readonly feePayer: Keypair;
@@ -549,10 +593,11 @@ export class SolanaSponsorService {
       preflightCommitment: "confirmed",
       maxRetries: 3,
     });
-    const confirmation = await this.connection.confirmTransaction(
-      { signature, blockhash, lastValidBlockHeight: input.lastValidBlockHeight },
-      "confirmed"
-    );
+    const confirmation = await confirmFast(this.connection, {
+      signature,
+      blockhash,
+      lastValidBlockHeight: input.lastValidBlockHeight,
+    });
     if (confirmation.value.err) {
       throw new SponsorError(
         `Transaction failed after broadcast: ${JSON.stringify(confirmation.value.err)}`,

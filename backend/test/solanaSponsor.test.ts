@@ -9,6 +9,7 @@ import {
 } from "@solana/web3.js";
 import {
   analyzeSponsoredTransaction,
+  confirmFast,
   SponsorError,
   validateSponsoredTransaction,
   type SponsorPolicy,
@@ -642,4 +643,42 @@ test("rejects session tokens valid for more than a day", () => {
       ),
     /expiry violates sponsor policy/
   );
+});
+
+test("confirmFast returns as soon as the signature status is confirmed", async () => {
+  let polls = 0;
+  const connection = {
+    // A websocket confirmation that never arrives.
+    confirmTransaction: () => new Promise<never>(() => undefined),
+    getSignatureStatuses: async () => {
+      polls += 1;
+      return {
+        context: { slot: 1 },
+        value: [polls < 2 ? null : { slot: 1, confirmations: 1, err: null, confirmationStatus: "confirmed" as const }],
+      };
+    },
+  };
+  const result = await confirmFast(
+    connection as never,
+    { signature: "sig", blockhash: "hash", lastValidBlockHeight: 10 },
+    5
+  );
+  assert.equal(result.value.err, null);
+  assert.equal(polls, 2);
+});
+
+test("confirmFast reports a failed transaction from the status poll", async () => {
+  const connection = {
+    confirmTransaction: () => new Promise<never>(() => undefined),
+    getSignatureStatuses: async () => ({
+      context: { slot: 1 },
+      value: [{ slot: 1, confirmations: 1, err: { InstructionError: [0, "Custom"] }, confirmationStatus: "confirmed" as const }],
+    }),
+  };
+  const result = await confirmFast(
+    connection as never,
+    { signature: "sig", blockhash: "hash", lastValidBlockHeight: 10 },
+    5
+  );
+  assert.deepEqual(result.value.err, { InstructionError: [0, "Custom"] });
 });

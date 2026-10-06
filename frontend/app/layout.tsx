@@ -75,7 +75,7 @@ export default function RootLayout({
       className={`${archivo.variable} ${geist.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
-      <body className="flex min-h-screen flex-col md:flex-row bg-background font-body text-foreground antialiased pb-[72px] md:pb-0">
+      <body className="flex min-h-screen flex-col md:flex-row bg-background font-body text-foreground antialiased pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0">
         <Providers>
           <Header />
           <main className="flex-1 overflow-x-hidden">

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -30,6 +30,7 @@ import { useWallets } from "@privy-io/react-auth/solana";
 import {
   DELEGATION_PROGRAM_ID,
   findChessMatchPda,
+  GameEndReason,
   findMatchEscrowPda,
   GameStatus,
   waitForDelegation,
@@ -54,7 +55,7 @@ import {
 import { useMagicBlock } from "@/hooks/useMagicBlock";
 import { useMagicSession } from "@/components/shared/MagicSessionProvider";
 import { cn } from "@/lib/utils";
-import { selectSolanaWallet } from "@/lib/privy-wallet";
+import { isPrivyEmbeddedWallet, selectSolanaWallet } from "@/lib/privy-wallet";
 import { magicBlockTxUrl, solanaDevnetTxUrl } from "@/lib/explorer";
 import { useMoveTransactionNotifications } from "@/hooks/useMoveTransactionNotifications";
 import { useOnChainMoves } from "@/hooks/useOnChainMoves";
@@ -87,6 +88,79 @@ function statusLabel(status: GameStatus): string {
     [GameStatus.Aborted]: "Aborted",
   };
   return labels[status];
+}
+
+/** Resolves when the promise settles or after `ms`, whichever is first. */
+function settleWithin(promise: Promise<unknown>, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(resolve, ms);
+    void promise
+      .catch(() => undefined)
+      .finally(() => {
+        window.clearTimeout(timer);
+        resolve();
+      });
+  });
+}
+
+type Side = "white" | "black";
+
+const capitalize = (side: Side) => (side === "white" ? "White" : "Black");
+
+/** Who won and why, worded for the viewer. */
+function describeEnd(
+  match: ChessMatch,
+  playerColor: Side | null
+): { headline: string; detail: string; outcome: "win" | "loss" | "draw" | null } {
+  const winner: Side | null =
+    match.gameStatus === GameStatus.WhiteWins
+      ? "white"
+      : match.gameStatus === GameStatus.BlackWins
+        ? "black"
+        : null;
+  const loser: Side | null = winner ? (winner === "white" ? "black" : "white") : null;
+  const reason = match.gameEndReason;
+
+  if (match.gameStatus === GameStatus.Aborted || reason === GameEndReason.Aborted) {
+    return { headline: "Match cancelled", detail: "The wager was refunded.", outcome: null };
+  }
+
+  const detailFor = (): string => {
+    const loserName = loser ? (loser === playerColor ? "You" : capitalize(loser)) : "";
+    switch (reason) {
+      case GameEndReason.Timeout:
+        return loser === playerColor
+          ? "You ran out of time on your move."
+          : `${loserName} ran out of time on their move.`;
+      case GameEndReason.Checkmate:
+        return "Checkmate.";
+      case GameEndReason.Resignation:
+        return loser === playerColor ? "You resigned." : `${loserName} resigned.`;
+      case GameEndReason.Stalemate:
+        return "Stalemate: the side to move has no legal move.";
+      case GameEndReason.FiftyMoveRule:
+        return "Fifty moves without a capture or pawn move.";
+      case GameEndReason.ThreefoldRepetition:
+        return "The same position appeared three times.";
+      case GameEndReason.InsufficientMaterial:
+        return "Neither side has enough material to mate.";
+      default:
+        return winner ? `${capitalize(winner)} won.` : "The game is drawn.";
+    }
+  };
+
+  if (!winner) {
+    return { headline: "Draw", detail: detailFor(), outcome: playerColor ? "draw" : null };
+  }
+  if (playerColor) {
+    const won = winner === playerColor;
+    return {
+      headline: won ? "You won" : "You lost",
+      detail: detailFor(),
+      outcome: won ? "win" : "loss",
+    };
+  }
+  return { headline: `${capitalize(winner)} wins`, detail: detailFor(), outcome: null };
 }
 
 export default function PlayPage() {
@@ -155,6 +229,8 @@ function PlayView() {
     if (realtime.refreshSequence > 0) refreshAfterMove();
   }, [realtime.refreshSequence, refreshAfterMove]);
 
+  const waitingForOpponent = match?.gameStatus === GameStatus.WaitingForOpponent;
+
   useEffect(() => {
     void loadHistory();
     let polling = false;
@@ -164,9 +240,11 @@ function PlayView() {
       void Promise.allSettled([refetch(), loadHistory()]).finally(() => {
         polling = false;
       });
-    }, realtime.status === "live" ? 8_000 : 3_000);
+      // An open match polls fast so the creator sees the opponent join
+      // right after the devnet transaction lands.
+    }, waitingForOpponent ? 1_500 : realtime.status === "live" ? 8_000 : 3_000);
     return () => window.clearInterval(intervalId);
-  }, [loadHistory, realtime.status, refetch]);
+  }, [loadHistory, realtime.status, refetch, waitingForOpponent]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => setNow(Date.now()), 1_000);
@@ -270,6 +348,11 @@ function PlayView() {
       remainingMilliseconds === 0 &&
       !isBusy
   );
+  // The side to move is out of time, but the game stays "in progress" on
+  // chain until the other player claims the win.
+  const flagged = Boolean(isActive && remainingMilliseconds === 0);
+  const endSummary = match && isFinished ? describeEnd(match, playerColor) : null;
+  const embeddedWallet = wallet ? isPrivyEmbeddedWallet(wallet) : false;
 
   // The indexer database and the rollup's own transaction log both list the
   // confirmed moves; use whichever is further along, so the list survives the
@@ -333,7 +416,10 @@ function PlayView() {
           ? magicBlockTxUrl(result.signature, result.rpcEndpoint)
           : solanaDevnetTxUrl(result.signature)
       );
-      await Promise.allSettled([refetch(), loadHistory()]);
+      // The indexer can be asleep; never hold the panel (and with it the
+      // board, which is locked while a transaction is pending) on it.
+      void loadHistory();
+      await settleWithin(refetch(), 4_000);
       setTxStatus("success");
       toast.success(successMessage);
       return result.signature;
@@ -581,10 +667,8 @@ function PlayView() {
   };
 
   const handleResign = async () => {
+    // BoardControls already asked "Resign this game?".
     if (!isParticipant || !isActive) return;
-    if (!window.confirm("Resign this on-chain match? This cannot be undone.")) {
-      return;
-    }
     try {
       await runTransaction(() => client.resign(matchId), "Resignation confirmed");
     } catch {
@@ -593,6 +677,7 @@ function PlayView() {
   };
 
   const handleClaimTimeout = async () => {
+    if (!canClaimTimeout) return;
     try {
       await runTransaction(
         () => client.claimTimeout(matchId),
@@ -651,6 +736,47 @@ function PlayView() {
       await refetch();
     }
   };
+
+  // An embedded wallet signs the claim without a popup, so the winner's page
+  // claims the win itself once the opponent's clock runs out. The rollup
+  // needs its own clock strictly past the limit, hence the short grace.
+  const claimTimeoutRef = useRef(handleClaimTimeout);
+  useEffect(() => {
+    claimTimeoutRef.current = handleClaimTimeout;
+  });
+  const autoClaimedRef = useRef<string | null>(null);
+  const lastMoveTimestamp = match?.lastMoveTimestamp.toString();
+  useEffect(() => {
+    if (!canClaimTimeout || !embeddedWallet || !match?.isDelegated) return;
+    const key = `${matchId}:${lastMoveTimestamp}`;
+    if (autoClaimedRef.current === key) return;
+    const timer = window.setTimeout(() => {
+      autoClaimedRef.current = key;
+      void claimTimeoutRef.current();
+    }, 3_000);
+    return () => window.clearTimeout(timer);
+  }, [canClaimTimeout, embeddedWallet, lastMoveTimestamp, match?.isDelegated, matchId]);
+
+  // Sounds for what arrives from the chain: the opponent's moves (ours play
+  // on submit), the game starting and the game ending.
+  const plies = match ? pliesPlayed(match) : 0;
+  const gameStatus = match?.gameStatus;
+  const lastSan = confirmedMoves.at(-1)?.san ?? "";
+  const soundStateRef = useRef<{ plies: number; status: GameStatus } | null>(null);
+  useEffect(() => {
+    if (gameStatus === undefined) return;
+    const previous = soundStateRef.current;
+    soundStateRef.current = { plies, status: gameStatus };
+    if (!previous) return;
+    if (gameStatus !== previous.status) {
+      if (gameStatus === GameStatus.Active) sounds.play("game_start");
+      else if (gameStatus !== GameStatus.WaitingForOpponent) sounds.play("game_end");
+      return;
+    }
+    if (plies > previous.plies && (!playerColor || match?.currentTurn === playerColor)) {
+      sounds.playMoveSound(lastSan);
+    }
+  }, [gameStatus, lastSan, match?.currentTurn, playerColor, plies]);
 
   // ── Debug hooks for cross-browser automated play ──
   useEffect(() => {
@@ -763,15 +889,46 @@ function PlayView() {
                     aria-live="polite"
                     className={cn(
                       "w-full max-w-[560px] rounded-lg px-3 py-2 text-center text-sm font-medium",
-                      isMyTurn ? "bg-primary/15 text-primary" : "bg-card/60 text-muted-foreground"
+                      isMyTurn || flagged
+                        ? "bg-primary/15 text-primary"
+                        : "bg-card/60 text-muted-foreground"
                     )}
                   >
                     {isBusy && txStatus === "submitting"
                       ? "Sending your move…"
-                      : isMyTurn
-                        ? "Your move"
-                        : "Waiting for your opponent…"}
+                      : flagged && isMyTurn
+                        ? "Your time ran out. Your opponent can now claim the win."
+                        : flagged
+                          ? embeddedWallet && match.isDelegated
+                            ? "Your opponent ran out of time. Claiming your win…"
+                            : "Your opponent ran out of time. Claim your win."
+                          : isMyTurn
+                            ? "Your move"
+                            : "Waiting for your opponent…"}
                   </p>
+                ) : null}
+
+                {endSummary ? (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className={cn(
+                      "w-full max-w-[560px] border px-4 py-3 text-center",
+                      endSummary.outcome === "win"
+                        ? "border-primary/40 bg-primary/15"
+                        : "border-border bg-card/60"
+                    )}
+                  >
+                    <p
+                      className={cn(
+                        "font-heading text-lg font-semibold",
+                        endSummary.outcome === "win" ? "text-primary" : "text-foreground"
+                      )}
+                    >
+                      {endSummary.headline}
+                    </p>
+                    <p className="mt-0.5 text-sm text-muted-foreground">{endSummary.detail}</p>
+                  </div>
                 ) : null}
 
                 <div className="relative">
@@ -835,7 +992,7 @@ function PlayView() {
                       #{match.matchId}
                     </h1>
                     <span className="shrink-0 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                      {statusLabel(match.gameStatus)}
+                      {flagged ? "Time ran out" : statusLabel(match.gameStatus)}
                     </span>
                   </div>
                   <dl className="mt-4 space-y-3 text-sm">
@@ -957,13 +1114,14 @@ function PlayView() {
                     )
                   ) : null}
 
-                  {canClaimTimeout ? (
+                  {flagged && isParticipant && !isMyTurn ? (
                     <button
                       type="button"
                       onClick={() => void handleClaimTimeout()}
-                      className="mt-3 min-h-11 w-full rounded-lg border border-primary/40 px-4 text-sm font-semibold text-primary focus-visible:ring-2 focus-visible:ring-primary"
+                      disabled={!canClaimTimeout}
+                      className="mt-3 min-h-11 w-full rounded-lg border border-primary/40 px-4 text-sm font-semibold text-primary focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                     >
-                      Claim timeout win
+                      {isBusy ? "Claiming the win…" : "Claim timeout win"}
                     </button>
                   ) : null}
 
