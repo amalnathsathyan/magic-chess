@@ -1,6 +1,6 @@
 "use client";
 
-import { playHref, spectateHref } from "@/lib/match-links";
+import { playHref, reviewHref, spectateHref } from "@/lib/match-links";
 import Link from "next/link";
 import { useMemo } from "react";
 import { Castle, Clock, Coins, Crown, Swords, User, Zap } from "lucide-react";
@@ -87,9 +87,11 @@ export function MatchCard({ match, className }: MatchCardProps) {
   return (
     <Link
       href={
-        isOpen || match.isOwn
-          ? playHref(match.matchId)
-          : spectateHref(match.matchId)
+        isCompleted
+          ? reviewHref(match.matchId)
+          : isOpen || match.isOwn
+            ? playHref(match.matchId)
+            : spectateHref(match.matchId)
       }
       className={cn(
         "group glass-card block p-5 transition-all hover:border-border-hover hover:shadow-glow",
@@ -202,7 +204,7 @@ export function MatchCard({ match, className }: MatchCardProps) {
             </span>
           ) : (
             <span className="inline-flex items-center justify-center rounded-lg bg-muted/20 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors group-hover:bg-muted group-hover:text-foreground">
-              Review
+              Replay
             </span>
           )}
         </div>

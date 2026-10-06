@@ -8,6 +8,7 @@ import { useWallets } from "@privy-io/react-auth/solana";
 import { useMatches, usePlayerMatches } from "@magic-chess/sdk/react";
 import { GameStatus, type MatchInfo } from "@magic-chess/sdk";
 import { LiveGames } from "@/components/lobby/LiveGames";
+import { RecentGames } from "@/components/lobby/RecentGames";
 import { api, type ApiMatch } from "@/lib/api";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
 import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
@@ -336,7 +337,9 @@ export default function ArenaPage() {
         </div>
       )}
 
-      {/* ── Your Matches (Live + Past) ── */}
+      <RecentGames walletAddress={walletAddress} />
+
+      {/* ── Your live matches ── */}
       {walletAddress && (
         <section className="mt-10">
           {/* Tab bar */}

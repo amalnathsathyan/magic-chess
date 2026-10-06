@@ -3,14 +3,18 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Trophy, Medal, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { api, type ApiLeaderboardEntry } from "@/lib/api";
+import { PlayerAvatar } from "@/components/shared/PlayerAvatar";
+import { profileHref } from "@/lib/match-links";
+import { playerLabel } from "@/lib/players";
 import { predictionsApi } from "@/lib/predictions";
 
 type Predictor = Awaited<ReturnType<typeof predictionsApi.leaderboard>>["leaderboard"][number];
 
 export default function LeaderboardPage() {
   const [entries, setEntries] = useState<ApiLeaderboardEntry[]>([]);
-  const [sortBy, setSortBy] = useState<"wins" | "winRate" | "totalGames">("wins");
+  const [sortBy, setSortBy] = useState<"rating" | "wins" | "winRate" | "totalGames">("rating");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [predictors, setPredictors] = useState<Predictor[] | null>(null);
@@ -41,12 +45,14 @@ export default function LeaderboardPage() {
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="font-heading text-3xl font-bold">Leaderboard</h1>
-        <p className="mt-1 text-muted-foreground">Top players ranked by performance.</p>
+        <p className="mt-1 text-muted-foreground">
+          Top players by Elo rating. Everyone starts at 1200.
+        </p>
       </motion.div>
 
       {/* Sort controls */}
       <div className="mt-6 flex gap-2">
-        {(["wins", "winRate", "totalGames"] as const).map((s) => (
+        {(["rating", "wins", "winRate", "totalGames"] as const).map((s) => (
           <button
             key={s}
             onClick={() => setSortBy(s)}
@@ -56,7 +62,13 @@ export default function LeaderboardPage() {
                 : "border-border text-muted-foreground hover:border-border-hover"
             }`}
           >
-            {s === "wins" ? "Most Wins" : s === "winRate" ? "Win Rate" : "Most Games"}
+            {s === "rating"
+              ? "Rating"
+              : s === "wins"
+                ? "Most Wins"
+                : s === "winRate"
+                  ? "Win Rate"
+                  : "Most Games"}
           </button>
         ))}
       </div>
@@ -78,6 +90,7 @@ export default function LeaderboardPage() {
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
                 <th className="py-3 pl-4 pr-2">#</th>
                 <th className="py-3 px-2">Player</th>
+                <th className="py-3 px-2 text-right">Rating</th>
                 <th className="py-3 px-2 text-right">Games</th>
                 <th className="py-3 px-2 text-right">Wins</th>
                 <th className="py-3 px-2 text-right">Losses</th>
@@ -92,8 +105,19 @@ export default function LeaderboardPage() {
                   className="border-b border-border/50 hover:bg-card/50 transition-colors"
                 >
                   <td className="py-3 pl-4 pr-2">{rankIcon(entry.rank)}</td>
-                  <td className="py-3 px-2 font-mono text-xs">
-                    {entry.playerPubkey.slice(0, 4)}...{entry.playerPubkey.slice(-4)}
+                  <td className="py-3 px-2">
+                    <Link
+                      href={profileHref(entry.playerPubkey)}
+                      className="inline-flex items-center gap-2 text-sm hover:text-primary hover:underline"
+                    >
+                      <PlayerAvatar wallet={entry.playerPubkey} avatar={entry.avatar} size="sm" />
+                      <span className="truncate">
+                        {playerLabel(entry.playerPubkey, entry.displayName)}
+                      </span>
+                    </Link>
+                  </td>
+                  <td className="py-3 px-2 text-right font-mono text-sm font-semibold tabular-nums">
+                    {entry.rating ?? "—"}
                   </td>
                   <td className="py-3 px-2 text-right text-sm">{entry.totalGames}</td>
                   <td className="py-3 px-2 text-right text-sm text-emerald-400">{entry.wins}</td>

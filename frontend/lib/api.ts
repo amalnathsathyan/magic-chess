@@ -51,6 +51,19 @@ export interface ApiMatch {
   betAmountPerPlayer?: string;
   /** Open move predictions spectators have placed on this match. */
   openPredictions?: number;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  whiteName?: string | null;
+  blackName?: string | null;
+  /** Ratings going into the game and what each side gained or lost. */
+  whiteRating?: number | null;
+  blackRating?: number | null;
+  whiteRatingChange?: number | null;
+  blackRatingChange?: number | null;
+}
+
+export interface ApiPlayerMatch extends ApiMatch {
+  playerColor: "white" | "black";
 }
 
 export interface ApiMatchDetail extends ApiMatch {
@@ -75,14 +88,85 @@ export interface ApiMove {
   isCheck: boolean;
   isCheckmate: boolean;
   isStalemate: boolean;
+  /** When the move was confirmed on chain (falls back to when it was indexed). */
+  playedAt?: string | null;
+}
+
+export interface ApiHistorySide {
+  name: string | null;
+  avatar: string | null;
+  rating: number | null;
+  ratingChange: number | null;
 }
 
 export interface ApiMatchHistory {
   matchId: string;
   whitePlayer: string;
   blackPlayer: string | null;
+  gameStatus: string;
+  gameEndReason: string | null;
+  bettingTokenMint: string;
+  betAmountPerPlayer: string;
+  totalPot: string;
+  moveTimeoutSeconds: string;
+  createdAt: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  payoutProcessed: boolean;
+  finalFen: string | null;
+  white: ApiHistorySide;
+  black: ApiHistorySide;
   moves: ApiMove[];
   totalMoves: number;
+}
+
+export type ApiOutcome = "win" | "loss" | "draw";
+
+export interface ApiTally {
+  games: number;
+  wins: number;
+  losses: number;
+  draws: number;
+}
+
+export interface ApiPlayerProfile {
+  wallet: string;
+  displayName: string | null;
+  bio: string | null;
+  avatar: string | null;
+  memberSince: string | null;
+  rating: number;
+  peakRating: number;
+  ratedGames: number;
+  provisional: boolean;
+  rank: number | null;
+  activeGames: number;
+  stats: {
+    totalGames: number;
+    wins: number;
+    losses: number;
+    draws: number;
+    winRate: number;
+    currentStreak: number;
+    longestWinStreak: number;
+    totalWagered: string;
+    totalWon: string;
+    lastGameAt: string | null;
+  };
+  byColor: { white: ApiTally; black: ApiTally };
+  endings: Array<{ outcome: ApiOutcome; reason: string; count: number }>;
+  openings: {
+    white: Array<ApiTally & { move: string }>;
+    black: Array<ApiTally & { move: string }>;
+  };
+  ratingHistory: Array<{ matchId: string; endedAt: string | null; rating: number }>;
+  recentForm: Array<{ matchId: string; result: ApiOutcome }>;
+}
+
+export interface ApiProfileEdit {
+  displayName: string;
+  bio: string;
+  avatar: string;
 }
 
 export interface ApiPlayerStats {
@@ -112,6 +196,11 @@ export interface ApiLeaderboardEntry {
   winRate: number;
   currentStreak: number;
   longestWinStreak: number;
+  rating?: number;
+  peakRating?: number;
+  ratedGames?: number;
+  displayName?: string | null;
+  avatar?: string | null;
 }
 
 export interface ApiPaginated<T> {
@@ -213,17 +302,36 @@ export const api = {
   getPlayerStats: (pubkey: string) =>
     fetchApi<ApiPlayerStats>(`/api/players/${pubkey}/stats`),
 
+  getPlayerProfile: (pubkey: string) =>
+    fetchApi<ApiPlayerProfile>(`/api/players/${pubkey}/profile`),
+
+  profileChallenge: (pubkey: string, edit: ApiProfileEdit) =>
+    fetchApi<{ issuedAt: number; message: string }>(
+      `/api/players/${pubkey}/profile/challenge`,
+      { method: "POST", body: JSON.stringify(edit) }
+    ),
+
+  saveProfile: (
+    pubkey: string,
+    body: ApiProfileEdit & { issuedAt: number; signature: string }
+  ) =>
+    fetchApi<ApiPlayerProfile>(`/api/players/${pubkey}/profile`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
   getPlayerMatches: (
     pubkey: string,
-    params?: { page?: number; limit?: number; status?: string }
+    params?: { page?: number; limit?: number; status?: string; result?: ApiOutcome }
   ) => {
     const qs = new URLSearchParams();
     if (params?.page) qs.set("page", String(params.page));
     if (params?.limit) qs.set("limit", String(params.limit));
     if (params?.status) qs.set("status", params.status);
+    if (params?.result) qs.set("result", params.result);
     const query = qs.toString();
     return fetchApi<{
-      matches: Array<ApiMatch & { playerColor: string }>;
+      matches: ApiPlayerMatch[];
       pagination: { page: number; limit: number; total: number };
     }>(`/api/players/${pubkey}/matches${query ? `?${query}` : ""}`);
   },
