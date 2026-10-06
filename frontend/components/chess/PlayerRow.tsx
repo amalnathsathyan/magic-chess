@@ -25,7 +25,7 @@ export function PlayerRow({
       )}
     >
       <div className="flex min-w-0 items-center gap-3">
-        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary">
+        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center bg-secondary">
           <User className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           {online !== undefined ? (
             <span
@@ -48,7 +48,7 @@ export function PlayerRow({
         </div>
       </div>
       {active ? (
-        <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary">
+        <span className="shrink-0 bg-primary/15 px-2.5 py-1 text-xs font-medium text-primary">
           To move
         </span>
       ) : null}

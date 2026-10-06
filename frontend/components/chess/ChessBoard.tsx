@@ -86,13 +86,12 @@ export function ChessBoard({
         background:
           game.get(move.to as Square) &&
           game.get(move.to as Square)?.color !== game.get(square)?.color
-            ? "radial-gradient(circle, rgba(255,255,255,.25) 85%, transparent 85%)"
-            : "radial-gradient(circle, rgba(255,255,255,.25) 25%, transparent 25%)",
-        borderRadius: "50%",
+            ? "radial-gradient(circle, transparent 62%, rgba(255,79,26,.55) 63%)"
+            : "radial-gradient(circle, rgba(13,14,16,.38) 22%, transparent 23%)",
       };
     });
     newSquares[square] = {
-      background: "rgba(255, 255, 255, 0.15)",
+      background: "rgba(255, 79, 26, 0.38)",
     };
     setOptionSquares(newSquares);
     return true;
@@ -138,7 +137,7 @@ export function ChessBoard({
   }
 
   function onSquareRightClick(square: Square) {
-    const colour = "rgba(255, 255, 255, 0.2)";
+    const colour = "rgba(157, 180, 208, 0.55)";
     setRightClickedSquares((current) => {
       const next = { ...current };
       if (current[square]?.backgroundColor === colour) {
@@ -170,7 +169,9 @@ export function ChessBoard({
         for (let c = 0; c < 8; c++) {
           const piece = board[r][c];
           if (piece && piece.type === "k" && piece.color === turn) {
-            squares[piece.square] = { backgroundColor: "rgba(255, 0, 0, 0.5)" };
+            squares[piece.square] = {
+              background: "radial-gradient(circle, rgba(255,79,26,.9) 0%, rgba(255,79,26,.55) 45%, rgba(255,79,26,0) 75%)",
+            };
           }
         }
       }
@@ -181,8 +182,9 @@ export function ChessBoard({
   const squareStyles = useMemo(() => {
     const styles: Record<string, React.CSSProperties> = {};
     if (lastMove) {
-      styles[lastMove.from] = { backgroundColor: "rgba(255, 255, 255, 0.15)" };
-      styles[lastMove.to] = { backgroundColor: "rgba(255, 255, 255, 0.15)" };
+      // Vermilion marks the consequence: the last move played.
+      styles[lastMove.from] = { backgroundColor: "rgba(255, 79, 26, 0.22)" };
+      styles[lastMove.to] = { backgroundColor: "rgba(255, 79, 26, 0.38)" };
     }
     if (highlightSquares) {
       for (const [sq, style] of Object.entries(highlightSquares)) {
@@ -203,7 +205,7 @@ export function ChessBoard({
 
   const arrows = useMemo(() => {
     if (!customArrows || customArrows.length === 0) return undefined;
-    return customArrows.map((a) => ({ startSquare: a.from, endSquare: a.to, color: a.color ?? "rgba(255, 255, 255, 0.5)" }));
+    return customArrows.map((a) => ({ startSquare: a.from, endSquare: a.to, color: a.color ?? "rgba(255, 79, 26, 0.8)" }));
   }, [customArrows]);
 
   return (
@@ -231,11 +233,14 @@ export function ChessBoard({
           boardStyle: {
             width: boardWidth,
             height: boardWidth,
-            borderRadius: "4px",
-            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -4px rgba(0, 0, 0, 0.5)",
+            borderRadius: 0,
+            boxShadow: "0 0 0 1px #2C3036",
           },
-          darkSquareStyle: { backgroundColor: "#1e1e1e" }, // dark charcoal
-          lightSquareStyle: { backgroundColor: "#404040" }, // dark gray
+          // Graphite and bone, per the ZUG board spec.
+          darkSquareStyle: { backgroundColor: "#5F656E" },
+          lightSquareStyle: { backgroundColor: "#E4DFD4" },
+          darkSquareNotationStyle: { color: "#E4DFD4", fontFamily: "var(--font-jetbrains)", fontSize: "10px" },
+          lightSquareNotationStyle: { color: "#5F656E", fontFamily: "var(--font-jetbrains)", fontSize: "10px" },
           squareStyles,
           arrows,
         }}

@@ -120,7 +120,7 @@ export function MatchCard({ match, className }: MatchCardProps) {
         </div>
         <span
           className={cn(
-            "rounded-full px-2.5 py-0.5 text-xs font-medium",
+            " px-2.5 py-0.5 text-xs font-medium",
             isOpen && "bg-primary/10 text-primary",
             isInProgress && "bg-accent/10 text-accent",
             isCompleted && "bg-muted/10 text-muted-foreground"
@@ -137,7 +137,7 @@ export function MatchCard({ match, className }: MatchCardProps) {
       {/* Players */}
       <div className="mt-4 flex items-center gap-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+          <div className="flex h-8 w-8 items-center justify-center bg-primary/10">
             <User className="h-4 w-4 text-primary" />
           </div>
           <span className="font-mono text-sm">
@@ -147,7 +147,7 @@ export function MatchCard({ match, className }: MatchCardProps) {
         <span className="text-sm text-muted">vs</span>
         {match.blackPlayer ? (
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10">
+            <div className="flex h-8 w-8 items-center justify-center bg-accent/10">
               <User className="h-4 w-4 text-accent" />
             </div>
             <span className="font-mono text-sm">
@@ -182,7 +182,7 @@ export function MatchCard({ match, className }: MatchCardProps) {
             </span>
           </div>
           {/* On-chain badge */}
-          <div className="flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2 py-0.5">
+          <div className="flex items-center gap-1.5 border border-primary/20 bg-primary/5 px-2 py-0.5">
             <Zap className="h-3 w-3 text-primary" aria-hidden="true" />
             <span className="font-mono text-xs text-primary/90">On-chain</span>
           </div>

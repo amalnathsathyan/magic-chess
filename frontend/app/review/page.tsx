@@ -175,7 +175,7 @@ function ReviewView() {
                     <Trophy className="h-4 w-4 text-primary" aria-hidden="true" />
                     {resultHeadline(status)}
                   </h1>
-                  <span className="shrink-0 rounded-full bg-primary/15 px-2.5 py-1 font-mono text-xs font-semibold text-primary">
+                  <span className="shrink-0 bg-primary/15 px-2.5 py-1 font-mono text-xs font-semibold text-primary">
                     {resultScore(status) ?? "—"}
                   </span>
                 </div>
@@ -280,7 +280,7 @@ function ReviewPlayer({
             <span
               className={cn(
                 "ml-1 text-xs",
-                (meta.ratingChange ?? 0) > 0 && "text-emerald-400",
+                (meta.ratingChange ?? 0) > 0 && "text-success",
                 (meta.ratingChange ?? 0) < 0 && "text-destructive"
               )}
             >

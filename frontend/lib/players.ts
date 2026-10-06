@@ -25,12 +25,6 @@ export function avatarFor(wallet: string, avatar?: string | null): string {
   return Object.values(AVATAR_GLYPHS)[hash % AVATAR_OPTIONS.length];
 }
 
-/** A hue derived from the wallet, so each player's badge looks consistent. */
-export function walletHue(wallet: string): number {
-  let hash = 0;
-  for (const char of wallet) hash = (hash * 17 + char.charCodeAt(0)) >>> 0;
-  return hash % 360;
-}
 
 export function formatRatingChange(change: number | null | undefined): string | null {
   if (change === null || change === undefined) return null;

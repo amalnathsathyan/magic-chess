@@ -225,7 +225,7 @@ export function CreateMatchForm({
                         "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                         selectedTokenIndex === index
                           ? "bg-primary/10 text-primary"
-                          : "hover:bg-white/5"
+                          : "hover:bg-card-hover"
                       )}
                     >
                       <span className="flex-1 text-left">{token.symbol}</span>
@@ -250,7 +250,7 @@ export function CreateMatchForm({
                     }}
                     className={cn(
                       "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
-                      isCustom ? "bg-primary/10 text-primary" : "hover:bg-white/5"
+                      isCustom ? "bg-primary/10 text-primary" : "hover:bg-card-hover"
                     )}
                   >
                     <Plus className="h-4 w-4" />

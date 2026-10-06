@@ -82,7 +82,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             Set up your Solana wallet
           </h1>
           <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Magic Chess needs a Solana wallet to create, join, and play on-chain matches.
+            ZUG Arena needs a Solana wallet to create, join, and play on-chain matches.
           </p>
           {walletError && (
             <p role="alert" className="mt-4 text-sm text-destructive">

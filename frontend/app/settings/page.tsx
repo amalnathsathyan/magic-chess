@@ -56,9 +56,9 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
       <div className="mb-8">
-        <h1 className="font-heading text-3xl font-bold">Settings</h1>
+        <h1 className="font-display text-4xl sm:text-5xl">Settings</h1>
         <p className="mt-1 text-muted-foreground">
-          Configure your Magic Chess experience.
+          Sound, board and account preferences for ZUG Arena.
         </p>
       </div>
 
@@ -72,7 +72,7 @@ export default function SettingsPage() {
           {authenticated && wallet ? (
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <div className="flex h-10 w-10 items-center justify-center bg-primary/10">
                   <User className="h-5 w-5 text-primary" aria-hidden="true" />
                 </div>
                 <div>
@@ -109,7 +109,7 @@ export default function SettingsPage() {
             </div>
           ) : (
             <div className="flex items-center gap-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/30">
+              <div className="flex h-10 w-10 items-center justify-center bg-muted/30">
                 <Wallet className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
               </div>
               <div>
@@ -160,7 +160,7 @@ export default function SettingsPage() {
               aria-checked={soundEnabled}
               aria-labelledby="sound-effects-label"
               onClick={toggleSound}
-              className={`relative inline-flex h-10 w-16 shrink-0 items-center rounded-full border transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+              className={`relative inline-flex h-10 w-16 shrink-0 items-center border transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
                 soundEnabled
                   ? "border-primary/50 bg-primary"
                   : "border-border bg-muted"
@@ -168,7 +168,7 @@ export default function SettingsPage() {
             >
               <span
                 aria-hidden="true"
-                className={`inline-block h-7 w-7 rounded-full bg-background shadow-sm transition-transform ${
+                className={`inline-block h-7 w-7 bg-background shadow-sm transition-transform ${
                   soundEnabled ? "translate-x-8" : "translate-x-1"
                 }`}
               />
@@ -186,7 +186,7 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
-            <span className="inline-flex shrink-0 items-center rounded-full border border-border bg-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="inline-flex shrink-0 items-center border border-border bg-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
               Coming soon
             </span>
           </div>

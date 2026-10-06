@@ -40,9 +40,9 @@ export function FinishedGameCard({
       href={reviewHref(match.matchId)}
       className={cn(
         "group glass-card flex items-center gap-3 p-3 transition-all hover:border-border-hover hover:shadow-glow focus-visible:ring-2 focus-visible:ring-primary",
-        outcome === "win" && "border-l-2 border-l-emerald-500/60",
+        outcome === "win" && "border-l-2 border-l-success/60",
         outcome === "loss" && "border-l-2 border-l-destructive/60",
-        outcome === "draw" && "border-l-2 border-l-amber-500/60",
+        outcome === "draw" && "border-l-2 border-l-accent/60",
         className
       )}
     >
@@ -50,9 +50,9 @@ export function FinishedGameCard({
         <span
           className={cn(
             "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border font-mono text-sm font-bold",
-            outcome === "win" && "border-emerald-500/20 bg-emerald-500/10 text-emerald-400",
+            outcome === "win" && "border-success/20 bg-success/10 text-success",
             outcome === "loss" && "border-destructive/20 bg-destructive/10 text-destructive",
-            outcome === "draw" && "border-amber-500/20 bg-amber-500/10 text-amber-400"
+            outcome === "draw" && "border-accent/20 bg-accent/10 text-accent"
           )}
           aria-label={outcome === "win" ? "Win" : outcome === "loss" ? "Loss" : "Draw"}
         >
@@ -61,32 +61,27 @@ export function FinishedGameCard({
       ) : null}
 
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <PlayerAvatar wallet={match.whitePlayer} size="sm" />
-          <span className="truncate text-sm font-medium">
-            {playerLabel(match.whitePlayer, match.whiteName)}
-          </span>
-          {match.whiteRating != null ? (
-            <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-              {match.whiteRating}
-              <RatingDelta change={match.whiteRatingChange} />
-            </span>
-          ) : null}
-          <span className="shrink-0 font-mono text-xs font-semibold text-muted-foreground">
+        <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+          <Side
+            wallet={match.whitePlayer}
+            name={match.whiteName}
+            rating={match.whiteRating}
+            change={match.whiteRatingChange}
+          />
+          <span className="hidden shrink-0 font-mono text-xs font-semibold text-muted-foreground sm:inline">
             {score ?? "vs"}
           </span>
-          {match.blackPlayer ? <PlayerAvatar wallet={match.blackPlayer} size="sm" /> : null}
-          <span className="truncate text-sm font-medium">
-            {playerLabel(match.blackPlayer, match.blackName)}
-          </span>
-          {match.blackRating != null ? (
-            <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
-              {match.blackRating}
-              <RatingDelta change={match.blackRatingChange} />
-            </span>
+          {match.blackPlayer ? (
+            <Side
+              wallet={match.blackPlayer}
+              name={match.blackName}
+              rating={match.blackRating}
+              change={match.blackRatingChange}
+            />
           ) : null}
         </div>
         <p className="mt-1 truncate text-xs text-muted-foreground">
+          {score ? <span className="font-mono font-semibold text-foreground sm:hidden">{score} · </span> : null}
           {reason ? `${reason} · ` : ""}
           {match.moveCount} moves
           {wager > 0n ? ` · ${formatTokenAmount(wager)} ${solanaConfig.wagerSymbol}` : " · Free"}
@@ -110,11 +105,36 @@ function RatingDelta({ change }: { change?: number | null }) {
     <span
       className={cn(
         "ml-1",
-        (change ?? 0) > 0 && "text-emerald-400",
+        (change ?? 0) > 0 && "text-success",
         (change ?? 0) < 0 && "text-destructive"
       )}
     >
       {label}
+    </span>
+  );
+}
+
+function Side({
+  wallet,
+  name,
+  rating,
+  change,
+}: {
+  wallet: string;
+  name?: string | null;
+  rating?: number | null;
+  change?: number | null;
+}) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <PlayerAvatar wallet={wallet} size="sm" />
+      <span className="truncate text-sm font-medium">{playerLabel(wallet, name)}</span>
+      {rating != null ? (
+        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+          {rating}
+          <RatingDelta change={change} />
+        </span>
+      ) : null}
     </span>
   );
 }

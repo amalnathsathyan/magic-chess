@@ -114,7 +114,7 @@ export function WalletButton() {
       <div
         role="status"
         aria-label="Loading wallet"
-        className="h-11 w-11 animate-pulse rounded-xl bg-white/5 motion-reduce:animate-none"
+        className="h-11 w-11 animate-pulse rounded-xl bg-card-hover motion-reduce:animate-none"
       />
     );
   }
@@ -127,7 +127,7 @@ export function WalletButton() {
         onClick={() => login()}
         aria-label="Sign in or connect a wallet"
         title="Sign in or connect a wallet"
-        className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-[0_0_15px_rgba(0,230,118,0.3)] transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <Wallet aria-hidden="true" className="h-5 w-5 shrink-0" />
         <span className="sr-only">Sign in</span>
@@ -185,7 +185,7 @@ export function WalletButton() {
         className={cn(
           "relative flex h-11 w-11 items-center justify-center rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           dropdownOpen
-            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+            ? "border-success/30 bg-success/10 text-success"
             : "border-border bg-card/50 text-primary hover:border-border-hover hover:bg-card-hover"
         )}
       >
@@ -211,7 +211,7 @@ export function WalletButton() {
           </div>
 
           {/* Full address with copy icon */}
-          <div className="flex items-start gap-2 rounded-lg bg-white/[0.03] px-3 py-2.5">
+          <div className="flex items-start gap-2 rounded-lg bg-background px-3 py-2.5">
             <span className="flex-1 break-all font-mono text-xs leading-relaxed text-foreground">
               {address}
             </span>
@@ -219,10 +219,10 @@ export function WalletButton() {
               type="button"
               onClick={handleCopy}
               aria-label="Copy wallet address"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {copied ? (
-                <Check aria-hidden="true" className="h-4 w-4 text-emerald-400" />
+                <Check aria-hidden="true" className="h-4 w-4 text-success" />
               ) : (
                 <Copy aria-hidden="true" className="h-4 w-4" />
               )}
@@ -233,7 +233,7 @@ export function WalletButton() {
           <button
             type="button"
             onClick={handleCopy}
-            className="mt-1.5 flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="mt-1.5 flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Copy aria-hidden="true" className="h-4 w-4" />
             Copy address
@@ -247,7 +247,7 @@ export function WalletButton() {
             onClick={handleSwitchAccount}
             disabled={walletAction !== null}
             aria-busy={walletAction === "switching"}
-            className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
           >
             {walletAction === "switching" ? (
               <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />

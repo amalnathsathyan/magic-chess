@@ -32,7 +32,7 @@ export function RatingChart({
   const area = `${padding},${height} ${line} ${width - padding},${height}`;
   const last = points[points.length - 1];
   const rising = last.rating >= points[0].rating;
-  const stroke = rising ? "var(--color-primary, #34d399)" : "#f87171";
+  const stroke = rising ? "#ECE8DF" : "#FF4F1A";
 
   return (
     <figure className={className}>

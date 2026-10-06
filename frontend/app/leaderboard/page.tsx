@@ -35,16 +35,16 @@ export default function LeaderboardPage() {
   }, [sortBy]);
 
   const rankIcon = (rank: number) => {
-    if (rank === 1) return <Trophy className="h-5 w-5 text-yellow-400" />;
+    if (rank === 1) return <Trophy className="h-5 w-5 text-accent" />;
     if (rank === 2) return <Medal className="h-5 w-5 text-gray-300" />;
-    if (rank === 3) return <Medal className="h-5 w-5 text-amber-600" />;
+    if (rank === 3) return <Medal className="h-5 w-5 text-accent" />;
     return <span className="text-sm text-muted-foreground w-5 text-center">{rank}</span>;
   };
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="font-heading text-3xl font-bold">Leaderboard</h1>
+        <h1 className="font-display text-4xl sm:text-5xl">Ladder</h1>
         <p className="mt-1 text-muted-foreground">
           Top players by Elo rating. Everyone starts at 1200.
         </p>
@@ -78,7 +78,7 @@ export default function LeaderboardPage() {
         {loading ? (
           <div className="flex justify-center py-12 text-muted-foreground">Loading...</div>
         ) : error ? (
-          <div className="flex justify-center py-12 text-red-400">{error}</div>
+          <div className="flex justify-center py-12 text-destructive">{error}</div>
         ) : entries.length === 0 ? (
           <div className="flex flex-col items-center py-12 text-muted-foreground">
             <Trophy className="mb-3 h-10 w-10" />
@@ -120,8 +120,8 @@ export default function LeaderboardPage() {
                     {entry.rating ?? "—"}
                   </td>
                   <td className="py-3 px-2 text-right text-sm">{entry.totalGames}</td>
-                  <td className="py-3 px-2 text-right text-sm text-emerald-400">{entry.wins}</td>
-                  <td className="py-3 px-2 text-right text-sm text-red-400">{entry.losses}</td>
+                  <td className="py-3 px-2 text-right text-sm text-success">{entry.wins}</td>
+                  <td className="py-3 px-2 text-right text-sm text-destructive">{entry.losses}</td>
                   <td className="py-3 px-2 text-right text-sm text-muted-foreground">{entry.draws}</td>
                   <td className="py-3 pr-4 pl-2 text-right text-sm font-medium">
                     {(entry.winRate * 100).toFixed(0)}%
@@ -135,7 +135,7 @@ export default function LeaderboardPage() {
 
       <section className="mt-10" aria-labelledby="predictors-heading">
         <h2 id="predictors-heading" className="flex items-center gap-2 font-heading text-xl font-bold">
-          <Sparkles className="h-5 w-5 text-amber-300" aria-hidden="true" />
+          <Sparkles className="h-5 w-5 text-accent" aria-hidden="true" />
           Top predictors
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -166,7 +166,7 @@ export default function LeaderboardPage() {
                     <td className="py-3 px-2 font-mono text-xs">
                       {entry.wallet.slice(0, 4)}...{entry.wallet.slice(-4)}
                     </td>
-                    <td className="py-3 px-2 text-right text-sm text-emerald-400">{entry.betsWon}</td>
+                    <td className="py-3 px-2 text-right text-sm text-success">{entry.betsWon}</td>
                     <td className="py-3 px-2 text-right text-sm text-muted-foreground">{entry.betsLost}</td>
                     <td className="py-3 pr-4 pl-2 text-right font-mono text-sm font-medium">
                       {entry.balance.toLocaleString()}

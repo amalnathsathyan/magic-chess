@@ -61,7 +61,7 @@ export function RecentGames({ walletAddress }: { walletAddress?: string | null }
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h2
           id="recent-games-heading"
-          className="flex items-center gap-2 font-heading text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+          className="flex items-center gap-2 label"
         >
           <History className="h-4 w-4" aria-hidden="true" />
           Recent games
@@ -118,7 +118,7 @@ export function RecentGames({ walletAddress }: { walletAddress?: string | null }
             href="/leaderboard"
             className="mt-3 inline-flex text-xs font-medium text-primary hover:underline"
           >
-            See the rating leaderboard
+            See the Ladder
           </Link>
         </>
       )}

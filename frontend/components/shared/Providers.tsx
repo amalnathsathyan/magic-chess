@@ -25,7 +25,7 @@ function AuthConfigurationError() {
         </p>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           Add <code className="font-mono text-foreground">NEXT_PUBLIC_PRIVY_APP_ID</code>{" "}
-          to this deployment and rebuild Magic Chess.
+          to this deployment and rebuild ZUG Arena.
         </p>
       </div>
     </div>
@@ -53,8 +53,8 @@ function PrivyAuthProvider({ children }: { children: React.ReactNode }) {
 
         appearance: {
           theme: "dark",
-          accentColor: "#00e676",
-          logo: "/logo.png",
+          accentColor: "#FF4F1A",
+          logo: "/brand/zug-logo.svg",
           walletChainType: "solana-only",
           walletList: [
             "phantom",

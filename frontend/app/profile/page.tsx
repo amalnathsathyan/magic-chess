@@ -126,13 +126,20 @@ function ProfileView() {
     [matches]
   );
 
-  if (!ready || !walletsReady) return <ProfileShell><ProfileSkeleton /></ProfileShell>;
+  // A public profile needs no sign-in; only "my profile" waits for the wallet.
+  if (!requested && (!ready || !walletsReady)) {
+    return (
+      <ProfileShell>
+        <ProfileSkeleton />
+      </ProfileShell>
+    );
+  }
 
   if (!wallet) {
     return (
       <ProfileShell>
         <div className="glass-card flex flex-col items-center gap-4 px-6 py-12 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-primary/20 bg-primary/10">
+          <div className="flex h-14 w-14 items-center justify-center border border-primary/20 bg-primary/10">
             <Trophy className="h-7 w-7 text-primary" aria-hidden="true" />
           </div>
           <div className="space-y-1">
@@ -198,7 +205,7 @@ function ProfileView() {
             <h1 className="font-heading text-2xl font-bold">
               {playerLabel(profile.wallet, profile.displayName)}
             </h1>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 font-mono text-sm font-semibold text-primary">
+            <span className="inline-flex items-center gap-1.5 border border-primary/20 bg-primary/10 px-3 py-1 font-mono text-sm font-semibold text-primary">
               {profile.rating}
               {profile.provisional ? (
                 <span className="text-[11px] font-normal text-primary/70">provisional</span>
@@ -217,7 +224,7 @@ function ProfileView() {
             >
               {profile.wallet}
               {copied ? (
-                <Check className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
+                <Check className="h-3.5 w-3.5 text-success" aria-hidden="true" />
               ) : (
                 <Copy className="h-3.5 w-3.5" aria-hidden="true" />
               )}
@@ -286,9 +293,9 @@ function ProfileView() {
                     title={game.result}
                     className={cn(
                       "flex h-6 w-6 items-center justify-center rounded font-mono text-[11px] font-bold",
-                      game.result === "win" && "bg-emerald-500/15 text-emerald-400",
+                      game.result === "win" && "bg-success/15 text-success",
                       game.result === "loss" && "bg-destructive/15 text-destructive",
-                      game.result === "draw" && "bg-amber-500/15 text-amber-400"
+                      game.result === "draw" && "bg-accent/15 text-accent"
                     )}
                   >
                     {game.result === "win" ? "W" : game.result === "loss" ? "L" : "D"}
@@ -305,20 +312,20 @@ function ProfileView() {
             <p className="mt-2 font-mono text-3xl font-bold tabular-nums">{stats.totalGames}</p>
             <p className="text-xs text-muted-foreground">games played</p>
             <div className="mt-2 flex items-center gap-3 font-mono text-xs tabular-nums">
-              <span className="text-emerald-400">{stats.wins}W</span>
+              <span className="text-success">{stats.wins}W</span>
               <span className="text-destructive">{stats.losses}L</span>
-              <span className="text-amber-400">{stats.draws}D</span>
+              <span className="text-accent">{stats.draws}D</span>
               <span className="text-muted-foreground">
                 {Math.round(stats.winRate * 100)}%
               </span>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-500/20 bg-orange-500/10 px-2.5 py-1 text-xs text-orange-400">
+            <span className="inline-flex items-center gap-1.5 border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs text-primary">
               <Flame className="h-3.5 w-3.5" aria-hidden="true" />
               Streak {stats.currentStreak}
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-400">
+            <span className="inline-flex items-center gap-1.5 border border-accent/20 bg-accent/10 px-2.5 py-1 text-xs text-accent">
               <Crown className="h-3.5 w-3.5" aria-hidden="true" />
               Best {stats.longestWinStreak}
             </span>
@@ -382,7 +389,7 @@ function ProfileView() {
           <p
             className={cn(
               "font-mono text-lg font-bold tabular-nums",
-              BigInt(stats.totalWon) > 0n ? "text-emerald-400" : "text-muted-foreground"
+              BigInt(stats.totalWon) > 0n ? "text-success" : "text-muted-foreground"
             )}
           >
             {formatTokenAmount(stats.totalWon)} {solanaConfig.wagerSymbol}
@@ -431,7 +438,7 @@ function ProfileView() {
                 className="glass-card flex items-center justify-between gap-3 p-3 transition-colors hover:border-border-hover"
               >
                 <span className="inline-flex items-center gap-2 text-sm">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" aria-hidden="true" />
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" aria-hidden="true" />
                   Live vs{" "}
                   {playerLabel(
                     match.playerColor === "white" ? match.blackPlayer : match.whitePlayer,
@@ -493,9 +500,9 @@ function ColorRow({ label, tally }: { label: string; tally: ApiTally }) {
           {tally.wins}/{tally.draws}/{tally.losses}
         </span>
       </div>
-      <div className="mt-1 flex h-2 overflow-hidden rounded-full bg-card" aria-hidden="true">
-        <span className="bg-emerald-500/70" style={{ width: `${width(tally.wins)}%` }} />
-        <span className="bg-amber-500/70" style={{ width: `${width(tally.draws)}%` }} />
+      <div className="mt-1 flex h-2 overflow-hidden bg-card" aria-hidden="true">
+        <span className="bg-success/70" style={{ width: `${width(tally.wins)}%` }} />
+        <span className="bg-accent/70" style={{ width: `${width(tally.draws)}%` }} />
         <span className="bg-destructive/70" style={{ width: `${width(tally.losses)}%` }} />
       </div>
     </div>
@@ -531,7 +538,7 @@ function ProfileSkeleton() {
   return (
     <div className="space-y-6" aria-label="Loading profile">
       <div className="flex items-center gap-4">
-        <div className="h-20 w-20 shrink-0 animate-pulse rounded-full bg-muted" />
+        <div className="h-20 w-20 shrink-0 animate-pulse bg-muted" />
         <div className="flex-1 space-y-2">
           <div className="h-7 w-40 animate-pulse rounded bg-muted" />
           <div className="h-4 w-64 animate-pulse rounded bg-muted" />

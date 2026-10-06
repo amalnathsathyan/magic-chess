@@ -29,7 +29,7 @@ export function ReplayControls({
 
   return (
     <div className={cn("glass-card w-full max-w-[560px] p-2", className)}>
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         <button
           type="button"
           onClick={replay.toStart}
@@ -80,7 +80,7 @@ export function ReplayControls({
           <SkipForward className="h-4 w-4" aria-hidden="true" />
         </button>
 
-        <span className="ml-2 shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
+        <span className="ml-1 shrink-0 font-mono text-xs tabular-nums text-muted-foreground sm:ml-2">
           {ply === 0 ? "Start" : `${moveNumber}${ply % 2 === 1 ? "." : "…"}`} · {ply}/{totalPlies}
         </span>
 

@@ -1,77 +1,78 @@
-"use client";
-
 import Link from "next/link";
-import { motion, useReducedMotion } from "framer-motion";
-import { Play, Code2, Zap, BookOpen } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { ZugSymbol, ZugWordmark } from "@/components/brand/ZugLogo";
+
+const FILES = "abcdefgh";
+
+/** The Leap on its board: g1 and f3 lit, every other square quiet. */
+function LeapBoard() {
+  const cells = [];
+  for (let rank = 8; rank >= 1; rank--) {
+    for (let file = 0; file < 8; file++) {
+      const square = `${FILES[file]}${rank}`;
+      const hot = square === "g1" || square === "f3";
+      const dark = (rank + file) % 2 === 0;
+      cells.push(
+        <div
+          key={square}
+          className="relative border-b border-r border-[#1F2226]"
+          style={{ background: hot ? "rgba(255,79,26,0.12)" : dark ? "#141619" : "#16181B" }}
+        >
+          <span className="absolute left-1.5 top-1 font-mono text-[9px] text-[#3A3F46]">{square}</span>
+        </div>
+      );
+    }
+  }
+  return (
+    <div className="relative aspect-square w-full bg-card">
+      <div className="absolute inset-0 grid grid-cols-8 grid-rows-8">{cells}</div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <ZugSymbol className="h-1/2 w-1/2" />
+      </div>
+      <span className="label absolute bottom-3 right-4">N g1–f3 · The Leap</span>
+    </div>
+  );
+}
 
 export function Hero() {
-  const prefersReducedMotion = useReducedMotion();
-
   return (
-    <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-black px-4 py-24">
-      {/* Animated Motion Background (CSS) */}
-      <div className="absolute inset-0 z-0">
-        <div className="absolute top-1/4 left-1/4 h-96 w-96 -translate-x-1/2 -translate-y-1/2 animate-pulse rounded-full bg-primary/20 blur-[120px] motion-reduce:animate-none" style={{ animationDuration: "4s" }} />
-        <div className="absolute right-1/4 bottom-1/4 h-[500px] w-[500px] translate-x-1/3 translate-y-1/3 animate-pulse rounded-full bg-accent/10 blur-[150px] motion-reduce:animate-none" style={{ animationDuration: "6s" }} />
+    <section className="border-b border-border">
+      <div className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 md:py-24 lg:grid-cols-2 lg:items-center">
+        <div className="flex flex-col gap-8">
+          <div className="flex items-center justify-between">
+            <span className="label">Real-time competitive chess</span>
+            <span className="stage-tag text-success">Live on devnet</span>
+          </div>
+          <h1 className="sr-only">ZUG — Every move matters.</h1>
+          <ZugWordmark className="h-auto w-full max-w-[420px] text-foreground" />
+          <p className="font-display text-3xl sm:text-4xl" aria-hidden="true">
+            Every move matters.
+          </p>
+          <p className="max-w-lg text-lg leading-relaxed text-soft">
+            Fast competitive chess where every move is recorded on-chain. Play instantly with a
+            wallet or social login, gas sponsored.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/arena"
+              className="inline-flex min-h-12 items-center gap-2 bg-primary px-6 font-heading text-sm font-bold uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              Play on ZUG
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </Link>
+            <Link
+              href="/arena#recent-games-heading"
+              className="inline-flex min-h-12 items-center gap-2 border border-border px-6 font-heading text-sm font-semibold uppercase tracking-wide transition-colors hover:border-border-hover hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              Replay recent games
+            </Link>
+          </div>
+          <p className="font-mono text-xs text-muted-foreground">
+            Solana devnet · test tokens only · sign in with email, Google, Discord or a wallet
+          </p>
+        </div>
+        <LeapBoard />
       </div>
-
-      <motion.div
-        initial={prefersReducedMotion ? false : { opacity: 0, y: 40 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={prefersReducedMotion ? { duration: 0 } : { duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 mx-auto flex max-w-5xl flex-col items-center text-center"
-      >
-        <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary shadow-[0_0_15px_rgba(0,230,118,0.15)]">
-          <Zap aria-hidden="true" className="h-4 w-4" />
-          Realtime chess, verified on Solana
-        </div>
-
-        <h1 className="font-heading text-6xl leading-[1.1] font-extrabold tracking-tight text-white drop-shadow-2xl sm:text-7xl lg:text-[5.5rem]">
-          Every Move <br />On-Chain.
-        </h1>
-
-        <p className="mt-5 font-mono text-xs font-semibold tracking-[0.28em] text-primary/80 uppercase sm:text-sm">
-          Create <span aria-hidden="true">·</span> Join <span aria-hidden="true">·</span> Predict
-        </p>
-
-        <p className="mt-7 max-w-2xl text-xl leading-relaxed font-medium text-neutral-400">
-          Play fast and wager transparently with match state verified on Solana.
-          Powered by MagicBlock Ephemeral Rollups.
-        </p>
-
-        {/* Primary CTAs */}
-        <div className="mt-12 flex w-full max-w-md flex-col gap-4 sm:max-w-none sm:flex-row sm:justify-center">
-          <Link
-            href="/arena"
-            className="group flex h-14 items-center justify-center gap-3 rounded-full bg-white px-8 text-base font-semibold text-black shadow-xl transition-transform hover:scale-105 hover:bg-neutral-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black motion-reduce:hover:scale-100"
-          >
-            <Play aria-hidden="true" className="h-5 w-5 fill-black" />
-            Enter Arena
-          </Link>
-        </div>
-        
-        <div className="mt-8 flex items-center justify-center gap-6">
-          <Link
-            href="https://amalnathsathyan.github.io/magic-chess/"
-            target="_blank"
-            rel="noreferrer"
-            className="flex min-h-10 items-center gap-2 text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-          >
-            <BookOpen aria-hidden="true" className="h-4 w-4" />
-            Documentation
-          </Link>
-          <span className="text-neutral-800">|</span>
-          <Link
-            href="https://github.com/amalnathsathyan/magic-chess"
-            target="_blank"
-            rel="noreferrer"
-            className="flex min-h-10 items-center gap-2 text-sm font-medium text-neutral-500 transition-colors hover:text-neutral-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-          >
-            <Code2 aria-hidden="true" className="h-4 w-4" />
-            Open Source
-          </Link>
-        </div>
-      </motion.div>
     </section>
   );
 }

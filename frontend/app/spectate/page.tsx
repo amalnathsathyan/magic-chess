@@ -280,7 +280,7 @@ function SpectateView() {
                   </h1>
                   <span
                     className={cn(
-                      "shrink-0 rounded-full px-2.5 py-1 text-xs font-medium",
+                      "shrink-0 px-2.5 py-1 text-xs font-medium",
                       isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
                     )}
                   >
@@ -304,7 +304,7 @@ function SpectateView() {
                     <dd
                       className={cn(
                         "font-mono text-sm font-semibold tabular-nums",
-                        remaining?.isLow && "animate-pulse text-red-400"
+                        remaining?.isLow && "animate-pulse text-primary"
                       )}
                     >
                       {remaining ? remaining.text : "—"}
