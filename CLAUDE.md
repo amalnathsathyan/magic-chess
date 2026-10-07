@@ -4,6 +4,17 @@ On-chain FIDE chess engine on Solana with MagicBlock Ephemeral Rollups for gasle
 The product is branded **ZUG Arena** ("Every move matters."). It is live on devnet at
 https://arena.chessmagic.workers.dev. `dev` is the only branch, and feature PRs target `dev`.
 
+## Git workflow (required for every agent and session)
+
+`dev` is the only long-lived branch and everything deploys from it. Never commit or push directly to `dev`.
+
+1. For any new or major piece of work, start a fresh branch from the latest `dev`:
+   `git fetch origin && git checkout -b <type>/<short-description> origin/dev` (types: `feat`, `fix`, `chore`, `docs`, …).
+2. Commit with Conventional Commits messages. Do not add a `Co-Authored-By: Claude` (or any Claude co-author) trailer.
+3. Push the branch (`git push -u origin <branch>`) and open a PR into `dev` using `.github/PULL_REQUEST_TEMPLATE.md`.
+4. Get CI green before asking for merge. Small follow-ups to an open PR go on that PR's branch; after a PR merges, new work starts a new branch from `dev`.
+5. When the task is done, update this file's status and next-steps sections in the same PR.
+
 ## Project Layout
 
 ```
