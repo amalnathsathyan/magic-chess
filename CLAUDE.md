@@ -134,16 +134,28 @@ Program tests: 182 unit (`--test unit_tests`) + 59 LiteSVM + 15 payout flow + 11
 Prediction market instructions live on-chain (`prediction_enabled` flag, 5 instructions); no outcome-pool UI yet.
 Frontend (ZUG Arena) and backend are live on devnet; see `docs/docs/deployment.md`.
 
-## Gameplay: status and next steps
+## Gameplay: status and next steps (handoff, 2026-10-07)
 
-Fixed after jason's live test (2026-10-06):
-- The page no longer jumps on phones: `MoveList` scrolled the whole page with `scrollIntoView` on every re-render (once a second), which also cancelled touch drags.
-- "Confirming transaction…" no longer hangs: `runTransaction` in `frontend/app/play/page.tsx` stopped awaiting the backend history call (the DB can be asleep). That pending state also locked the board, which is why moves failed.
-- Create and join confirm faster: the gas sponsor (`backend/src/services/solanaSponsor.ts`, `confirmFast`) polls the signature status instead of waiting only on the RPC websocket. An open match also polls every 1.5s so the creator sees the join.
-- Finished games say who won and why (timeout, resignation, checkmate, draws) above the board.
-- When the side to move runs out of time, both players see it. An embedded (Privy) wallet claims the timeout win itself, without a popup (`claim_timeout_win` is in the quiet-signing list). External wallets get the "Claim timeout win" button.
-- Sounds play for the opponent's moves and for game start and end, and all sounds are unlocked on the first tap so phones play them.
+Owner so far: the "Gameplay fixes from live testing" thread. This section is the handoff for the next agent.
 
-Next steps:
-- Timeouts still need a claim and "Finalize and settle payout" still needs a press, because the task-scheduler crank is disabled. Re-enabling the crank (or settling from the backend) would end games with no action from players.
-- Not verified on a real phone yet; retest drag and tap moves, sound and the bottom nav on iOS Safari and Android Chrome.
+### Shipped on dev (PR #48)
+- Phones: `MoveList` no longer scrolls the whole page (it used `scrollIntoView` every second), which also cancelled touch drags.
+- `runTransaction` in `frontend/app/play/page.tsx` no longer awaits the backend history call (the DB can be asleep). A pending transaction locks the board, so this was why moves failed.
+- Faster create/join: the gas sponsor's `confirmFast` (`backend/src/services/solanaSponsor.ts`) polls signature status alongside the websocket. Open matches poll every 1.5s so the creator sees the join.
+- End-of-game banner says who won and why (`describeEnd` in the play page). When a clock runs out both players see it. Embedded (Privy) wallets auto-claim the timeout win without a popup (`claim_timeout_win` is in `GAMEPLAY_DISCRIMINATORS` in `SolanaProgramProvider.tsx`). External wallets get the button.
+- Sounds for opponent moves, game start and end. Every sound is primed on the first tap so phones play them.
+
+### Shipped with this section (PR #51)
+- A "What's happening" panel (`frontend/components/chess/MatchJourney.tsx`) walks players through created → opponent joins → play → save result to Solana → pay out. It covers the move clock, why the game ended, the payout after the fee, and that either player can finalize. The finalize button names its step (1 of 2 saving, 2 of 2 paying).
+
+### Automatic payout: findings and the decision waiting on jason
+Finished games still pay out only when a player presses "Finalize and settle payout" (undelegate on the rollup, then `process_match_settlement` on base).
+- Re-enabling the task scheduler (`TASK_SCHEDULER_ENABLED` in `schedule_timeout.rs`) would not fix this. The scheduler isn't available on the rollup, where games end (see the comment above the scheduling block in `make_move.rs`). The settlement task it schedules also passes no token accounts, so it couldn't pay anyone.
+- `process_match_settlement` needs no player signature; any fee payer can send it. `undelegate_match` requires a player signer.
+- Proposed design (jason has a decision card in the thread and hasn't answered yet): (1) the program lets anyone call `undelegate_match` once the game is terminal (WhiteWins/BlackWins/Draw/Aborted), keeping the player check while Active; (2) a backend `MatchSettler` uses the sponsor fee payer. It finds terminal, unpaid matches (the `matches` table, or the reconciler's sweep), undelegates on the rollup, waits for the base account to come back, creates the payout ATAs (idempotent) and sends `process_match_settlement`, behind an `AUTO_SETTLE_ENABLED` flag that stays off until the program upgrade is on devnet; (3) the panel says "Paying out automatically" when that flag is on.
+- Do not start step (1) without jason's explicit approval. It loosens an authorization check and needs a devnet program upgrade that jason deploys. The deployed program already lags the source (see project memory).
+- Silently signing payout transactions from the player's page (quiet-signing `process_match_settlement`) was tried and rejected, because it would sign without the player approving. Don't revisit that.
+
+### Other next steps
+- Not verified on a real phone yet: retest drag and tap moves, sound and the bottom nav on iOS Safari and Android Chrome.
+- Timeout wins for external wallets (Phantom etc.) still need a press of "Claim timeout win".
