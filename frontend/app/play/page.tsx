@@ -44,6 +44,7 @@ import { ChessBoard } from "@/components/chess/ChessBoard";
 import { MoveList } from "@/components/chess/MoveList";
 import { PromotionDialog } from "@/components/chess/PromotionDialog";
 import { BoardControls } from "@/components/chess/BoardControls";
+import { MatchJourney, type SettlePhase } from "@/components/chess/MatchJourney";
 import { api, type ApiMatchHistory } from "@/lib/api";
 import { sounds } from "@/lib/sounds";
 import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
@@ -210,6 +211,7 @@ function PlayView() {
   const [txSignature, setTxSignature] = useState<string>();
   const [txExplorerHref, setTxExplorerHref] = useState<string>();
   const [txError, setTxError] = useState<string>();
+  const [settlePhase, setSettlePhase] = useState<SettlePhase>("idle");
 
   const loadHistory = useCallback(async () => {
     if (!matchId) return;
@@ -357,6 +359,27 @@ function PlayView() {
   // chain until the other player claims the win.
   const flagged = Boolean(isActive && remainingMilliseconds === 0);
   const endSummary = match && isFinished ? describeEnd(match, playerColor) : null;
+  const formatWager = (amount: bigint) =>
+    formatOnChainTokenAmount(amount, wagerTokenDetail);
+  // What the escrow pays, using the program's own split (fee off the pot).
+  const payoutDetail = (() => {
+    if (!match || match.totalPot === 0n) return null;
+    const fee = (match.totalPot * BigInt(match.platformFeeBasisPoints)) / 10_000n;
+    const net = match.totalPot - fee;
+    const feeNote = fee > 0n ? ` after the ${match.platformFeeBasisPoints / 100}% fee` : "";
+    if (match.gameStatus === GameStatus.Draw) {
+      return `Each player gets ${formatWager(net / 2n)} back${feeNote}.`;
+    }
+    const winner =
+      match.gameStatus === GameStatus.WhiteWins
+        ? "white"
+        : match.gameStatus === GameStatus.BlackWins
+          ? "black"
+          : null;
+    if (!winner) return `The winner receives ${formatWager(net)}${feeNote}.`;
+    if (winner === playerColor) return `You receive ${formatWager(net)}${feeNote}.`;
+    return `${winner === "white" ? "White" : "Black"} receives ${formatWager(net)}${feeNote}.`;
+  })();
   const embeddedWallet = wallet ? isPrivyEmbeddedWallet(wallet) : false;
 
   // The indexer database and the rollup's own transaction log both list the
@@ -698,6 +721,7 @@ function PlayView() {
     try {
       let baseMatch: ChessMatch | null = match;
       if (match.isDelegated) {
+        setSettlePhase("committing");
         await runTransaction(
           () => client.undelegateMatch(matchId),
           "Final state committed to Solana"
@@ -729,6 +753,7 @@ function PlayView() {
         [baseMatch.players[0], baseMatch.players[1], baseMatch.platformFeeWallet]
       );
       const [playerOneAta, playerTwoAta, platformFeeAta] = settlement.accounts;
+      setSettlePhase("paying");
       await runTransaction(
         () =>
           client.settleMatch(matchId, playerOneAta, playerTwoAta, platformFeeAta, {
@@ -739,6 +764,8 @@ function PlayView() {
       );
     } catch {
       await refetch();
+    } finally {
+      setSettlePhase("idle");
     }
   };
 
@@ -933,6 +960,11 @@ function PlayView() {
                       {endSummary.headline}
                     </p>
                     <p className="mt-0.5 text-sm text-muted-foreground">{endSummary.detail}</p>
+                    {isParticipant && !match.payoutProcessed && match.totalPot > 0n ? (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        The pot is still in escrow. Finalize the game to pay it out; either player can.
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -1145,7 +1177,13 @@ function PlayView() {
                       disabled={isBusy}
                       className="mt-5 min-h-11 w-full rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
                     >
-                      {match.isDelegated ? "Finalize and settle payout" : "Settle payout"}
+                      {settlePhase === "committing"
+                        ? "Step 1 of 2: saving the result…"
+                        : settlePhase === "paying"
+                          ? "Step 2 of 2: paying out…"
+                          : match.isDelegated
+                            ? "Finalize and settle payout"
+                            : "Settle payout"}
                     </button>
                   ) : null}
 
@@ -1180,6 +1218,23 @@ function PlayView() {
                     </Link>
                   ) : null}
                 </section>
+
+                <MatchJourney
+                  isWaiting={isWaiting}
+                  isActive={isActive}
+                  isFinished={isFinished}
+                  isDelegated={match.isDelegated}
+                  payoutProcessed={match.payoutProcessed}
+                  playerColor={playerColor}
+                  isCreator={walletAddress === whiteAddress}
+                  isFree={match.betAmountPlayerOne === 0n}
+                  wagerLabel={formatWager(match.betAmountPlayerOne)}
+                  moveTimeoutSeconds={Number(match.moveTimeoutDuration)}
+                  flagged={flagged}
+                  endDetail={endSummary?.detail ?? null}
+                  payoutDetail={payoutDetail}
+                  settlePhase={settlePhase}
+                />
 
                 <PredictionPanel
                   matchId={matchId}
