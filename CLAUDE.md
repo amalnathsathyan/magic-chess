@@ -159,3 +159,37 @@ Finished games still pay out only when a player presses "Finalize and settle pay
 ### Other next steps
 - Not verified on a real phone yet: retest drag and tap moves, sound and the bottom nav on iOS Safari and Android Chrome.
 - Timeout wins for external wallets (Phantom etc.) still need a press of "Claim timeout win".
+
+### MagicBlock Validator v1.0 review and free-match settlement (2026-10-07, not started)
+Research only; no code changed. Pick up from here.
+
+**Free (0-wager) matches pay for a token path they never use.** Today a free match creates a wSOL ATA for each player (`frontend/lib/wager.ts:72`, `play/page.tsx:559` with `0n`), always creates the `match_escrow` token account (`initialize_match.rs`), then at settle creates 3 payout ATAs (`buildSettlementInstructions`), makes 0-amount transfers and closes the escrow. Each ATA is ~0.00204 SOL of sponsor money that is never reclaimed. Proposed program change:
+- `initialize_match` / `join_match`: token accounts and escrow become `Option<>` (or a separate `initialize_free_match`), required whenever the wager is > 0 (`require!(total_pot == 0 || accounts.is_some())`; `total_pot` is set on-chain, so it can't be spoofed).
+- New `settle_free_match` (or a `total_pot == 0` branch in `close_match`): once terminal, close `chess_match` directly. One instruction, no ATAs, no token CPI, ~0.0161 SOL rent back to the sponsor.
+- Frontend skips `buildWagerInstruction` / `buildSettlementInstructions` when the wager is 0.
+- Same upgrade: `process_match_settlement.rs:61` `payer` is an `UncheckedAccount`, so whoever settles first picks who gets the escrow rent the sponsor paid. Constrain it.
+
+**Auto-payout alternative to the backend `MatchSettler`: Magic Actions.** `ephemeral-rollups-sdk` 0.16.2 (in use) already has it; 0.17.3 is latest with the same action API, but crank/vrf move behind cargo features.
+- Terminal paths (`make_move`, `resign_game`, `claim_timeout_win`) schedule `MagicIntentBundleBuilder::commit_and_undelegate(&[chess_match]).add_post_undelegate_action(CallHandler{..})`, the builder `undelegate_match.rs` already uses. Use post-undelegate, not post-commit: after a commit alone `chess_match` is still owned by the delegation program on L1.
+- The action can be `process_match_settlement` unchanged (same 7 accounts, permissionless, `payout_processed` + escrow close stop double pay). The delegation program's extra trailing accounts land in `remaining_accounts`. Don't trust the `#[action]` macro's account order; MagicBlock's own example looks shifted.
+- Escrow authority: a global `["action_auth"]` PDA signs via `build_and_invoke_signed`; fund `["balance", action_auth, idx]` once with `top_up_ephemeral_balance` and don't delegate it. A commit fee of ~0.001 SOL applies.
+- Accounts are `Option<>` on those instructions so normal moves don't carry them. Simpler first step: a rollup `finish_match` instruction the backend calls.
+- If the action fails (e.g. a missing ATA; actions can't create ATAs), the validator retries commit+undelegate without it, so the "Finalize" button stays as the fallback. Free matches have no ATAs, so nothing can fail there; do the free-match change first.
+- Same loosened-authorization concern as above: needs jason's approval and a devnet upgrade.
+
+**Smaller gameplay fixes (no program change, effort S unless noted):**
+- `subscribeToMatch` (`sdk/src/client.ts:218`) and `useMoveTransactionNotifications.ts:120` never resubscribe after a rollup restart or dropped socket; moves arrive late through the 8s fallback poll (`play/page.tsx:250`). Add a `getSlot` heartbeat and rebuild, plus a "rollup reconnecting" banner instead of a frozen board or a "Match unavailable" card (`play/page.tsx:853-862`).
+- Per move, `sendInstructionWithSession` (`client.ts:162-179`) fetches a fresh blockhash and simulates; `makeMove` then reads the account again (`client.ts:415`) and the frontend discards it. Cache the blockhash ~30s, drop the simulation and the read (~100–300 ms per move).
+- Runtime lookup (base → router → rollup, `sdk/src/magicblock.ts:243-281`) repeats on every `getMatch`/`subscribeToMatch`/`resign`/`claimTimeout`, 2–3× on reload. Share the per-match cache `makeMove` has (`client.ts:184-194`).
+- No rebroadcast for dropped moves (`play/page.tsx:632-640`). `useMagicBlock.ts:25` matches the generic `"accountnotfound"`, so a transient error can turn session keys off and bring wallet popups back mid-game (effort S–M).
+- Timer compares the device clock to the chain's `lastMoveTimestamp` (`play/page.tsx:336-343`). A skewed device fires `claim_timeout_win` early, then `autoClaimedRef` blocks the retry (`play/page.tsx:749-758`). Estimate the offset.
+- White's clock starts at join on L1 (`join_match.rs:81`) before delegation is seen; `waitForDelegation` polls at 1s (`sdk/src/magicblock.ts:113`). Poll at ~250 ms (effort M to start the clock on the first rollup tx).
+- Finalize polls `getMatch` up to 20×1s (`play/page.tsx:701-707`) after `client.undelegateMatch` already waited for the undelegation (`client.ts:651-661`). Remove it.
+- Duplicate polling: `useMatch` 3–8s, log poller 2.5s, backend `refreshConnectedMatches` 3s (`matchRealtime.ts:173`), indexer 3s (`chainIndexer.ts:71`, runtime cache 30s TTL), spectate 3–10s. Let SSE `match.snapshot` drive refreshes.
+
+**Later / optional:**
+- Ephemeral accounts (effort M): `position_history` is 1,604 of `ChessMatch`'s 2,186 bytes (`state/chess_match.rs:29-30`). An ephemeral PDA on the rollup cuts ~0.0112 SOL rent per match; it needs a fallback for undelegated play. `delegation_uid` (68 bytes) is derivable as `"chess-{id}"`. Chat and draw offers fit ephemeral accounts too.
+- Token-2022 (effort L): the classic Token program is hard-coded in the program (`Program<Token>`, 10 files), SDK (`client.ts:39`), frontend (`play/page.tsx:468`, `lib/wager.ts`) and sponsor (`solanaSponsor.ts:201,206`). Transfer-fee mints break pot accounting. Wait until a Token-2022 token is actually wanted.
+- Private payments: no gain while wagers stay in the L1 escrow.
+
+Suggested order: free-match path + `payer` fix (one upgrade) → small fixes above → auto-payout via Magic Actions.
