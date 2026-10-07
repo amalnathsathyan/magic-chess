@@ -47,6 +47,8 @@ CI runs the program, frontend and SDK checks on every pull request.
 ## Workflow
 
 1. Fork, then branch from `dev`: `git checkout -b fix/short-description dev`.
+   Maintainers and AI agents with write access skip the fork and branch in this repo.
+   Nobody pushes directly to `dev`; every change lands through a PR.
 2. Keep pull requests focused. One fix or feature per PR.
 3. Write commits in [Conventional Commits](https://www.conventionalcommits.org/)
    style: `fix(play): ...`, `feat(backend): ...`, `docs: ...`.

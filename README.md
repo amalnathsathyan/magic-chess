@@ -23,11 +23,22 @@ Magic Chess is an Anchor program that enforces the full FIDE rules on-chain:
 
 During a game, the match account is delegated to a MagicBlock Ephemeral Rollup. Moves there confirm in milliseconds and cost no gas. Session keys remove wallet popups. Wagers stay in a program-owned escrow on Solana L1 and pay out when the game ends.
 
-**ZUG Arena** is the web app built on it. You sign in with Privy, a sponsor pays transaction fees, and the app adds:
+**ZUG Arena** is the web app built on it, live on devnet at [arena.chessmagic.workers.dev](https://arena.chessmagic.workers.dev). You sign in with Privy (email, social or an external wallet like Phantom). A backend sponsor pays every network fee and rent, so players pay only their wager, and free (0-wager) games cost nothing. The app adds:
 
-- live spectating with points-based move predictions
-- Elo ratings and player profiles
-- game history and replays
+- a lobby with open games, live games and a public Recent games list
+- live boards that stream moves from the rollup, with move and game-end sounds
+- spectating with points-based move predictions
+- a review page that replays any finished game move by move
+- profiles with names, bios, avatars, Elo ratings (start 1200) and match history
+- XP and levels for playing (tiers Pawn to King), and a Ladder ranked by rating with an XP tab
+
+## Current status
+
+- The program, ZUG Arena frontend (Cloudflare Worker) and backend (Render + Supabase Postgres) are live on **devnet**, all deployed from `dev`.
+- Game creation, joining and gasless moves work end to end. Finished games show who won and why.
+- Every game is stored: a chain indexer records moves as they happen, and an account reconciler sweeps the chain every 60 seconds to recover games played while the backend was down (those show the final position without individual moves).
+- Not automatic yet: the task-scheduler crank is disabled, so a player claims a timeout win (embedded wallets do it automatically) and presses "Finalize and settle payout" to pay out.
+- Prediction market instructions are on-chain, but there is no outcome-pool UI yet.
 
 > **Devnet only.** Magic Chess has not been externally audited. See [SECURITY.md](SECURITY.md).
 
@@ -64,7 +75,7 @@ Details: [Architecture overview](https://amalnathsathyan.github.io/magic-chess/d
 | [`magic-chess-program/`](magic-chess-program) | Anchor 1.1.2 program (Rust). Covers the chess engine, escrow and settlement, MagicBlock delegation, session keys and the prediction pool. |
 | [`sdk/`](sdk) | `@magic-chess/sdk`: a TypeScript client with base/rollup routing, React hooks and PDA and FEN helpers |
 | [`frontend/`](frontend) | ZUG Arena: a Next.js 15 static export on a Cloudflare Worker, using Privy and Tailwind 4 |
-| [`backend/`](backend) | Fastify + Postgres. Runs the chain indexer, realtime SSE hub, gas sponsor, ratings and move predictions. |
+| [`backend/`](backend) | Fastify + Postgres. Runs the chain indexer, account reconciler, realtime SSE hub, gas sponsor, ratings, XP and move predictions. |
 | [`docs/`](docs) | Docusaurus source for the [docs site](https://amalnathsathyan.github.io/magic-chess/docs/) |
 | [`research/`](research) | Earlier R&D notes and design docs, kept for reference and no longer maintained |
 
@@ -112,9 +123,20 @@ The full guide is [Local setup](https://amalnathsathyan.github.io/magic-chess/do
 - [Security reviews](https://amalnathsathyan.github.io/magic-chess/docs/security/overview)
 - [Roadmap](https://amalnathsathyan.github.io/magic-chess/docs/roadmap)
 
+## Development workflow
+
+`dev` is the only long-lived branch and the one everything deploys from. Every piece of new or major work, whether by a person or an AI agent (Claude Code CLI, cloud sessions), follows the same flow:
+
+1. Start a new branch from the latest `dev`: `git fetch origin && git checkout -b feat/short-description origin/dev`.
+2. Commit there in [Conventional Commits](https://www.conventionalcommits.org/) style.
+3. Push the branch and open a pull request into `dev`, using the PR template.
+4. Merge once CI is green and the PR is reviewed.
+
+Don't commit or push straight to `dev`. Small follow-ups to an open PR go on that PR's branch; once a PR is merged, new work starts a new branch.
+
 ## Contributing
 
-Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md), and target the `dev` branch. Report security issues privately as described in [SECURITY.md](SECURITY.md).
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md), and follow the workflow above. Report security issues privately as described in [SECURITY.md](SECURITY.md).
 
 ## License
 
