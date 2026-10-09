@@ -1,6 +1,8 @@
 "use client";
 
 import { useAppLogin } from "@/hooks/useAppLogin";
+import { useExportPrivyKey } from "@/hooks/useExportPrivyKey";
+import { formatSol, useSolBalance } from "@/hooks/useSolBalance";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useCreateWallet, useWallets } from "@privy-io/react-auth/solana";
@@ -8,6 +10,7 @@ import {
   ArrowLeftRight,
   Check,
   Copy,
+  KeyRound,
   LoaderCircle,
   LogOut,
   Wallet,
@@ -31,7 +34,9 @@ export function WalletButton() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const wallet = selectSolanaWallet(wallets);
+  const { canExport, exportKey, exporting } = useExportPrivyKey(wallet);
   const address = wallet?.address ?? null;
+  const { balance, error: balanceError } = useSolBalance(address, dropdownOpen);
   const shortAddress = address
     ? `${address.slice(0, 4)}...${address.slice(-4)}`
     : null;
@@ -229,6 +234,18 @@ export function WalletButton() {
             </button>
           </div>
 
+          {/* SOL balance on the app's cluster */}
+          <div className="mt-2 flex items-baseline justify-between px-1">
+            <span className="text-xs text-muted-foreground">Balance (devnet)</span>
+            <span className="font-mono text-sm text-foreground" aria-live="polite">
+              {balance !== null
+                ? `${formatSol(balance)} SOL`
+                : balanceError
+                  ? "Unavailable"
+                  : "Loading…"}
+            </span>
+          </div>
+
           {/* Copy address text button */}
           <button
             type="button"
@@ -238,6 +255,26 @@ export function WalletButton() {
             <Copy aria-hidden="true" className="h-4 w-4" />
             Copy address
           </button>
+
+          {canExport && (
+            <button
+              type="button"
+              onClick={() => {
+                setDropdownOpen(false);
+                void exportKey();
+              }}
+              disabled={exporting}
+              aria-busy={exporting}
+              className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {exporting ? (
+                <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />
+              ) : (
+                <KeyRound aria-hidden="true" className="h-4 w-4" />
+              )}
+              Export private key
+            </button>
+          )}
 
           {/* Separator */}
           <div className="my-1 h-px bg-border" />
