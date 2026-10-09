@@ -147,3 +147,20 @@ Fixed after jason's live test (2026-10-06):
 Next steps:
 - Timeouts still need a claim and "Finalize and settle payout" still needs a press, because the task-scheduler crank is disabled. Re-enabling the crank (or settling from the backend) would end games with no action from players.
 - Not verified on a real phone yet; retest drag and tap moves, sound and the bottom nav on iOS Safari and Android Chrome.
+
+## Share cards: status and next steps (2026-10-10)
+
+Three shareable 1200×675 PNG cards, drawn on a canvas with the site's fonts (`frontend/lib/share-card.ts`)
+and shown in one dialog (`frontend/components/share/ShareCard.tsx`: preview, Download PNG, Copy image,
+native Share image on phones, Copy link, and X / WhatsApp / Telegram links with a prefilled post):
+- **P&L card** (own profile, once something was wagered): net = `totalWon − totalWagered`. The backend's
+  `totalWon` is the full pot on wins and draws add nothing to it, so a draw refund counts as a loss of the stake.
+- **Player card** (any profile): rating, ladder rank, level/tier, XP progress, rating curve, form, games/wins/win rate/best streak.
+- **Challenge card** (play page, creator of an open match): stake, move clock, "you play black", plus direct
+  X / WhatsApp / Telegram buttons under "Copy invite link".
+
+Next steps:
+- Share links can't attach the image (X, WhatsApp and Telegram intents take text only); players download or
+  copy the card and paste it. Per-profile/per-match OG images would need a server-rendered image endpoint.
+- "Games created" isn't tracked in `player_stats`; add it in the backend if the player card should show it.
+- Count draw refunds in `total_won` (or add `total_refunded`) so the P&L is exact.
