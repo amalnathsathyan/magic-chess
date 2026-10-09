@@ -209,10 +209,10 @@ function ProfileView() {
   const roi = wagered > 0n ? `${net >= 0n ? "+" : "−"}${(Math.abs(Number((net * 1000n) / wagered)) / 10).toFixed(1)}%` : "0%";
   const shareMessage =
     sharing === "pnl"
-      ? `Wagered ${compactAmount(formatTokenAmount(wagered))} ${symbol} on ZUG Arena, took home ${compactAmount(formatTokenAmount(returned))}. ${net >= 0n ? "+" : "−"}${netLabel} ${symbol} net (${roi} ROI). Every move matters.`
+      ? `Wagered ${compactAmount(formatTokenAmount(wagered))} ${symbol} on @zugxyz, took home ${compactAmount(formatTokenAmount(returned))}. ${net >= 0n ? "+" : "−"}${netLabel} ${symbol} net (${roi} ROI). Every move matters.`
       : isOwnProfile
-        ? `Rated ${profile.rating}${profile.rank ? `, #${profile.rank} on the ladder` : ""}${profile.xp ? `, Lv ${profile.xp.level} ${profile.xp.tier}` : ""} on ZUG Arena. ${stats.wins} wins and counting. Come take my spot.`
-        : `${name} is rated ${profile.rating}${profile.rank ? ` (#${profile.rank})` : ""} on ZUG Arena. Think you can take them?`;
+        ? `Rated ${profile.rating}${profile.rank ? `, #${profile.rank} on the ladder` : ""}${profile.xp ? `, Lv ${profile.xp.level} ${profile.xp.tier}` : ""} on @zugxyz. ${stats.wins} wins and counting. Come take my spot.`
+        : `${name} is rated ${profile.rating}${profile.rank ? ` (#${profile.rank})` : ""} on @zugxyz. Think you can take them?`;
 
   return (
     <ProfileShell>
