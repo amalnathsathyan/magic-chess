@@ -159,6 +159,11 @@ native Share image on phones, Copy link, and X / WhatsApp / Telegram links with 
 - **Challenge card** (play page, creator of an open match): stake, move clock, "you play black", plus direct
   X / WhatsApp / Telegram buttons under "Copy invite link".
 
+Fixed 2026-10-09: saving a profile failed after the wallet signed, because the backend's CORS list had no `PUT`
+and the browser blocked the save request. Allowed methods now live in `backend/src/cors.ts`, and
+`backend/test/cors.test.ts` checks the preflight for every method the API uses. The player card was checked in a
+real browser (Chromium) with mocked profile data: it draws at 2400×1350 and the dialog's links and buttons work.
+
 Next steps:
 - Share links can't attach the image (X, WhatsApp and Telegram intents take text only); players download or
   copy the card and paste it. Per-profile/per-match OG images would need a server-rendered image endpoint.

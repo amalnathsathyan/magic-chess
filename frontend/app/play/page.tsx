@@ -585,7 +585,7 @@ function PlayView() {
 
   const inviteStake =
     match && match.betAmountPlayerOne > 0n ? formatWager(match.betAmountPlayerOne) : null;
-  const inviteMessage = `Your move. I just opened a ${inviteStake ? `${inviteStake} chess match` : "free chess match"} on ZUG Arena${timeoutMilliseconds > 0 ? `, ${timeoutMilliseconds / 1_000}s a move` : ""}. Take the black pieces:`;
+  const inviteMessage = `Your move. I just opened a ${inviteStake ? `${inviteStake} chess match` : "free chess match"} on @zugxyz${timeoutMilliseconds > 0 ? `, ${timeoutMilliseconds / 1_000}s a move` : ""}. Take the black pieces:`;
   const renderInvite = async () => {
     // Name and rating are a nice touch, not a requirement: the DB may be asleep.
     const profile = whiteAddress ? await api.getPlayerProfile(whiteAddress).catch(() => null) : null;
