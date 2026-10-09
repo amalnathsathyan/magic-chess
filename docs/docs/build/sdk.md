@@ -1,6 +1,6 @@
 # TypeScript SDK
 
-`@magic-chess/sdk` is the TypeScript client for the Magic Chess program. The ZUG Arena frontend uses it for everything on-chain. It includes:
+[`@magic-chess/sdk`](https://www.npmjs.com/package/@magic-chess/sdk) ([source](https://github.com/amalnathsathyan/magic-chess/tree/dev/sdk)) is the TypeScript client for the Magic Chess program. The ZUG Arena frontend uses it for everything on-chain. It includes:
 
 - `MagicChessClient`, a typed wrapper around the Anchor program that routes each call to the base layer or the Ephemeral Rollup
 - React hooks
@@ -8,7 +8,7 @@
 - the program IDL and types
 
 :::note
-The package ships compiled ESM and CommonJS builds with type declarations. If it isn't on npm yet when you read this, use it from the monorepo (`"@magic-chess/sdk": "file:../sdk"`); run `npm install && npm run build` inside `sdk/` to produce `dist/`.
+The package ships compiled ESM and CommonJS builds with type declarations. Only `@magic-chess/sdk` and `@magic-chess/sdk/react` are importable; everything else is exported from the root. If the package isn't on npm yet when you read this, use it from the monorepo (`"@magic-chess/sdk": "file:../sdk"`); run `npm install && npm run build` inside `sdk/` to produce `dist/`.
 :::
 
 ## Install

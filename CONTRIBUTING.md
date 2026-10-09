@@ -36,7 +36,7 @@ cargo test -p magic_chess --features integration-tests --test cu_benchmarks
 cd backend && npm ci && npm test
 
 # SDK
-cd sdk && npm install && npm test
+cd sdk && npm install && npm test && npm run build && npm run smoke
 
 # Frontend
 cd frontend && npm ci && npm run typecheck && npm run lint
@@ -58,7 +58,7 @@ CI runs the program, frontend and SDK checks on every pull request.
 
 - Account layout changes break existing devnet matches. Call them out in the PR.
 - After changing instructions or accounts, rebuild and copy the IDL into the SDK:
-  `cd sdk && npm run sync-idl`.
+  `cd sdk && npm run sync-idl`. SDK releases follow `DEPLOY.md` → "Publish the SDK".
 - Every new instruction needs a LiteSVM test that covers the unauthorized-signer
   path, not only the happy path.
 

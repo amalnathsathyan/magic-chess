@@ -73,7 +73,7 @@ Details: [Architecture overview](https://amalnathsathyan.github.io/magic-chess/d
 | Path | What it is |
 |------|------------|
 | [`magic-chess-program/`](magic-chess-program) | Anchor 1.1.2 program (Rust). Covers the chess engine, escrow and settlement, MagicBlock delegation, session keys and the prediction pool. |
-| [`sdk/`](sdk) | `@magic-chess/sdk`: a TypeScript client with base/rollup routing, React hooks and PDA and FEN helpers |
+| [`sdk/`](sdk) | [`@magic-chess/sdk`](https://amalnathsathyan.github.io/magic-chess/docs/build/sdk/): a TypeScript client with base/rollup routing, React hooks and PDA and FEN helpers |
 | [`frontend/`](frontend) | ZUG Arena: a Next.js 15 static export on a Cloudflare Worker, using Privy and Tailwind 4 |
 | [`backend/`](backend) | Fastify + Postgres. Runs the chain indexer, account reconciler, realtime SSE hub, gas sponsor, ratings, XP and move predictions. |
 | [`docs/`](docs) | Docusaurus source for the [docs site](https://amalnathsathyan.github.io/magic-chess/docs/) |
@@ -102,7 +102,7 @@ cargo test --test payout_full_flow                                   # payout fl
 cargo test --features integration-tests --test cu_benchmarks         # compute-unit benchmarks
 
 # SDK
-cd ../../../sdk && npm install && npm test
+cd ../../../sdk && npm install && npm test && npm run build
 
 # Backend (needs Postgres; see backend/.env.example)
 cd ../backend && npm ci && cp .env.example .env && npm run dev
@@ -118,7 +118,7 @@ The full guide is [Local setup](https://amalnathsathyan.github.io/magic-chess/do
 - [How to play](https://amalnathsathyan.github.io/magic-chess/docs/getting-started/how-to-play)
 - [Program reference](https://amalnathsathyan.github.io/magic-chess/docs/architecture/program): accounts, instructions and errors
 - [MagicBlock integration](https://amalnathsathyan.github.io/magic-chess/docs/architecture/magicblock)
-- [TypeScript SDK](https://amalnathsathyan.github.io/magic-chess/docs/build/sdk)
+- [TypeScript SDK](https://amalnathsathyan.github.io/magic-chess/docs/build/sdk/) ([npm release steps](DEPLOY.md#publish-the-sdk-magic-chesssdk))
 - [Building agents](https://amalnathsathyan.github.io/magic-chess/docs/build/agents)
 - [Security reviews](https://amalnathsathyan.github.io/magic-chess/docs/security/overview)
 - [Roadmap](https://amalnathsathyan.github.io/magic-chess/docs/roadmap)

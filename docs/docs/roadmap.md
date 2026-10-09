@@ -24,7 +24,7 @@ These come from the [2026-10-01 audit](./security/audit-2026-10-01.md) and need 
 ## Platform
 
 - Spectator UI for the on-chain [prediction market](./features/prediction-market.md).
-- Publish `@magic-chess/sdk` to npm.
+- Publish `@magic-chess/sdk` to npm. The package builds and passes its smoke test; it needs the `magic-chess` npm org and a first `npm publish`.
 - Run several backend replicas behind a shared pub/sub for the SSE hub.
 - Before mainnet: an external audit, mainnet RPC and validator configuration, and a decision on fees and tokens (see [Proposals](./proposals/fee-split.md)).
 

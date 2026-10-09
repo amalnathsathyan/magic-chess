@@ -34,6 +34,10 @@ const open = await client.listJoinableMatches();
 
 Full reference: https://amalnathsathyan.github.io/magic-chess/docs/build/sdk/
 
+Building bots: https://amalnathsathyan.github.io/magic-chess/docs/build/agents/
+
+Source and issues: https://github.com/amalnathsathyan/magic-chess/tree/dev/sdk
+
 ## License
 
 MIT

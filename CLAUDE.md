@@ -170,7 +170,7 @@ Next steps:
 ### Next steps (owner action needed)
 - The owner creates the npm org `magic-chess`, runs `npm login`, does the first `npm publish` from `sdk/`,
   then adds the trusted publisher on npmjs.com (steps in `DEPLOY.md`).
-- After publishing: drop the "if it isn't on npm yet" note in `docs/docs/build/sdk.md`.
+- After publishing: drop the "if the package isn't on npm yet" note in `docs/docs/build/sdk.md` and the "pending" wording in `docs/docs/intro.md` and `docs/docs/roadmap.md`. Docs import only from `@magic-chess/sdk` and `@magic-chess/sdk/react` (the `exports` map blocks deep paths like `/utils/fen`).
 - Worth doing before 1.0: a mainnet/devnet cluster option (program ID and router are devnet-only today),
   an example app (`examples/node-bot` playing via session keys), and API docs from TSDoc (typedoc).
 - CJS `react` entry bundles its own copy of the client (no code splitting in CJS); fine for now, revisit if
