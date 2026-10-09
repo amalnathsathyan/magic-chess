@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "predev": "cd ../sdk && npm install",
+    "predev": "cd ../sdk && npm install --include=dev",
     "dev": "next dev --turbopack",
-    "prebuild": "cd ../sdk && npm install",
+    "prebuild": "cd ../sdk && npm install --include=dev",
     "build": "next build",
     "postbuild": "cp _worker.js out/_worker.js",
     "start": "next start",
