@@ -1,42 +1,98 @@
 {
   "name": "@magic-chess/sdk",
   "version": "0.1.0",
-  "description": "TypeScript SDK for Magic Chess \u2014 on-chain chess with wagering",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
-  "scripts": {
-    "sync-idl": "cp ../magic-chess-program/target/types/magic_chess.ts src/idl/magic_chess.ts && cp ../magic-chess-program/target/idl/magic_chess.json src/idl/magic_chess.json",
-    "typecheck": "tsc --noEmit",
-    "test": "node --test test/*.test.mjs"
+  "description": "TypeScript SDK for ZUG Arena (Magic Chess): on-chain chess with wagers on Solana and MagicBlock Ephemeral Rollups",
+  "keywords": [
+    "solana",
+    "chess",
+    "magicblock",
+    "ephemeral-rollups",
+    "anchor",
+    "sdk"
+  ],
+  "homepage": "https://amalnathsathyan.github.io/magic-chess/docs/build/sdk/",
+  "bugs": {
+    "url": "https://github.com/amalnathsathyan/magic-chess/issues"
   },
-  "exports": {
-    ".": "./src/index.ts",
-    "./react": "./src/react/index.tsx"
-  },
-  "peerDependencies": {
-    "@anchor-lang/core": "^1.0.0",
-    "@solana/web3.js": "^1.95.4",
-    "@solana/spl-token": "^0.4.0",
-    "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0"
-  },
-  "dependencies": {
-    "@magicblock-labs/ephemeral-rollups-kit": "^0.16.2"
-  },
-  "devDependencies": {
-    "@anchor-lang/core": "^1.1.2",
-    "@solana/web3.js": "^1.95.4",
-    "@solana/spl-token": "^0.4.0",
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "typescript": "^5.0.0"
-  },
-  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/amalnathsathyan/magic-chess.git",
     "directory": "sdk"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./react": {
+      "import": {
+        "types": "./dist/react/index.d.ts",
+        "default": "./dist/react/index.js"
+      },
+      "require": {
+        "types": "./dist/react/index.d.cts",
+        "default": "./dist/react/index.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepare": "tsup",
+    "sync-idl": "cp ../magic-chess-program/target/types/magic_chess.ts src/idl/magic_chess.ts && cp ../magic-chess-program/target/idl/magic_chess.json src/idl/magic_chess.json",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.mjs",
+    "smoke": "node test/smoke.mjs",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build && npm run smoke"
+  },
+  "peerDependencies": {
+    "@anchor-lang/core": "^1.0.0",
+    "@solana/spl-token": "^0.4.0",
+    "@solana/web3.js": "^1.95.4",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@magicblock-labs/ephemeral-rollups-kit": "^0.16.2",
+    "bn.js": "^5.2.5"
+  },
+  "devDependencies": {
+    "@anchor-lang/core": "^1.1.2",
+    "@solana/spl-token": "^0.4.0",
+    "@solana/web3.js": "^1.95.4",
+    "@types/bn.js": "^5.2.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.0.0"
   }
 }

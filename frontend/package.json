@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "cd ../sdk && npm install",
     "dev": "next dev --turbopack",
     "prebuild": "cd ../sdk && npm install",
     "build": "next build",

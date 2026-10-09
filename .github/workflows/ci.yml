@@ -51,6 +51,10 @@ jobs:
         with:
           node-version: 22
 
+      - name: Build SDK
+        working-directory: sdk
+        run: npm install
+
       - name: Install dependencies
         working-directory: frontend
         run: npm ci
@@ -63,7 +67,7 @@ jobs:
         working-directory: frontend
         run: NEXT_LINT_PROMPT=skip npm run lint
 
-  # ── SDK Typecheck ───────────────────────────────────────────────
+  # ── SDK Typecheck + Build ───────────────────────────────────────────────
   sdk:
     runs-on: ubuntu-latest
     steps:
@@ -84,6 +88,10 @@ jobs:
       - name: Test
         working-directory: sdk
         run: npm test
+
+      - name: Build + smoke-test the package
+        working-directory: sdk
+        run: npm run build && npm run smoke && npm pack --dry-run
 
   # ── Backend Typecheck + Tests ───────────────────────────────────
   backend:

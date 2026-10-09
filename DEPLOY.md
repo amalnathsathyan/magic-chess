@@ -430,3 +430,51 @@ Every push to `dev` rebuilds the frontend through Cloudflare Workers Builds
 deploy `npx wrangler deploy`). Public config lives in the `[vars]` block of
 `frontend/wrangler.toml`; change `NEXT_PUBLIC_API_URL` there if the backend moves.
 The backend's allowed origins are set by `CORS_ORIGIN` (see `backend/.env.example`).
+
+---
+
+## Publish the SDK (`@magic-chess/sdk`)
+
+The package lives in `sdk/`. `npm run build` (tsup) writes ESM, CommonJS and `.d.ts` files to `sdk/dist/`;
+only `dist/`, `README.md`, `LICENSE` and `package.json` are published. `prepublishOnly` runs typecheck,
+tests, build and `test/smoke.mjs` (loads the built package through its `exports` map in ESM and CJS), so a
+broken build can't be published.
+
+### One-time setup
+
+1. Create an npm account at https://www.npmjs.com/signup and turn on 2FA.
+2. Create the `magic-chess` organization (free for public packages): https://www.npmjs.com/org/create.
+   The scope `@magic-chess` was unclaimed on 2026-10-09. If someone takes it, rename the package in
+   `sdk/package.json` (e.g. `@<your-npm-user>/magic-chess-sdk`) and update the docs and imports.
+3. Log in from the terminal: `npm login`, then check with `npm whoami`.
+
+### First release (manual)
+
+```bash
+cd sdk
+npm install                 # also builds dist/ (prepare script)
+npm pack --dry-run          # check the file list: dist/, README.md, LICENSE, package.json
+npm publish                 # publishConfig.access=public is set, so the scoped package is public
+```
+
+Check it: `npm view @magic-chess/sdk`, then in an empty folder
+`npm install @magic-chess/sdk @anchor-lang/core @solana/web3.js@1 @solana/spl-token`.
+
+### Later releases (CI, no token)
+
+1. On npmjs.com, open the package → Settings → Trusted publisher → GitHub Actions:
+   owner `amalnathsathyan`, repo `magic-chess`, workflow `publish-sdk.yml`. Trusted publishing works only
+   after the package exists, which is why the first release is manual.
+2. Bump the version on a branch (`cd sdk && npm version patch --no-git-tag-version`), merge the PR into `dev`.
+3. Tag the merge commit on `dev` and push the tag:
+   ```bash
+   git checkout dev && git pull
+   git tag sdk-v$(node -p 'require("./sdk/package.json").version')
+   git push origin --tags
+   ```
+   `.github/workflows/publish-sdk.yml` checks the tag matches `package.json`, then publishes with provenance.
+
+Versioning: stay on `0.x` while the program is devnet-only; bump the minor for breaking API or IDL changes
+(any program upgrade that changes accounts or instructions), the patch otherwise. Run `npm run sync-idl`
+before releasing after a program change. Published versions can't be reused; `npm unpublish` works only
+within 72 hours, so prefer `npm deprecate @magic-chess/sdk@<version> "<reason>"` for a bad release.

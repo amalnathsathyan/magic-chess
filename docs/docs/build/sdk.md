@@ -8,15 +8,13 @@
 - the program IDL and types
 
 :::note
-The SDK is not on npm yet. Use it from the monorepo (`"@magic-chess/sdk": "file:../sdk"`) or copy `sdk/` into your project. It ships TypeScript source (`main: src/index.ts`), so your bundler compiles it.
+The package ships compiled ESM and CommonJS builds with type declarations. If it isn't on npm yet when you read this, use it from the monorepo (`"@magic-chess/sdk": "file:../sdk"`); `npm install` inside `sdk/` builds `dist/`.
 :::
 
 ## Install
 
-Peer dependencies:
-
 ```bash
-npm install @anchor-lang/core @solana/web3.js@1 @solana/spl-token
+npm install @magic-chess/sdk @anchor-lang/core @solana/web3.js@1 @solana/spl-token
 # React hooks only:
 npm install react react-dom
 ```
@@ -207,5 +205,7 @@ After you change the program, rebuild it and copy the IDL into the SDK:
 
 ```bash
 cd magic-chess-program && anchor build
-cd ../sdk && npm run sync-idl && npm run typecheck
+cd ../sdk && npm run sync-idl && npm run typecheck && npm run build
 ```
+
+While you work on the SDK and the frontend together, run `npm run dev` in `sdk/` (rebuilds `dist/` on save) next to the frontend's dev server.
