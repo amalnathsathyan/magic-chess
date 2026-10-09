@@ -53,7 +53,7 @@ jobs:
 
       - name: Build SDK
         working-directory: sdk
-        run: npm install
+        run: npm install && npm run build
 
       - name: Install dependencies
         working-directory: frontend

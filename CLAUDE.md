@@ -156,8 +156,9 @@ Next steps:
 ### Done
 - `tsup` (`sdk/tsup.config.ts`) builds ESM + CJS + `.d.ts` for `.` and `./react` into `sdk/dist/` (gitignored).
   `package.json` has an `exports` map, `files: ["dist"]`, `publishConfig.access: public`, react as optional peer.
-- `prepare` builds on `npm install`, so the frontend's `prebuild`/`predev` (`cd ../sdk && npm install --include=dev`) keep
-  working; the frontend now consumes `sdk/dist`, not `sdk/src`. Editing the SDK with the frontend running:
+- The frontend now consumes `sdk/dist`, not `sdk/src`; its `prebuild`/`predev` run
+  `cd ../sdk && npm install --include=dev && npm run build`. Don't add a `prepare` script to the SDK: the
+  frontend's `npm ci` runs it for the `file:../sdk` dep before the SDK's own deps exist, which broke Workers Builds. Editing the SDK with the frontend running:
   `cd sdk && npm run dev` (tsup watch).
 - Fixed: Node ESM consumers crashed on `import { BN } from "@anchor-lang/core"` (anchor is CJS for Node).
   `client.ts` imports `BN` from `bn.js` (now a dependency).

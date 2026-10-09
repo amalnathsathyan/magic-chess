@@ -8,7 +8,7 @@
 - the program IDL and types
 
 :::note
-The package ships compiled ESM and CommonJS builds with type declarations. If it isn't on npm yet when you read this, use it from the monorepo (`"@magic-chess/sdk": "file:../sdk"`); `npm install` inside `sdk/` builds `dist/`.
+The package ships compiled ESM and CommonJS builds with type declarations. If it isn't on npm yet when you read this, use it from the monorepo (`"@magic-chess/sdk": "file:../sdk"`); run `npm install && npm run build` inside `sdk/` to produce `dist/`.
 :::
 
 ## Install

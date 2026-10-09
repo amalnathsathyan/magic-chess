@@ -452,8 +452,8 @@ broken build can't be published.
 
 ```bash
 cd sdk
-npm install                 # also builds dist/ (prepare script)
-npm pack --dry-run          # check the file list: dist/, README.md, LICENSE, package.json
+npm install
+npm run build && npm pack --dry-run   # check the file list: dist/, README.md, LICENSE, package.json
 npm publish                 # publishConfig.access=public is set, so the scoped package is public
 ```
 

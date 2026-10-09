@@ -57,7 +57,6 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "prepare": "tsup",
     "sync-idl": "cp ../magic-chess-program/target/types/magic_chess.ts src/idl/magic_chess.ts && cp ../magic-chess-program/target/idl/magic_chess.json src/idl/magic_chess.json",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.mjs",
