@@ -6,14 +6,15 @@ https://arena.chessmagic.workers.dev. `dev` is the only branch, and feature PRs 
 
 ## Git workflow (required for every agent and session)
 
-`dev` is the only long-lived branch and everything deploys from it. Never commit or push directly to `dev`.
+`dev` is the only long-lived branch and everything deploys from it. Don't commit or push directly to `dev` unless the user explicitly asks for that change to go straight to `dev`.
 
-1. For any new or major piece of work, start a fresh branch from the latest `dev`:
-   `git fetch origin && git checkout -b <type>/<short-description> origin/dev` (types: `feat`, `fix`, `chore`, `docs`, …).
-2. Commit with Conventional Commits messages. Do not add a `Co-Authored-By: Claude` (or any Claude co-author) trailer.
-3. Push the branch (`git push -u origin <branch>`) and open a PR into `dev` using `.github/PULL_REQUEST_TEMPLATE.md`.
-4. Get CI green before asking for merge. Small follow-ups to an open PR go on that PR's branch; after a PR merges, new work starts a new branch from `dev`.
-5. When the task is done, update this file's status and next-steps sections in the same PR.
+1. Open a new branch only when the work needs one. Reuse an existing branch when the work is a follow-up to an open PR (push to that PR's branch) or continues work already on a branch. Start a new branch only for a new, separate piece of work with no open branch or PR for it.
+2. Name a new branch for what it does: `<type>/<short-description>` in lowercase kebab-case, e.g. `fix/move-clock-skew` or `feat/free-match-settlement` (types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`). Never use random or generated names (session ids, hashes, `claude/...-abc123`); if a tool assigned such a branch, create a descriptive one from it before pushing. Create it from the latest `dev`:
+   `git fetch origin && git checkout -b <type>/<short-description> origin/dev`.
+3. Commit with Conventional Commits messages. Do not add a `Co-Authored-By: Claude` (or any Claude co-author) trailer.
+4. Push the branch (`git push -u origin <branch>`) and open a PR into `dev` using `.github/PULL_REQUEST_TEMPLATE.md`.
+5. Get CI green before asking for merge. After a PR merges, new work starts a new branch from `dev`.
+6. When the task is done, update this file's status and next-steps sections in the same PR.
 
 ## Project Layout
 
