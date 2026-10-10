@@ -212,6 +212,7 @@ export interface PnlCard {
   returned: string;
   record: string;
   games: number;
+  rank: number | null;
 }
 
 export function drawPnlCard(ctx: Ctx, card: PnlCard) {
@@ -243,7 +244,12 @@ export function drawPnlCard(ctx: Ctx, card: PnlCard) {
 
   fit(ctx, card.name, 640, "display", 30, 800);
   text(ctx, card.name, PAD, 160, INK.bone);
-  label(ctx, `Net P&L · ${card.games} ${card.games === 1 ? "game" : "games"}`, PAD, 196);
+  label(
+    ctx,
+    `Net P&L · ${card.games} ${card.games === 1 ? "game" : "games"}${card.rank ? ` · #${card.rank} by rating` : ""}`,
+    PAD,
+    196
+  );
 
   const figure = `${card.positive ? "+" : "−"}${card.net}`;
   const size = fit(ctx, figure, 560, "display", 150, 900);
@@ -313,7 +319,7 @@ export function drawProfileCard(ctx: Ctx, card: ProfileCard) {
     fit(ctx, `#${card.rank}`, 84, "display", 44, 900);
     text(ctx, `#${card.rank}`, x + 52, 334, INK.graphite, "center");
     font(ctx, "mono", 11, 700, 2);
-    text(ctx, "LADDER", x + 52, 360, INK.graphite, "center");
+    text(ctx, "BY RATING", x + 52, 360, INK.graphite, "center");
   }
 
   // Rating curve on the right.
@@ -366,6 +372,103 @@ export function drawProfileCard(ctx: Ctx, card: ProfileCard) {
     { label: "Best streak", value: String(card.bestStreak), color: INK.vermilion },
     { label: "XP", value: card.level ? card.level.xp.toLocaleString() : "—" },
   ]);
+}
+
+export interface MatchCardSide {
+  name: string;
+  rating: number | null;
+  ratingChange: number | null;
+  xp: number | null;
+}
+
+export interface MatchCard {
+  /** "White won", "Black won" or "Draw". */
+  headline: string;
+  reason: string | null;
+  score: string;
+  winner: "white" | "black" | null;
+  white: MatchCardSide;
+  black: MatchCardSide;
+  moves: number;
+  length: string | null;
+  /** "15 WSOL" or "FREE"; null hides the wager. */
+  stake: string | null;
+  pot: string | null;
+}
+
+function matchSide(ctx: Ctx, side: MatchCardSide, color: "white" | "black", won: boolean, y: number, right: number) {
+  // Piece colour as a square, like the board.
+  ctx.fillStyle = color === "white" ? INK.bone : INK.graphite;
+  ctx.fillRect(PAD, y - 30, 36, 36);
+  ctx.strokeStyle = color === "white" ? INK.bone : INK.muted;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(PAD + 1, y - 29, 34, 34);
+
+  let stats = side.rating !== null ? String(side.rating) : "";
+  if (side.ratingChange) stats += ` ${side.ratingChange > 0 ? "+" : "−"}${Math.abs(side.ratingChange)}`;
+  font(ctx, "mono", 18, 700, 0.5);
+  const statsWidth = ctx.measureText(stats).width;
+  const xpText = side.xp ? `+${side.xp} XP` : "";
+  const xpWidth = xpText ? ctx.measureText(xpText).width + 16 : 0;
+
+  fit(ctx, side.name, right - PAD - 56 - statsWidth - xpWidth - (won ? 84 : 0) - 24, "display", 30, 800);
+  const nameWidth = text(ctx, side.name, PAD + 56, y, won ? INK.bone : INK.muted);
+  if (won) {
+    font(ctx, "mono", 13, 700, 2.2);
+    tag(ctx, "WIN", PAD + 56 + nameWidth + 16 + ctx.measureText("WIN").width + 24, y - 4, INK.vermilion, true);
+  }
+
+  font(ctx, "mono", 18, 700, 0.5);
+  if (xpText) text(ctx, xpText, right, y, INK.vermilion, "right");
+  if (stats) {
+    const base = side.rating !== null ? String(side.rating) : "";
+    const x = right - xpWidth - statsWidth;
+    const baseWidth = text(ctx, base, x, y, INK.bone);
+    if (side.ratingChange) {
+      text(ctx, stats.slice(base.length), x + baseWidth, y, side.ratingChange > 0 ? INK.success : INK.destructive);
+    }
+  }
+}
+
+export function drawMatchCard(ctx: Ctx, card: MatchCard) {
+  frame(ctx, "GAME RESULT");
+
+  const square = 62;
+  const bx = W - PAD - square * 5;
+  const by = 132;
+  leap(ctx, bx, by, square, 5, 6, [3, 4], {
+    light: INK.raised,
+    dark: INK.card,
+    knight: INK.bone,
+    path: INK.bone,
+  });
+  const fade = ctx.createLinearGradient(bx - 40, 0, bx + square * 2, 0);
+  fade.addColorStop(0, INK.graphite);
+  fade.addColorStop(1, "rgba(13,14,16,0)");
+  ctx.fillStyle = fade;
+  ctx.fillRect(bx - 40, by, square * 2 + 40, square * 6);
+
+  const columnRight = bx - 48;
+  label(ctx, card.reason ? `Final · by ${card.reason.toLowerCase()}` : "Final", PAD, 146, INK.vermilion);
+  const head = card.headline.toUpperCase();
+  fit(ctx, head, columnRight - PAD - 150, "display", 92, 900);
+  const headWidth = text(ctx, head, PAD - 4, 236, INK.bone);
+  font(ctx, "mono", 30, 700, 1);
+  text(ctx, card.score, PAD + headWidth + 20, 236, INK.vermilion);
+
+  hairline(ctx, PAD, 270, columnRight, 270);
+  matchSide(ctx, card.white, "white", card.winner === "white", 322, columnRight);
+  matchSide(ctx, card.black, "black", card.winner === "black", 384, columnRight);
+
+  const items: Array<{ label: string; value: string; color?: string }> = [
+    { label: "Moves", value: String(card.moves) },
+    { label: "Length", value: card.length ?? "—" },
+  ];
+  if (card.stake) {
+    items.push({ label: "Stake", value: card.stake, color: card.stake === "FREE" ? INK.bone : INK.vermilion });
+    if (card.pot) items.push({ label: "Pot", value: card.pot, color: INK.success });
+  }
+  cells(ctx, 444, PAD, columnRight - PAD, items);
 }
 
 export interface InviteCard {
