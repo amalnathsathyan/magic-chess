@@ -74,8 +74,8 @@ Migrations live in `src/db/migrate.ts` and run on boot unless
 | GET | `/health` | Liveness |
 | GET | `/api/health` | DB, indexer, sponsor and realtime status. `503` until the DB is ready |
 | GET | `/api/lobbies` | Open matches waiting for an opponent |
-| GET | `/api/matches` | Matches, filter by `status` and `player` |
-| GET | `/api/matches/:matchId` | One match with current FEN |
+| GET | `/api/matches` | Matches, filter by `status`, `player` and `timedOut` (side to move out of time, unclaimed) |
+| GET | `/api/matches/:matchId` | One match with current FEN and timeout state |
 | GET | `/api/matches/:matchId/history` | Moves with FEN after each move (replay) |
 | GET | `/api/players/:pubkey/stats` | Record, streaks, rating |
 | GET | `/api/players/:pubkey/matches` | Paginated match history |
