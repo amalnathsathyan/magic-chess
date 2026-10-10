@@ -134,6 +134,65 @@ Program tests: 182 unit (`--test unit_tests`) + 59 LiteSVM + 15 payout flow + 11
 Prediction market instructions live on-chain (`prediction_enabled` flag, 5 instructions); no outcome-pool UI yet.
 Frontend (ZUG Arena) and backend are live on devnet; see `docs/docs/deployment.md`.
 
+## Gameplay: status and next steps (handoff, 2026-10-07)
+
+Owner so far: the "Gameplay fixes from live testing" thread. This section is the handoff for the next agent.
+
+### Shipped on dev (PR #48)
+- Phones: `MoveList` no longer scrolls the whole page (it used `scrollIntoView` every second), which also cancelled touch drags.
+- `runTransaction` in `frontend/app/play/page.tsx` no longer awaits the backend history call (the DB can be asleep). A pending transaction locks the board, so this was why moves failed.
+- Faster create/join: the gas sponsor's `confirmFast` (`backend/src/services/solanaSponsor.ts`) polls signature status alongside the websocket. Open matches poll every 1.5s so the creator sees the join.
+- End-of-game banner says who won and why (`describeEnd` in the play page). When a clock runs out both players see it. Embedded (Privy) wallets auto-claim the timeout win without a popup (`claim_timeout_win` is in `GAMEPLAY_DISCRIMINATORS` in `SolanaProgramProvider.tsx`). External wallets get the button.
+- Sounds for opponent moves, game start and end. Every sound is primed on the first tap so phones play them.
+
+### Shipped with this section (PR #51)
+- A "What's happening" panel (`frontend/components/chess/MatchJourney.tsx`) walks players through created → opponent joins → play → save result to Solana → pay out. It covers the move clock, why the game ended, the payout after the fee, and that either player can finalize. The finalize button names its step (1 of 2 saving, 2 of 2 paying).
+
+### Automatic payout: findings and the decision waiting on jason
+Finished games still pay out only when a player presses "Finalize and settle payout" (undelegate on the rollup, then `process_match_settlement` on base).
+- Re-enabling the task scheduler (`TASK_SCHEDULER_ENABLED` in `schedule_timeout.rs`) would not fix this. The scheduler isn't available on the rollup, where games end (see the comment above the scheduling block in `make_move.rs`). The settlement task it schedules also passes no token accounts, so it couldn't pay anyone.
+- `process_match_settlement` needs no player signature; any fee payer can send it. `undelegate_match` requires a player signer.
+- Proposed design (jason has a decision card in the thread and hasn't answered yet): (1) the program lets anyone call `undelegate_match` once the game is terminal (WhiteWins/BlackWins/Draw/Aborted), keeping the player check while Active; (2) a backend `MatchSettler` uses the sponsor fee payer. It finds terminal, unpaid matches (the `matches` table, or the reconciler's sweep), undelegates on the rollup, waits for the base account to come back, creates the payout ATAs (idempotent) and sends `process_match_settlement`, behind an `AUTO_SETTLE_ENABLED` flag that stays off until the program upgrade is on devnet; (3) the panel says "Paying out automatically" when that flag is on.
+- Do not start step (1) without jason's explicit approval. It loosens an authorization check and needs a devnet program upgrade that jason deploys. The deployed program already lags the source (see project memory).
+- Silently signing payout transactions from the player's page (quiet-signing `process_match_settlement`) was tried and rejected, because it would sign without the player approving. Don't revisit that.
+
+### Other next steps
+- Not verified on a real phone yet: retest drag and tap moves, sound and the bottom nav on iOS Safari and Android Chrome.
+- Timeout wins for external wallets (Phantom etc.) still need a press of "Claim timeout win".
+
+### MagicBlock Validator v1.0 review and free-match settlement (2026-10-07, not started)
+Research only; no code changed. Pick up from here.
+
+**Free (0-wager) matches pay for a token path they never use.** Today a free match creates a wSOL ATA for each player (`frontend/lib/wager.ts:72`, `play/page.tsx:559` with `0n`), always creates the `match_escrow` token account (`initialize_match.rs`), then at settle creates 3 payout ATAs (`buildSettlementInstructions`), makes 0-amount transfers and closes the escrow. Each ATA is ~0.00204 SOL of sponsor money that is never reclaimed. Proposed program change:
+- `initialize_match` / `join_match`: token accounts and escrow become `Option<>` (or a separate `initialize_free_match`), required whenever the wager is > 0 (`require!(total_pot == 0 || accounts.is_some())`; `total_pot` is set on-chain, so it can't be spoofed).
+- New `settle_free_match` (or a `total_pot == 0` branch in `close_match`): once terminal, close `chess_match` directly. One instruction, no ATAs, no token CPI, ~0.0161 SOL rent back to the sponsor.
+- Frontend skips `buildWagerInstruction` / `buildSettlementInstructions` when the wager is 0.
+- Same upgrade: `process_match_settlement.rs:61` `payer` is an `UncheckedAccount`, so whoever settles first picks who gets the escrow rent the sponsor paid. Constrain it.
+
+**Auto-payout alternative to the backend `MatchSettler`: Magic Actions.** `ephemeral-rollups-sdk` 0.16.2 (in use) already has it; 0.17.3 is latest with the same action API, but crank/vrf move behind cargo features.
+- Terminal paths (`make_move`, `resign_game`, `claim_timeout_win`) schedule `MagicIntentBundleBuilder::commit_and_undelegate(&[chess_match]).add_post_undelegate_action(CallHandler{..})`, the builder `undelegate_match.rs` already uses. Use post-undelegate, not post-commit: after a commit alone `chess_match` is still owned by the delegation program on L1.
+- The action can be `process_match_settlement` unchanged (same 7 accounts, permissionless, `payout_processed` + escrow close stop double pay). The delegation program's extra trailing accounts land in `remaining_accounts`. Don't trust the `#[action]` macro's account order; MagicBlock's own example looks shifted.
+- Escrow authority: a global `["action_auth"]` PDA signs via `build_and_invoke_signed`; fund `["balance", action_auth, idx]` once with `top_up_ephemeral_balance` and don't delegate it. A commit fee of ~0.001 SOL applies.
+- Accounts are `Option<>` on those instructions so normal moves don't carry them. Simpler first step: a rollup `finish_match` instruction the backend calls.
+- If the action fails (e.g. a missing ATA; actions can't create ATAs), the validator retries commit+undelegate without it, so the "Finalize" button stays as the fallback. Free matches have no ATAs, so nothing can fail there; do the free-match change first.
+- Same loosened-authorization concern as above: needs jason's approval and a devnet upgrade.
+
+**Smaller gameplay fixes (no program change, effort S unless noted):**
+- `subscribeToMatch` (`sdk/src/client.ts:218`) and `useMoveTransactionNotifications.ts:120` never resubscribe after a rollup restart or dropped socket; moves arrive late through the 8s fallback poll (`play/page.tsx:250`). Add a `getSlot` heartbeat and rebuild, plus a "rollup reconnecting" banner instead of a frozen board or a "Match unavailable" card (`play/page.tsx:853-862`).
+- Per move, `sendInstructionWithSession` (`client.ts:162-179`) fetches a fresh blockhash and simulates; `makeMove` then reads the account again (`client.ts:415`) and the frontend discards it. Cache the blockhash ~30s, drop the simulation and the read (~100–300 ms per move).
+- Runtime lookup (base → router → rollup, `sdk/src/magicblock.ts:243-281`) repeats on every `getMatch`/`subscribeToMatch`/`resign`/`claimTimeout`, 2–3× on reload. Share the per-match cache `makeMove` has (`client.ts:184-194`).
+- No rebroadcast for dropped moves (`play/page.tsx:632-640`). `useMagicBlock.ts:25` matches the generic `"accountnotfound"`, so a transient error can turn session keys off and bring wallet popups back mid-game (effort S–M).
+- Timer compares the device clock to the chain's `lastMoveTimestamp` (`play/page.tsx:336-343`). A skewed device fires `claim_timeout_win` early, then `autoClaimedRef` blocks the retry (`play/page.tsx:749-758`). Estimate the offset.
+- White's clock starts at join on L1 (`join_match.rs:81`) before delegation is seen; `waitForDelegation` polls at 1s (`sdk/src/magicblock.ts:113`). Poll at ~250 ms (effort M to start the clock on the first rollup tx).
+- Finalize polls `getMatch` up to 20×1s (`play/page.tsx:701-707`) after `client.undelegateMatch` already waited for the undelegation (`client.ts:651-661`). Remove it.
+- Duplicate polling: `useMatch` 3–8s, log poller 2.5s, backend `refreshConnectedMatches` 3s (`matchRealtime.ts:173`), indexer 3s (`chainIndexer.ts:71`, runtime cache 30s TTL), spectate 3–10s. Let SSE `match.snapshot` drive refreshes.
+
+**Later / optional:**
+- Ephemeral accounts (effort M): `position_history` is 1,604 of `ChessMatch`'s 2,186 bytes (`state/chess_match.rs:29-30`). An ephemeral PDA on the rollup cuts ~0.0112 SOL rent per match; it needs a fallback for undelegated play. `delegation_uid` (68 bytes) is derivable as `"chess-{id}"`. Chat and draw offers fit ephemeral accounts too.
+- Token-2022 (effort L): the classic Token program is hard-coded in the program (`Program<Token>`, 10 files), SDK (`client.ts:39`), frontend (`play/page.tsx:468`, `lib/wager.ts`) and sponsor (`solanaSponsor.ts:201,206`). Transfer-fee mints break pot accounting. Wait until a Token-2022 token is actually wanted.
+- Private payments: no gain while wagers stay in the L1 escrow.
+
+Suggested order: free-match path + `payer` fix (one upgrade) → small fixes above → auto-payout via Magic Actions.
 ## Gameplay: status and next steps
 
 Fixed after jason's live test (2026-10-06):
