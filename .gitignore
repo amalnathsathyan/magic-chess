@@ -24,7 +24,9 @@ next-env.d.ts
 # Local AI/agent tooling (per-developer, not part of the project)
 .agents/
 .claude/settings.local.json
-.claude/skills/
+.claude/skills/*
+# Shared skills checked in so every session (including cloud sessions) loads them
+!.claude/skills/magicblock/
 .claude/scheduled_tasks.json
 .gemini/
 .superstack/

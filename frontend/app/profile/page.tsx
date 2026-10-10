@@ -13,6 +13,7 @@ import {
   LogIn,
   Pencil,
   RefreshCw,
+  Share2,
   Sword,
   TrendingUp,
   Trophy,
@@ -25,6 +26,7 @@ import { FinishedGameCard } from "@/components/lobby/FinishedGameCard";
 import { LevelCard } from "@/components/profile/LevelCard";
 import { ProfileEditor } from "@/components/profile/ProfileEditor";
 import { RatingChart } from "@/components/profile/RatingChart";
+import { ShareCardDialog } from "@/components/share/ShareCard";
 import { PlayerAvatar } from "@/components/shared/PlayerAvatar";
 import { useAppLogin } from "@/hooks/useAppLogin";
 import {
@@ -35,9 +37,10 @@ import {
   type ApiTally,
 } from "@/lib/api";
 import { formatEndReason, timeAgo } from "@/lib/game-result";
-import { playHref, spectateHref } from "@/lib/match-links";
+import { absoluteUrl, playHref, profileHref, spectateHref } from "@/lib/match-links";
 import { playerLabel } from "@/lib/players";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
+import { compactAmount, drawPnlCard, drawProfileCard, renderCard } from "@/lib/share-card";
 import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
 import { cn } from "@/lib/utils";
 
@@ -74,6 +77,7 @@ function ProfileView() {
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [sharing, setSharing] = useState<"pnl" | "profile" | null>(null);
 
   const load = useCallback(async () => {
     if (!wallet) return;
@@ -195,6 +199,20 @@ function ProfileView() {
   }
 
   const { stats } = profile;
+  const name = playerLabel(profile.wallet, profile.displayName);
+  const profileUrl = absoluteUrl(profileHref(profile.wallet));
+  const symbol = solanaConfig.wagerSymbol;
+  const wagered = BigInt(stats.totalWagered);
+  const returned = BigInt(stats.totalWon);
+  const net = returned - wagered;
+  const netLabel = compactAmount(formatTokenAmount(net < 0n ? -net : net));
+  const roi = wagered > 0n ? `${net >= 0n ? "+" : "−"}${(Math.abs(Number((net * 1000n) / wagered)) / 10).toFixed(1)}%` : "0%";
+  const shareMessage =
+    sharing === "pnl"
+      ? `Wagered ${compactAmount(formatTokenAmount(wagered))} ${symbol} on @zugxyz, took home ${compactAmount(formatTokenAmount(returned))}. ${net >= 0n ? "+" : "−"}${netLabel} ${symbol} net (${roi} ROI). Every move matters.`
+      : isOwnProfile
+        ? `Rated ${profile.rating}${profile.rank ? `, #${profile.rank} on the ladder` : ""}${profile.xp ? `, Lv ${profile.xp.level} ${profile.xp.tier}` : ""} on @zugxyz. ${stats.wins} wins and counting. Come take my spot.`
+        : `${name} is rated ${profile.rating}${profile.rank ? ` (#${profile.rank})` : ""} on @zugxyz. Think you can take them?`;
 
   return (
     <ProfileShell>
@@ -249,6 +267,14 @@ function ProfileView() {
                 Edit profile
               </button>
             ) : null}
+            <button
+              type="button"
+              onClick={() => setSharing("profile")}
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-medium transition-colors hover:border-primary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <Share2 className="h-4 w-4" aria-hidden="true" />
+              {isOwnProfile ? "Share my card" : "Share card"}
+            </button>
             <Link
               href="/arena"
               className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary"
@@ -409,7 +435,70 @@ function ProfileView() {
             <p className="font-mono text-lg font-bold tabular-nums">{profile.activeGames}</p>
           </div>
         ) : null}
+        {isOwnProfile && wagered > 0n ? (
+          <button
+            type="button"
+            onClick={() => setSharing("pnl")}
+            className="ml-auto inline-flex min-h-10 items-center gap-2 bg-primary px-4 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <Share2 className="h-4 w-4" aria-hidden="true" />
+            Share P&amp;L
+          </button>
+        ) : null}
       </section>
+
+      <ShareCardDialog
+        open={sharing !== null}
+        onOpenChange={(open) => !open && setSharing(null)}
+        title={sharing === "pnl" ? "Share your P&L" : "Share player card"}
+        description={
+          sharing === "pnl"
+            ? "Your wagering ledger as a card. Post it, send it, or keep it."
+            : "Rating, rank, level and record on one card, ready to flex."
+        }
+        filename={sharing === "pnl" ? "zug-pnl.png" : "zug-player-card.png"}
+        message={shareMessage}
+        url={profileUrl}
+        render={() =>
+          renderCard((ctx) =>
+            sharing === "pnl"
+              ? drawPnlCard(ctx, {
+                  name,
+                  symbol,
+                  net: netLabel,
+                  positive: net >= 0n,
+                  roi,
+                  wagered: compactAmount(formatTokenAmount(wagered)),
+                  returned: compactAmount(formatTokenAmount(returned)),
+                  record: `${stats.wins}·${stats.losses}·${stats.draws}`,
+                  games: stats.totalGames,
+                  rank: profile.rank,
+                })
+              : drawProfileCard(ctx, {
+                  name,
+                  wallet: profile.wallet,
+                  rating: profile.rating,
+                  provisional: profile.provisional,
+                  rank: profile.rank,
+                  peak: profile.peakRating,
+                  level: profile.xp
+                    ? {
+                        level: profile.xp.level,
+                        tier: profile.xp.tier,
+                        xp: profile.xp.xp,
+                        progress: profile.xp.levelSpan > 0 ? profile.xp.levelXp / profile.xp.levelSpan : 0,
+                      }
+                    : null,
+                  games: stats.totalGames,
+                  wins: stats.wins,
+                  winRate: stats.winRate,
+                  bestStreak: stats.longestWinStreak,
+                  history: profile.ratingHistory.map((point) => point.rating),
+                  form: profile.recentForm.map((game) => game.result),
+                })
+          )
+        }
+      />
 
       {/* ── Games ── */}
       <section aria-labelledby="games-heading">

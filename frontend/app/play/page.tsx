@@ -12,6 +12,7 @@ import {
   ExternalLink,
   LoaderCircle,
   RefreshCw,
+  Share2,
   ShieldCheck,
   Sword,
   Zap,
@@ -40,6 +41,7 @@ import { useMagicChessClient, useMatch } from "@magic-chess/sdk/react";
 import { toast } from "sonner";
 import { AuthGate } from "@/components/shared/AuthGate";
 import { TransactionStatus } from "@/components/shared/TransactionStatus";
+import { ShareCardDialog, ShareChannels } from "@/components/share/ShareCard";
 import { ChessBoard } from "@/components/chess/ChessBoard";
 import { MoveList } from "@/components/chess/MoveList";
 import { PromotionDialog } from "@/components/chess/PromotionDialog";
@@ -68,6 +70,8 @@ import { PredictionPanel } from "@/components/predictions/PredictionPanel";
 import { useMatchRealtime } from "@/hooks/useMatchRealtime";
 import { copyToClipboard } from "@/lib/clipboard";
 import { absoluteUrl, playHref, spectateHref } from "@/lib/match-links";
+import { playerLabel } from "@/lib/players";
+import { drawInviteCard, renderCard } from "@/lib/share-card";
 import {
   formatRemaining,
   isSquare,
@@ -180,6 +184,7 @@ function PlayView() {
   const { match, loading, error, refetch } = useMatch(matchId || null);
   const realtime = useMatchRealtime({ matchId });
   const [copied, setCopied] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const { wallets } = useWallets();
   const wallet = selectSolanaWallet(wallets);
   const {
@@ -576,6 +581,23 @@ function PlayView() {
     } else {
       toast.error("Couldn't copy the invite link.");
     }
+  };
+
+  const inviteStake =
+    match && match.betAmountPlayerOne > 0n ? formatWager(match.betAmountPlayerOne) : null;
+  const inviteMessage = `Your move. I just opened a ${inviteStake ? `${inviteStake} chess match` : "free chess match"} on @zugxyz${timeoutMilliseconds > 0 ? `, ${timeoutMilliseconds / 1_000}s a move` : ""}. Take the black pieces:`;
+  const renderInvite = async () => {
+    // Name and rating are a nice touch, not a requirement: the DB may be asleep.
+    const profile = whiteAddress ? await api.getPlayerProfile(whiteAddress).catch(() => null) : null;
+    return renderCard((ctx) =>
+      drawInviteCard(ctx, {
+        name: playerLabel(whiteAddress, profile?.displayName),
+        rating: profile?.rating ?? null,
+        matchId,
+        stake: inviteStake ?? "FREE",
+        clock: timeoutMilliseconds > 0 ? `${timeoutMilliseconds / 1_000}s/move` : "Untimed",
+      })
+    );
   };
 
   const handleAbort = async () => {
@@ -1106,6 +1128,25 @@ function PlayView() {
                         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                         {copied ? "Invite link copied" : "Copy invite link"}
                       </button>
+                      <ShareChannels message={inviteMessage} url={absoluteUrl(playHref(matchId))} />
+                      <button
+                        type="button"
+                        onClick={() => setInviteOpen(true)}
+                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 border border-border px-4 text-sm font-semibold transition-colors hover:border-primary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
+                      >
+                        <Share2 className="h-4 w-4" aria-hidden="true" />
+                        Share invite card
+                      </button>
+                      <ShareCardDialog
+                        open={inviteOpen}
+                        onOpenChange={setInviteOpen}
+                        title="Send a challenge"
+                        description="A card for your open match. Whoever follows the link takes the black pieces."
+                        filename={`zug-challenge-${matchId}.png`}
+                        message={inviteMessage}
+                        url={absoluteUrl(playHref(matchId))}
+                        render={renderInvite}
+                      />
                       <button
                         type="button"
                         onClick={() => void handleAbort()}

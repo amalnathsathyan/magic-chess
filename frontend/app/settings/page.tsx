@@ -10,6 +10,8 @@ import {
   Copy,
   ExternalLink,
   Github,
+  KeyRound,
+  LoaderCircle,
   Palette,
   User,
   Volume2,
@@ -19,6 +21,7 @@ import {
 import { toast } from "sonner";
 import { sounds } from "@/lib/sounds";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
+import { useExportPrivyKey } from "@/hooks/useExportPrivyKey";
 
 const APP_VERSION = "0.1.0";
 const GITHUB_URL = "https://github.com/amalnathsathyan/magic-chess";
@@ -30,6 +33,7 @@ export default function SettingsPage() {
   const { wallets } = useWallets();
   const wallet = selectSolanaWallet(wallets);
   const [copied, setCopied] = useState(false);
+  const { canExport, exportKey, exporting } = useExportPrivyKey(wallet);
 
   useEffect(() => {
     setSoundEnabled(sounds.isEnabled());
@@ -70,43 +74,66 @@ export default function SettingsPage() {
         </h2>
         <div className="glass-card p-5">
           {authenticated && wallet ? (
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center bg-primary/10">
-                  <User className="h-5 w-5 text-primary" aria-hidden="true" />
+            <>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center bg-primary/10">
+                    <User className="h-5 w-5 text-primary" aria-hidden="true" />
+                  </div>
+                  <div>
+                    <p className="font-mono text-sm font-medium">
+                      {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Connected via {wallet.standardWallet.name}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-mono text-sm font-medium">
-                    {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Connected via Privy
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={copyAddress}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
-                  aria-label="Copy wallet address"
-                >
-                  {copied ? (
-                    <Check className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={copyAddress}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
+                    aria-label="Copy wallet address"
+                  >
+                    {copied ? (
+                      <Check className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                    {copied ? "Copied" : "Copy"}
+                  </button>
+                  <Link
+                    href="/profile"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    Profile
+                    <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                  </Link>
+                  {canExport && (
+                    <button
+                      type="button"
+                      onClick={() => void exportKey()}
+                      disabled={exporting}
+                      aria-busy={exporting}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {exporting ? (
+                        <LoaderCircle className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                      ) : (
+                        <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+                      )}
+                      Export key
+                    </button>
                   )}
-                  {copied ? "Copied" : "Copy"}
-                </button>
-                <Link
-                  href="/profile"
-                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
-                >
-                  Profile
-                  <ExternalLink className="h-3 w-3" aria-hidden="true" />
-                </Link>
+                </div>
               </div>
-            </div>
+              {canExport && (
+                <p className="mt-4 text-xs text-muted-foreground">
+                  Your private key opens in a secure Privy window. Anyone with it controls this wallet and its funds, so never share it.
+                </p>
+              )}
+            </>
           ) : (
             <div className="flex items-center gap-4">
               <div className="flex h-10 w-10 items-center justify-center bg-muted/30">

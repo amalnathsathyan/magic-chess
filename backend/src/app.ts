@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { config } from "./config.js";
+import { corsOptions } from "./cors.js";
 import { runMigrations } from "./db/migrate.js";
 import { healthRoutes } from "./routes/health.js";
 import { matchRoutes } from "./routes/matches.js";
@@ -39,11 +40,7 @@ async function main(): Promise<void> {
   });
 
   // CORS
-  await app.register(cors, {
-    origin: config.corsOrigins,
-    methods: ["GET", "POST", "DELETE", "OPTIONS"],
-    credentials: true,
-  });
+  await app.register(cors, corsOptions(config.corsOrigins));
 
   // A database outage must not take down the gas-sponsor relay, which needs
   // no database: keep serving and retry migrations in the background.
