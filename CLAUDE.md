@@ -44,7 +44,7 @@ magic-chess/
 ├── research/                   # Earlier R&D notes + agent-findings/ reports (reference, unmaintained)
 └── .claude/                    # Claude Code settings
 
-Local only (gitignored): .agents/skills/, .claude/skills/, skills-lock.json, marketing/
+Local only (gitignored): .agents/skills/, .claude/skills/ (except .claude/skills/magicblock/, which is checked in), skills-lock.json, marketing/
 ```
 
 ## Key Technical Details
@@ -122,9 +122,14 @@ anchor deploy --provider.cluster devnet
 
 ## Active Skills
 
+Checked in (loads in every session, including cloud sessions):
+
+- `magicblock` (`.claude/skills/magicblock/`) — MagicBlock dev skill vendored from
+  magicblock-labs/magicblock-dev-skill: ER/delegation, Magic Actions, session keys, cranks, VRF, fees,
+  debugging. Upstream commit and update steps are in its `SOURCE.md`.
+
 Installed locally (not tracked in git; reinstall from `skills-lock.json`):
 
-- `magicblock` — MagicBlock integration (delegation, ER, session keys, crank)
 - `solana-audit` — Security audit workflows and vulnerability taxonomies
 - `solana-incident-response` — Incident triage and post-mortem
 
