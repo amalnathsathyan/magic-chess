@@ -162,6 +162,10 @@ function SpectateView() {
       ? Math.max(0, timeoutMs - (now - Number(match.lastMoveTimestamp) * 1_000))
       : null;
   const remaining = remainingMs !== null ? formatRemaining(remainingMs) : null;
+  // On-chain the game stays Active until the waiting side claims the win.
+  const timedOut = remainingMs === 0;
+  const outOfTime = match?.currentTurn === "black" ? "Black" : "White";
+  const claimant = outOfTime === "White" ? "Black" : "White";
   const spectators = realtime.presence?.spectators ?? null;
 
   const share = async () => {
@@ -281,10 +285,14 @@ function SpectateView() {
                   <span
                     className={cn(
                       "shrink-0 px-2.5 py-1 text-xs font-medium",
-                      isActive ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                      timedOut
+                        ? "bg-destructive/15 text-destructive"
+                        : isActive
+                          ? "bg-primary/15 text-primary"
+                          : "bg-muted text-muted-foreground"
                     )}
                   >
-                    {STATUS_LABEL[match.gameStatus] ?? match.gameStatus}
+                    {timedOut ? "Out of time" : STATUS_LABEL[match.gameStatus] ?? match.gameStatus}
                   </span>
                 </div>
                 <dl className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
@@ -304,13 +312,32 @@ function SpectateView() {
                     <dd
                       className={cn(
                         "font-mono text-sm font-semibold tabular-nums",
-                        remaining?.isLow && "animate-pulse text-primary"
+                        timedOut
+                          ? "text-destructive"
+                          : remaining?.isLow && "animate-pulse text-primary"
                       )}
                     >
-                      {remaining ? remaining.text : "—"}
+                      {timedOut ? "Out" : remaining ? remaining.text : "—"}
                     </dd>
                   </div>
                 </dl>
+                {timedOut ? (
+                  <p className="mt-3 border border-border px-3 py-2 text-xs text-muted-foreground">
+                    {viewerColor === claimant.toLowerCase() ? (
+                      <>
+                        {outOfTime} ran out of time, so you won.{" "}
+                        <Link href={playHref(matchId)} className="font-semibold text-primary hover:underline">
+                          Claim the win
+                        </Link>{" "}
+                        to end the game{match.totalPot > 0n ? " and collect the pot" : ""}.
+                      </>
+                    ) : (
+                      <>
+                        {outOfTime} ran out of time. The game ends when {claimant} claims the win.
+                      </>
+                    )}
+                  </p>
+                ) : null}
                 {match.gameEndReason ? (
                   <p className="mt-3 text-sm">
                     Result: <strong>{formatReason(match.gameEndReason)}</strong>
@@ -322,8 +349,9 @@ function SpectateView() {
                 matchId={matchId}
                 fen={fen}
                 pliesPlayed={pliesPlayed(match)}
-                isActive={isActive}
+                isActive={isActive && !timedOut}
                 isFinished={isFinished}
+                timedOut={timedOut}
                 playerColor={viewerColor}
                 liveMarket={realtime.predictionMarket}
                 liveSettled={realtime.predictionSettled}
