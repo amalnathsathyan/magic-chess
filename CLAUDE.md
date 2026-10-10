@@ -155,7 +155,9 @@ and shown in one dialog (`frontend/components/share/ShareCard.tsx`: preview, Dow
 native Share image on phones, Copy link, and X / WhatsApp / Telegram links with a prefilled post):
 - **P&L card** (own profile, once something was wagered): net = `totalWon − totalWagered`. The backend's
   `totalWon` is the full pot on wins and draws add nothing to it, so a draw refund counts as a loss of the stake.
-- **Player card** (any profile): rating, ladder rank, level/tier, XP progress, rating curve, form, games/wins/win rate/best streak.
+- **Player card** (any profile): rating, rank ("#16 by rating", as on the profile page; the P&L card shows it too), level/tier, XP progress, rating curve, form, games/wins/win rate/best streak.
+- **Result card** (review page, any finished game): result and reason, both players with rating change and XP,
+  moves, length, and stake/pot. A "Show wager" switch hides the stake and pot on the card and in the caption.
 - **Challenge card** (play page, creator of an open match): stake, move clock, "you play black", plus direct
   X / WhatsApp / Telegram buttons under "Copy invite link".
 
@@ -166,6 +168,7 @@ real browser (Chromium) with mocked profile data: it draws at 2400×1350 and the
 
 Next steps:
 - Share links can't attach the image (X, WhatsApp and Telegram intents take text only); players download or
-  copy the card and paste it. Per-profile/per-match OG images would need a server-rendered image endpoint.
+  copy the card and paste it. To get a preview image on posted links, serve per-profile/per-match `og:image`
+  tags from the Worker (`frontend/_worker.js`) and render the PNG server-side (e.g. satori + resvg).
 - "Games created" isn't tracked in `player_stats`; add it in the backend if the player card should show it.
 - Count draw refunds in `total_won` (or add `total_refunded`) so the P&L is exact.

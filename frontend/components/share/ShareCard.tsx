@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Check, Copy, Download, ImageIcon, LoaderCircle, Share2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -70,6 +70,8 @@ export function ShareCardDialog({
   render,
   message,
   url,
+  options,
+  renderKey,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -79,6 +81,10 @@ export function ShareCardDialog({
   render: () => Promise<Blob>;
   message: string;
   url: string;
+  /** Controls shown above the preview, such as a toggle for what the card shows. */
+  options?: ReactNode;
+  /** Change it to redraw the card, for example when an option changes. */
+  renderKey?: string;
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -97,8 +103,15 @@ export function ShareCardDialog({
           <Dialog.Description className="mb-4 text-sm text-muted-foreground">
             {description}
           </Dialog.Description>
+          {options ? <div className="mb-4">{options}</div> : null}
           {open ? (
-            <ShareCardBody filename={filename} render={render} message={message} url={url} />
+            <ShareCardBody
+              filename={filename}
+              render={render}
+              renderKey={renderKey}
+              message={message}
+              url={url}
+            />
           ) : null}
         </Dialog.Content>
       </Dialog.Portal>
@@ -109,11 +122,13 @@ export function ShareCardDialog({
 function ShareCardBody({
   filename,
   render,
+  renderKey,
   message,
   url,
 }: {
   filename: string;
   render: () => Promise<Blob>;
+  renderKey?: string;
   message: string;
   url: string;
 }) {
@@ -121,13 +136,15 @@ function ShareCardBody({
   const [preview, setPreview] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [copied, setCopied] = useState<"link" | "image" | null>(null);
-  // Draw once per opening; the parent's render closure changes every render.
+  // Draw once per opening and per renderKey; the parent's render closure
+  // changes every render.
   const renderRef = useRef(render);
   renderRef.current = render;
 
   useEffect(() => {
     let objectUrl: string | null = null;
     let cancelled = false;
+    setFailed(false);
     renderRef
       .current()
       .then((image) => {
@@ -141,7 +158,7 @@ function ShareCardBody({
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, []);
+  }, [renderKey]);
 
   const file = blob ? new File([blob], filename, { type: "image/png" }) : null;
   const canShareFile =

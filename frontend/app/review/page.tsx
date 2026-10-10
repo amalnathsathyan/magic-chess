@@ -11,11 +11,13 @@ import {
   Coins,
   Link2,
   RefreshCw,
+  Share2,
   Trophy,
 } from "lucide-react";
 import { ChessBoard } from "@/components/chess/ChessBoard";
 import { MoveList } from "@/components/chess/MoveList";
 import { ReplayControls } from "@/components/chess/ReplayControls";
+import { ShareCardDialog } from "@/components/share/ShareCard";
 import { PlayerAvatar } from "@/components/shared/PlayerAvatar";
 import { useReplay, useReplayKeyboard } from "@/hooks/useReplay";
 import { api, type ApiMatchHistory } from "@/lib/api";
@@ -31,6 +33,7 @@ import {
 } from "@/lib/game-result";
 import { absoluteUrl, playHref, profileHref, reviewHref, spectateHref } from "@/lib/match-links";
 import { formatRatingChange, playerLabel } from "@/lib/players";
+import { compactAmount, drawMatchCard, renderCard, type MatchCardSide } from "@/lib/share-card";
 import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
 
 import { cn } from "@/lib/utils";
@@ -53,6 +56,8 @@ function ReviewView() {
   const [orientation, setOrientation] = useState<"white" | "black">("white");
   const [boardWidth, setBoardWidth] = useState(320);
   const [copied, setCopied] = useState(false);
+  const [sharingCard, setSharingCard] = useState(false);
+  const [showWager, setShowWager] = useState(true);
 
   const load = useCallback(async () => {
     if (!matchId) {
@@ -115,6 +120,36 @@ function ReviewView() {
       window.setTimeout(() => setCopied(false), 1_500);
     }
   };
+
+  const symbol = solanaConfig.wagerSymbol;
+  const stakeLabel = `${compactAmount(formatTokenAmount(wager))} ${symbol}`;
+  const potLabel = `${compactAmount(formatTokenAmount(BigInt(history?.totalPot ?? "0")))} ${symbol}`;
+  const wagerShown = wager > 0n && showWager;
+  const moveCount = Math.ceil((history?.plyCount ?? moves.length) / 2);
+  const winnerColor = status === "WhiteWins" ? "white" : status === "BlackWins" ? "black" : null;
+  const cardSide = (color: "white" | "black"): MatchCardSide => {
+    const address = color === "white" ? history?.whitePlayer : history?.blackPlayer;
+    const meta = color === "white" ? history?.white : history?.black;
+    return {
+      name: address ? playerLabel(address, meta?.name) : "Unknown",
+      rating: meta?.rating ?? null,
+      ratingChange: meta?.ratingChange ?? null,
+      xp: meta?.xp ?? null,
+    };
+  };
+  const shareCaption = (() => {
+    const white = cardSide("white").name;
+    const black = cardSide("black").name;
+    const how = reason ? ` by ${reason.toLowerCase()}` : "";
+    const stakes = wagerShown ? ` with ${potLabel} on the line` : "";
+    const outcome =
+      winnerColor === "white"
+        ? `${white} beat ${black}${how}`
+        : winnerColor === "black"
+          ? `${black} beat ${white}${how}`
+          : `${white} and ${black} drew${how}`;
+    return `${outcome} in ${moveCount} moves${stakes} on @zugxyz. Every move matters.`;
+  })();
 
   const topColor = orientation === "white" ? "black" : "white";
   const side = (color: "white" | "black") => ({
@@ -192,7 +227,7 @@ function ReviewView() {
                   <div className="rounded-md bg-card/60 p-2">
                     <dt className="text-muted-foreground">Moves</dt>
                     <dd className="font-mono text-sm font-semibold tabular-nums">
-                      {Math.ceil((history.plyCount ?? moves.length) / 2)}
+                      {moveCount}
                     </dd>
                   </div>
                   <div className="rounded-md bg-card/60 p-2">
@@ -224,6 +259,16 @@ function ReviewView() {
                 <p className="mt-3 text-xs text-muted-foreground">
                   Played {timeAgo(history.endedAt ?? history.createdAt)} · #{matchId}
                 </p>
+                {finished ? (
+                  <button
+                    type="button"
+                    onClick={() => setSharingCard(true)}
+                    className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 bg-primary px-4 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    <Share2 className="h-4 w-4" aria-hidden="true" />
+                    Share result card
+                  </button>
+                ) : null}
                 {!finished ? (
                   <Link
                     href={status === "Active" ? spectateHref(matchId) : playHref(matchId)}
@@ -257,6 +302,68 @@ function ReviewView() {
           </div>
         )}
       </main>
+
+      {history && finished ? (
+        <ShareCardDialog
+          open={sharingCard}
+          onOpenChange={setSharingCard}
+          title="Share result card"
+          description="The result, both players and what it did to their ratings, on one card."
+          filename={`zug-game-${matchId}.png`}
+          message={shareCaption}
+          url={absoluteUrl(reviewHref(matchId))}
+          renderKey={wagerShown ? "wager" : "no-wager"}
+          options={
+            wager > 0n ? (
+              <div className="flex items-center justify-between gap-4 border border-border px-4 py-3">
+                <div>
+                  <p id="show-wager-label" className="text-sm font-medium">
+                    Show wager
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Stake {stakeLabel} each, {potLabel} pot.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showWager}
+                  aria-labelledby="show-wager-label"
+                  onClick={() => setShowWager((current) => !current)}
+                  className={cn(
+                    "relative inline-flex h-8 w-14 shrink-0 items-center border transition-colors focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                    showWager ? "border-primary/50 bg-primary" : "border-border bg-muted"
+                  )}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={cn(
+                      "inline-block h-6 w-6 bg-background shadow-sm transition-transform",
+                      showWager ? "translate-x-7" : "translate-x-1"
+                    )}
+                  />
+                </button>
+              </div>
+            ) : undefined
+          }
+          render={() =>
+            renderCard((ctx) =>
+              drawMatchCard(ctx, {
+                headline: resultHeadline(status),
+                reason,
+                score: resultScore(status) ?? "",
+                winner: winnerColor,
+                white: cardSide("white"),
+                black: cardSide("black"),
+                moves: moveCount,
+                length: duration,
+                stake: wager > 0n ? (wagerShown ? stakeLabel : null) : "FREE",
+                pot: wagerShown ? potLabel : null,
+              })
+            )
+          }
+        />
+      ) : null}
     </div>
   );
 }

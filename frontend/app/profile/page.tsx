@@ -472,6 +472,7 @@ function ProfileView() {
                   returned: compactAmount(formatTokenAmount(returned)),
                   record: `${stats.wins}·${stats.losses}·${stats.draws}`,
                   games: stats.totalGames,
+                  rank: profile.rank,
                 })
               : drawProfileCard(ctx, {
                   name,
