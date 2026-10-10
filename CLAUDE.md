@@ -169,3 +169,15 @@ Next steps:
   copy the card and paste it. Per-profile/per-match OG images would need a server-rendered image endpoint.
 - "Games created" isn't tracked in `player_stats`; add it in the backend if the player card should show it.
 - Count draw refunds in `total_won` (or add `total_refunded`) so the P&L is exact.
+
+## Wallet menu: status and next steps (2026-10-09)
+
+- Privy embedded wallets can export their private key from the wallet menu ("Export private key") and the
+  Settings wallet card ("Export key"), via Privy's `useExportWallet` (`frontend/hooks/useExportPrivyKey.ts`).
+  Privy shows the key in its own iframe modal, so it never reaches app code. External wallets don't see the option.
+- The wallet menu shows the native SOL balance from the app's RPC (devnet), fetched each time the menu opens
+  (`frontend/hooks/useSolBalance.ts`).
+
+Next steps:
+- Not tested against a live Privy session; check that the export modal opens on a phone. If Privy returns an
+  error, confirm wallet export isn't blocked by a policy in the Privy dashboard.
