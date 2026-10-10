@@ -193,3 +193,50 @@ Research only; no code changed. Pick up from here.
 - Private payments: no gain while wagers stay in the L1 escrow.
 
 Suggested order: free-match path + `payer` fix (one upgrade) → small fixes above → auto-payout via Magic Actions.
+## Gameplay: status and next steps
+
+Fixed after jason's live test (2026-10-06):
+- The page no longer jumps on phones: `MoveList` scrolled the whole page with `scrollIntoView` on every re-render (once a second), which also cancelled touch drags.
+- "Confirming transaction…" no longer hangs: `runTransaction` in `frontend/app/play/page.tsx` stopped awaiting the backend history call (the DB can be asleep). That pending state also locked the board, which is why moves failed.
+- Create and join confirm faster: the gas sponsor (`backend/src/services/solanaSponsor.ts`, `confirmFast`) polls the signature status instead of waiting only on the RPC websocket. An open match also polls every 1.5s so the creator sees the join.
+- Finished games say who won and why (timeout, resignation, checkmate, draws) above the board.
+- When the side to move runs out of time, both players see it. An embedded (Privy) wallet claims the timeout win itself, without a popup (`claim_timeout_win` is in the quiet-signing list). External wallets get the "Claim timeout win" button.
+- Sounds play for the opponent's moves and for game start and end, and all sounds are unlocked on the first tap so phones play them.
+
+Next steps:
+- Timeouts still need a claim and "Finalize and settle payout" still needs a press, because the task-scheduler crank is disabled. Re-enabling the crank (or settling from the backend) would end games with no action from players.
+- Not verified on a real phone yet; retest drag and tap moves, sound and the bottom nav on iOS Safari and Android Chrome.
+
+## Share cards: status and next steps (2026-10-10)
+
+Three shareable 1200×675 PNG cards, drawn on a canvas with the site's fonts (`frontend/lib/share-card.ts`)
+and shown in one dialog (`frontend/components/share/ShareCard.tsx`: preview, Download PNG, Copy image,
+native Share image on phones, Copy link, and X / WhatsApp / Telegram links with a prefilled post):
+- **P&L card** (own profile, once something was wagered): net = `totalWon − totalWagered`. The backend's
+  `totalWon` is the full pot on wins and draws add nothing to it, so a draw refund counts as a loss of the stake.
+- **Player card** (any profile): rating, ladder rank, level/tier, XP progress, rating curve, form, games/wins/win rate/best streak.
+- **Challenge card** (play page, creator of an open match): stake, move clock, "you play black", plus direct
+  X / WhatsApp / Telegram buttons under "Copy invite link".
+
+Fixed 2026-10-09: saving a profile failed after the wallet signed, because the backend's CORS list had no `PUT`
+and the browser blocked the save request. Allowed methods now live in `backend/src/cors.ts`, and
+`backend/test/cors.test.ts` checks the preflight for every method the API uses. The player card was checked in a
+real browser (Chromium) with mocked profile data: it draws at 2400×1350 and the dialog's links and buttons work.
+
+Next steps:
+- Share links can't attach the image (X, WhatsApp and Telegram intents take text only); players download or
+  copy the card and paste it. Per-profile/per-match OG images would need a server-rendered image endpoint.
+- "Games created" isn't tracked in `player_stats`; add it in the backend if the player card should show it.
+- Count draw refunds in `total_won` (or add `total_refunded`) so the P&L is exact.
+
+## Wallet menu: status and next steps (2026-10-09)
+
+- Privy embedded wallets can export their private key from the wallet menu ("Export private key") and the
+  Settings wallet card ("Export key"), via Privy's `useExportWallet` (`frontend/hooks/useExportPrivyKey.ts`).
+  Privy shows the key in its own iframe modal, so it never reaches app code. External wallets don't see the option.
+- The wallet menu shows the native SOL balance from the app's RPC (devnet), fetched each time the menu opens
+  (`frontend/hooks/useSolBalance.ts`).
+
+Next steps:
+- Not tested against a live Privy session; check that the export modal opens on a phone. If Privy returns an
+  error, confirm wallet export isn't blocked by a policy in the Privy dashboard.
