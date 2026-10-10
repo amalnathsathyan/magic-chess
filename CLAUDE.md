@@ -213,6 +213,33 @@ Next steps:
 - Timeouts still need a claim and "Finalize and settle payout" still needs a press, because the task-scheduler crank is disabled. Re-enabling the crank (or settling from the backend) would end games with no action from players.
 - Not verified on a real phone yet; retest drag and tap moves, sound and the bottom nav on iOS Safari and Android Chrome.
 
+## SDK on npm: status and next steps (handoff, 2026-10-10)
+
+`@magic-chess/sdk` (`sdk/`) had full source but couldn't be published: it shipped raw TypeScript
+(`main: src/index.ts`). Branch `feat/sdk-npm-package` makes it a real package. Not published yet.
+
+### Done
+- `tsup` (`sdk/tsup.config.ts`) builds ESM + CJS + `.d.ts` for `.` and `./react` into `sdk/dist/` (gitignored).
+  `package.json` has an `exports` map, `files: ["dist"]`, `publishConfig.access: public`, react as optional peer.
+- The frontend now consumes `sdk/dist`, not `sdk/src`; its `prebuild`/`predev` run
+  `cd ../sdk && npm install --include=dev && npm run build`. Don't add a `prepare` script to the SDK: the
+  frontend's `npm ci` runs it for the `file:../sdk` dep before the SDK's own deps exist, which broke Workers Builds. Editing the SDK with the frontend running:
+  `cd sdk && npm run dev` (tsup watch).
+- Fixed: Node ESM consumers crashed on `import { BN } from "@anchor-lang/core"` (anchor is CJS for Node).
+  `client.ts` imports `BN` from `bn.js` (now a dependency).
+- `sdk/test/smoke.mjs` imports the built package by name in ESM and CJS. `prepublishOnly` = typecheck +
+  test + build + smoke. CI builds the SDK before the frontend typecheck and runs build + smoke + `npm pack --dry-run`.
+- `.github/workflows/publish-sdk.yml` publishes on a `sdk-v<version>` tag via npm trusted publishing (OIDC).
+- Publishing guide: `DEPLOY.md` → "Publish the SDK". npm README: `sdk/README.md`.
+
+### Next steps (owner action needed)
+- The owner creates the npm org `magic-chess`, runs `npm login`, does the first `npm publish` from `sdk/`,
+  then adds the trusted publisher on npmjs.com (steps in `DEPLOY.md`).
+- After publishing: drop the "if the package isn't on npm yet" note in `docs/docs/build/sdk.md` and the "pending" wording in `docs/docs/intro.md` and `docs/docs/roadmap.md`. Docs import only from `@magic-chess/sdk` and `@magic-chess/sdk/react` (the `exports` map blocks deep paths like `/utils/fen`).
+- Worth doing before 1.0: a mainnet/devnet cluster option (program ID and router are devnet-only today),
+  an example app (`examples/node-bot` playing via session keys), and API docs from TSDoc (typedoc).
+- CJS `react` entry bundles its own copy of the client (no code splitting in CJS); fine for now, revisit if
+  `instanceof MagicChessClient` across entries matters.
 ## Share cards: status and next steps (2026-10-10)
 
 Three shareable 1200×675 PNG cards, drawn on a canvas with the site's fonts (`frontend/lib/share-card.ts`)

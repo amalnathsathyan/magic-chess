@@ -1,6 +1,6 @@
 # TypeScript SDK
 
-`@magic-chess/sdk` is the TypeScript client for the Magic Chess program. The ZUG Arena frontend uses it for everything on-chain. It includes:
+[`@magic-chess/sdk`](https://www.npmjs.com/package/@magic-chess/sdk) ([source](https://github.com/amalnathsathyan/magic-chess/tree/dev/sdk)) is the TypeScript client for the Magic Chess program. The ZUG Arena frontend uses it for everything on-chain. It includes:
 
 - `MagicChessClient`, a typed wrapper around the Anchor program that routes each call to the base layer or the Ephemeral Rollup
 - React hooks
@@ -8,15 +8,13 @@
 - the program IDL and types
 
 :::note
-The SDK is not on npm yet. Use it from the monorepo (`"@magic-chess/sdk": "file:../sdk"`) or copy `sdk/` into your project. It ships TypeScript source (`main: src/index.ts`), so your bundler compiles it.
+The package ships compiled ESM and CommonJS builds with type declarations. Only `@magic-chess/sdk` and `@magic-chess/sdk/react` are importable; everything else is exported from the root. If the package isn't on npm yet when you read this, use it from the monorepo (`"@magic-chess/sdk": "file:../sdk"`); run `npm install && npm run build` inside `sdk/` to produce `dist/`.
 :::
 
 ## Install
 
-Peer dependencies:
-
 ```bash
-npm install @anchor-lang/core @solana/web3.js@1 @solana/spl-token
+npm install @magic-chess/sdk @anchor-lang/core @solana/web3.js@1 @solana/spl-token
 # React hooks only:
 npm install react react-dom
 ```
@@ -207,5 +205,7 @@ After you change the program, rebuild it and copy the IDL into the SDK:
 
 ```bash
 cd magic-chess-program && anchor build
-cd ../sdk && npm run sync-idl && npm run typecheck
+cd ../sdk && npm run sync-idl && npm run typecheck && npm run build
 ```
+
+While you work on the SDK and the frontend together, run `npm run dev` in `sdk/` (rebuilds `dist/` on save) next to the frontend's dev server.

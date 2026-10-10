@@ -1,0 +1,38 @@
+# Publishes @magic-chess/sdk to npm when a tag like sdk-v0.1.1 is pushed.
+# Uses npm trusted publishing (OIDC), so no NPM_TOKEN secret is needed.
+# Configure it once on npmjs.com: package settings → Trusted publisher → GitHub Actions,
+# repo amalnathsathyan/magic-chess, workflow publish-sdk.yml. See DEPLOY.md → "Publish the SDK".
+name: Publish SDK
+
+on:
+  push:
+    tags: ["sdk-v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm 11.5.1+.
+      - run: npm install -g npm@latest
+
+      - name: Tag matches package.json version
+        run: test "sdk-v$(node -p 'require("./package.json").version')" = "$GITHUB_REF_NAME"
+
+      - run: npm install
+
+      # prepublishOnly runs typecheck, tests, build and the smoke test.
+      - run: npm publish

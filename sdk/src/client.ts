@@ -6,7 +6,8 @@ import {
   type TransactionInstruction,
   type TransactionSignature,
 } from "@solana/web3.js";
-import { BN, type Program } from "@anchor-lang/core";
+import type { Program } from "@anchor-lang/core";
+import BN from "bn.js";
 import { getMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
 import type { MagicChess } from "./idl/magic_chess";

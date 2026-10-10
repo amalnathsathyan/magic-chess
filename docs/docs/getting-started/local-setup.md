@@ -92,8 +92,8 @@ Fill in `NEXT_PUBLIC_PRIVY_APP_ID` (create an app at
 `NEXT_PUBLIC_PLATFORM_FEE_WALLET`.
 
 ```bash
-npm ci            # also installs ../sdk through a file: dependency
-npm run dev       # http://localhost:3000
+npm ci            # links ../sdk through a file: dependency
+npm run dev       # builds ../sdk first (predev), then http://localhost:3000
 npm run typecheck && npm run lint
 ```
 
@@ -107,7 +107,13 @@ cd sdk
 npm install
 npm run typecheck
 npm test
+npm run build     # writes dist/ (ESM, CJS, .d.ts), which the frontend imports
+npm run smoke     # loads the built package the way an npm user would
 ```
+
+The frontend imports the built `dist/`, not `src/`. When you change the SDK while the frontend's dev
+server runs, keep `npm run dev` going in `sdk/` so `dist/` rebuilds on save. Publishing is covered in
+[`DEPLOY.md`](https://github.com/amalnathsathyan/magic-chess/blob/dev/DEPLOY.md#publish-the-sdk-magic-chesssdk).
 
 ## Docs
 

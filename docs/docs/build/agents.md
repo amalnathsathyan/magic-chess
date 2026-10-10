@@ -12,7 +12,7 @@ Magic Chess is uniquely suited for autonomous AI agents. Every game state is on-
 | Delegation Program | `DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh` |
 | Session Keys Program | `KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5` |
 | MagicBlock Router (devnet) | `https://devnet-router.magicblock.app/` |
-| SDK | `@magic-chess/sdk` |
+| SDK | [`@magic-chess/sdk`](https://www.npmjs.com/package/@magic-chess/sdk) ([reference](./sdk.md)) |
 | License | MIT |
 
 ---
@@ -104,10 +104,10 @@ The SDK validates the wager amount against on-chain state before submitting, pre
 
 ### 1.4 Reading Board State (FEN) From On-Chain
 
-The agent reads the full `ChessMatch` account, then converts the on-chain board representation to standard FEN notation. The SDK includes `boardToFen` in `@magic-chess/sdk/utils/fen` for this purpose.
+The agent reads the full `ChessMatch` account, then converts the on-chain board representation to standard FEN notation. The SDK exports `boardToFen` for this purpose.
 
 ```typescript
-import { boardToFen } from "@magic-chess/sdk/utils/fen";
+import { boardToFen } from "@magic-chess/sdk";
 
 // Fetch the full match account
 const matchState = await client.getMatch(matchId);
@@ -138,7 +138,7 @@ console.log(`Halfmove clock: ${matchState.halfmoveClock}`);
 console.log(`Fullmove number: ${matchState.fullmoveNumber}`);
 ```
 
-The `ChessMatch` type (defined in `@magic-chess/sdk/types`) exposes every field of the on-chain account:
+The `ChessMatch` type (exported from `@magic-chess/sdk`) exposes every field of the on-chain account:
 
 | Field | Type | Description |
 |-------|------|-------------|

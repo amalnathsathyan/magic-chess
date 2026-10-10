@@ -111,7 +111,7 @@ The program emits FEN in `MoveMadeEvent` for off-chain indexers. This is generat
 
 ### Off-Chain (SDK)
 
-The TypeScript SDK provides `boardToFen()` and `fenToBoard()` utilities in `@magic-chess/sdk/utils/fen`. These are used for display purposes (board rendering, PGN export, match sharing) where cryptographic authenticity is not required and zero CU cost is preferred.
+The TypeScript SDK provides `boardToFen()` and `fenToBoard()` utilities, exported from `@magic-chess/sdk`. These are used for display purposes (board rendering, PGN export, match sharing) where cryptographic authenticity is not required and zero CU cost is preferred.
 
 **FEN format:**
 ```
