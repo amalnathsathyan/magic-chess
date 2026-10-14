@@ -2,7 +2,7 @@
 
 On-chain FIDE chess engine on Solana with MagicBlock Ephemeral Rollups for gasless gameplay.
 The product is branded **ZUG Arena** ("Every move matters."). It is live on devnet at
-https://arena.chessmagic.workers.dev. `dev` is the only branch, and feature PRs target `dev`.
+https://arena.playzug.xyz (the old arena.chessmagic.workers.dev redirects there once enabled). `dev` is the only branch, and feature PRs target `dev`.
 
 ## Git workflow (required for every agent and session)
 
@@ -285,8 +285,8 @@ In the code: `frontend/wrangler.toml` attaches playzug.xyz and arena.playzug.xyz
 host and, when `REDIRECT_LEGACY_HOST = "true"`, 301s the workers.dev hosts. Backend CORS already allows the
 new origins.
 
-Next steps, in order (each waits on a dashboard step):
+Code is done (PR #60). Remaining dashboard steps, in order:
+- Cloudflare: playzug.xyz zone Active before merging; attach api. (Render custom domain, DNS only) and docs. (GitHub Pages, DNS only).
 - Privy: add https://arena.playzug.xyz and https://playzug.xyz to allowed origins.
-- Render: attach api.playzug.xyz, then set `NEXT_PUBLIC_API_URL` in `wrangler.toml`, `.env.production` and the Cloudflare build variables, and the keepalive URL.
-- Docs: attach docs.playzug.xyz in GitHub Pages, then set `url`/`baseUrl` in `docs/docusaurus.config.ts` and add `docs/static/CNAME`; update the landing `DOCS_URL` and README/docs links.
-- After testing the new domain, set `REDIRECT_LEGACY_HOST = "true"`.
+- Update `NEXT_PUBLIC_API_URL` in the Cloudflare build variables and `CORS_ORIGIN` on Render if set there.
+- After testing the new domain, set `REDIRECT_LEGACY_HOST = "true"` in `frontend/wrangler.toml`.
