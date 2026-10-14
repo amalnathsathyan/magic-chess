@@ -6,6 +6,13 @@ import { corsOptions } from "../src/cors.js";
 
 const ORIGIN = "https://arena.chessmagic.workers.dev";
 
+test("the built-in origin list includes the playzug.xyz app", async () => {
+  process.env.DATABASE_URL ||= "postgres://test";
+  const { config } = await import("../src/config.js");
+  assert.ok(config.corsOrigins.includes("https://arena.playzug.xyz"));
+  assert.ok(config.corsOrigins.includes("https://arena.chessmagic.workers.dev"));
+});
+
 test("the browser preflight allows every method the API routes use", async () => {
   const app = Fastify();
   await app.register(cors, corsOptions([ORIGIN]));

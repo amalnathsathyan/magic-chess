@@ -276,3 +276,17 @@ Next steps:
 Next steps:
 - Not tested against a live Privy session; check that the export modal opens on a phone. If Privy returns an
   error, confirm wallet export isn't blocked by a policy in the Privy dashboard.
+
+## Domain move to playzug.xyz: status and next steps (2026-10-14)
+
+Plan: playzug.xyz = landing, arena.playzug.xyz = app, api.playzug.xyz = backend, docs.playzug.xyz = docs.
+In the code: `frontend/wrangler.toml` attaches playzug.xyz and arena.playzug.xyz as Worker custom domains
+(needs the zone Active in Cloudflare first). `frontend/_worker.js` sends app paths on the apex to the arena
+host and, when `REDIRECT_LEGACY_HOST = "true"`, 301s the workers.dev hosts. Backend CORS already allows the
+new origins.
+
+Next steps, in order (each waits on a dashboard step):
+- Privy: add https://arena.playzug.xyz and https://playzug.xyz to allowed origins.
+- Render: attach api.playzug.xyz, then set `NEXT_PUBLIC_API_URL` in `wrangler.toml`, `.env.production` and the Cloudflare build variables, and the keepalive URL.
+- Docs: attach docs.playzug.xyz in GitHub Pages, then set `url`/`baseUrl` in `docs/docusaurus.config.ts` and add `docs/static/CNAME`; update the landing `DOCS_URL` and README/docs links.
+- After testing the new domain, set `REDIRECT_LEGACY_HOST = "true"`.
