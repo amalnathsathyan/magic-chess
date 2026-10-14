@@ -7,8 +7,8 @@ sidebar_position: 6
 | Piece | Where it runs | Source | How it ships |
 |-------|---------------|--------|--------------|
 | Program | Solana devnet, `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h` | `magic-chess-program/` | Manual `anchor deploy` |
-| Frontend (ZUG Arena) | Cloudflare Worker at [arena.chessmagic.workers.dev](https://arena.chessmagic.workers.dev) | `frontend/` | Cloudflare Workers Builds on push |
-| Backend | Render at `magic-chess-dev.onrender.com` | `backend/` | Render deploy on push |
+| Frontend (ZUG Arena) | Cloudflare Worker at [arena.playzug.xyz](https://arena.playzug.xyz) | `frontend/` | Cloudflare Workers Builds on push |
+| Backend | Render at `api.playzug.xyz` (`magic-chess-dev.onrender.com`) | `backend/` | Render deploy on push |
 | Database | Supabase Postgres | `backend/src/db/migrate.ts` | Migrations run at backend start (`RUN_MIGRATIONS_ON_START`) |
 | Docs | GitHub Pages | `docs/` | `.github/workflows/deploy-docs.yml` on push to `dev` |
 
@@ -75,4 +75,4 @@ npm run build   # fails on broken links
 npm run serve
 ```
 
-A push to `dev` that touches `docs/` builds and publishes to `https://amalnathsathyan.github.io/magic-chess/`.
+A push to `dev` that touches `docs/` builds and publishes to `https://docs.playzug.xyz/`.

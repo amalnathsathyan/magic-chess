@@ -15,10 +15,10 @@ const config: Config = {
   },
 
   // Set the production url of your site here
-  url: 'https://amalnathsathyan.github.io',
+  url: 'https://docs.playzug.xyz',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: '/magic-chess/',
+  baseUrl: '/',
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
@@ -83,7 +83,7 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          href: 'https://arena.chessmagic.workers.dev',
+          href: 'https://arena.playzug.xyz',
           label: 'Play',
           position: 'right',
         },
@@ -109,7 +109,7 @@ const config: Config = {
         {
           title: 'Project',
           items: [
-            {label: 'Play ZUG Arena', href: 'https://arena.chessmagic.workers.dev'},
+            {label: 'Play ZUG Arena', href: 'https://arena.playzug.xyz'},
             {label: 'GitHub', href: 'https://github.com/amalnathsathyan/magic-chess'},
             {label: 'Report a vulnerability', href: 'https://github.com/amalnathsathyan/magic-chess/security/advisories/new'},
           ],

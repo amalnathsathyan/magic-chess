@@ -3,7 +3,7 @@ import { ArrowUpRight } from "lucide-react";
 import { ZugSymbol } from "@/components/brand/ZugLogo";
 import { cn } from "@/lib/utils";
 
-const DOCS_URL = "https://amalnathsathyan.github.io/magic-chess/";
+const DOCS_URL = "https://docs.playzug.xyz/";
 const GITHUB_URL = "https://github.com/amalnathsathyan/magic-chess";
 
 function SectionHeader({ index, title, kicker }: { index: string; title: string; kicker: string }) {

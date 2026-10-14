@@ -422,8 +422,8 @@ There is one branch (`dev`) and one deployment.
 
 | Piece | Where | Source |
 |---|---|---|
-| Frontend | Cloudflare Worker → https://arena.chessmagic.workers.dev | `frontend/` on `dev`, config in `frontend/wrangler.toml` |
-| Backend | Render → https://magic-chess-dev.onrender.com | `backend/` |
+| Frontend | Cloudflare Worker → https://arena.playzug.xyz | `frontend/` on `dev`, config in `frontend/wrangler.toml` |
+| Backend | Render → https://api.playzug.xyz | `backend/` |
 
 Every push to `dev` rebuilds the frontend through Cloudflare Workers Builds
 (production branch `dev`, root directory `./frontend/`, build `npm run build`,

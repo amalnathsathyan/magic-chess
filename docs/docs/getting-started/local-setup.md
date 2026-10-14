@@ -120,7 +120,7 @@ server runs, keep `npm run dev` going in `sdk/` so `dist/` rebuilds on save. Pub
 ```bash
 cd docs
 npm ci
-npm start         # http://localhost:3000/magic-chess/
+npm start         # http://localhost:3000/
 npm run build     # fails on broken links
 ```
 

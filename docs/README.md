@@ -1,6 +1,6 @@
 # Magic Chess docs
 
-Source for https://amalnathsathyan.github.io/magic-chess/, built with [Docusaurus](https://docusaurus.io/).
+Source for https://docs.playzug.xyz/, built with [Docusaurus](https://docusaurus.io/).
 
 ```bash
 npm ci

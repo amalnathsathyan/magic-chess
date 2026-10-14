@@ -43,4 +43,4 @@ MagicBlock, Supabase) unless our integration causes them, and social engineering
 ## Past audits
 
 Internal audit reports live in the docs:
-[Security](https://amalnathsathyan.github.io/magic-chess/docs/security/).
+[Security](https://docs.playzug.xyz/docs/security/).

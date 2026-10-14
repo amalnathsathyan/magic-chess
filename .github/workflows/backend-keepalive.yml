@@ -15,4 +15,4 @@ jobs:
     timeout-minutes: 3
     steps:
       - name: Ping backend
-        run: curl -fsS --max-time 90 --retry 2 https://magic-chess-dev.onrender.com/health
+        run: curl -fsS --max-time 90 --retry 2 https://api.playzug.xyz/health

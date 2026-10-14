@@ -41,9 +41,7 @@ NEXT_PUBLIC_WAGER_SYMBOL = "WSOL"
 NEXT_PUBLIC_WAGER_DECIMALS = "9"
 NEXT_PUBLIC_PLATFORM_FEE_BPS = "100"
 NEXT_PUBLIC_PLATFORM_FEE_WALLET = "ByBqw1sTTPjWQx6DEAvwT4srVyr4wUdf1R4V4wGoh8j6"
-# Switch to https://api.playzug.xyz once that Render custom domain is verified,
-# and change frontend/.env.production in the same commit (Next inlines that one).
-NEXT_PUBLIC_API_URL = "https://magic-chess-dev.onrender.com"
+NEXT_PUBLIC_API_URL = "https://api.playzug.xyz"
 NEXT_PUBLIC_SOLANA_SPONSOR_MODE = "backend"
 NEXT_PUBLIC_SOLANA_FEE_PAYER_ADDRESS = "BuMLxTELQyTyNxroqFGHJprL1sdVMyQJ7om3MQUGToPQ"
 NEXT_PUBLIC_PRIVY_APP_ID = "cmsdk4zc7003y0cjlc22j9igy"
