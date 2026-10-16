@@ -111,6 +111,8 @@ const config: Config = {
           items: [
             {label: 'Play ZUG Arena', href: 'https://playzug.xyz'},
             {label: 'GitHub', href: 'https://github.com/amalnathsathyan/magic-chess'},
+            {label: 'X (@zugxyz)', href: 'https://x.com/zugxyz'},
+            {label: 'Email team@playzug.xyz', href: 'mailto:team@playzug.xyz'},
             {label: 'Report a vulnerability', href: 'https://github.com/amalnathsathyan/magic-chess/security/advisories/new'},
           ],
         },

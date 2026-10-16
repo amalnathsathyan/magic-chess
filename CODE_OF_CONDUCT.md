@@ -11,7 +11,7 @@ issues, pull requests, discussions or any other project space.
 
 Report unacceptable behavior privately to the maintainers through a
 [GitHub security advisory](https://github.com/amalnathsathyan/magic-chess/security/advisories/new)
-(it is private to maintainers) or by contacting
+(it is private to maintainers), by emailing [team@playzug.xyz](mailto:team@playzug.xyz), or by contacting
 [@amalnathsathyan](https://github.com/amalnathsathyan) directly. All reports are
 reviewed and kept confidential. Maintainers may remove content or block
 participants who break these rules.

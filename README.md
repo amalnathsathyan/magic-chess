@@ -10,7 +10,7 @@
   [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
   [![Network: devnet](https://img.shields.io/badge/solana-devnet-black?logo=solana)](https://explorer.solana.com/address/FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h?cluster=devnet)
 
-  **[Play ZUG Arena](https://playzug.xyz)** · **[Read the docs](https://docs.playzug.xyz/docs/)**
+  **[Play ZUG Arena](https://playzug.xyz)** · **[Read the docs](https://docs.playzug.xyz/docs/)** · [@zugxyz on X](https://x.com/zugxyz) · [team@playzug.xyz](mailto:team@playzug.xyz)
 </div>
 
 ---

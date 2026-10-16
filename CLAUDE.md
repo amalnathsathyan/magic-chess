@@ -2,7 +2,7 @@
 
 On-chain FIDE chess engine on Solana with MagicBlock Ephemeral Rollups for gasless gameplay.
 The product is branded **ZUG Arena** ("Every move matters."). It is live on devnet at
-https://playzug.xyz (the old arena.chessmagic.workers.dev redirects there once enabled). `dev` is the only branch, and feature PRs target `dev`.
+https://playzug.xyz (the old arena.chessmagic.workers.dev redirects there). `dev` is the only branch, and feature PRs target `dev`.
 
 ## Git workflow (required for every agent and session)
 

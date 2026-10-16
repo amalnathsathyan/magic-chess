@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 
 const DOCS_URL = "https://docs.playzug.xyz/";
 const GITHUB_URL = "https://github.com/amalnathsathyan/magic-chess";
+const X_URL = "https://x.com/zugxyz";
 
 function SectionHeader({ index, title, kicker }: { index: string; title: string; kicker: string }) {
   return (
@@ -258,6 +259,7 @@ export function Footer() {
         <Link href="/leaderboard" className="hover:text-foreground">Ladder</Link>
         <a href={DOCS_URL} className="hover:text-foreground">Docs</a>
         <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="hover:text-foreground">GitHub</a>
+        <a href={X_URL} target="_blank" rel="noreferrer" className="hover:text-foreground">X</a>
         <a href="mailto:team@playzug.xyz" className="hover:text-foreground">team@playzug.xyz</a>
         <span className="font-mono text-xs">Solana devnet · test tokens only</span>
       </div>
