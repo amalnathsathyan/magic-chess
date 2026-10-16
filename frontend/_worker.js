@@ -6,8 +6,8 @@
 // `/play/<id>/spectate`, which rendered a "placeholder" match; redirect them.
 //
 // playzug.xyz serves everything (landing at /, the app at /arena, /play, ...).
-// arena.playzug.xyz always 301s there, and the old workers.dev hosts do once
-// REDIRECT_LEGACY_HOST is "true". Path and query are kept.
+// arena.playzug.xyz and the old workers.dev hosts 301 there (the latter while
+// REDIRECT_LEGACY_HOST is "true"). Path and query are kept.
 const HOST = "playzug.xyz";
 
 export default {

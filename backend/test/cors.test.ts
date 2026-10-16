@@ -4,7 +4,7 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import { corsOptions } from "../src/cors.js";
 
-const ORIGIN = "https://arena.chessmagic.workers.dev";
+const ORIGIN = "https://playzug.xyz";
 
 test("the built-in origin list includes the playzug.xyz app", async () => {
   process.env.DATABASE_URL ||= "postgres://test";

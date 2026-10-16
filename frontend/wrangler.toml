@@ -16,7 +16,7 @@ compatibility_flags = ["nodejs_compat"]
 
 # Custom domains (playzug.xyz zone must be Active in this Cloudflare account,
 # otherwise `wrangler deploy` fails). Cloudflare creates the DNS records and
-# certificates. The workers.dev address stays on so the old URL keeps working
+# certificates. The workers.dev address stays on so old links reach the redirect
 # until _worker.js redirects it.
 workers_dev = true
 routes = [
