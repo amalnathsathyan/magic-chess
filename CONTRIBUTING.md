@@ -2,7 +2,7 @@
 
 Thanks for helping. This guide covers setup, the test suites and how we review
 changes. The full developer docs live at
-<https://amalnathsathyan.github.io/magic-chess/docs/getting-started/local-setup>.
+<https://docs.playzug.xyz/docs/getting-started/local-setup>.
 
 ## Repository layout
 

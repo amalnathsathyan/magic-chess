@@ -5,7 +5,7 @@ title: How to play
 
 # How to play on ZUG Arena
 
-[ZUG Arena](https://arena.chessmagic.workers.dev) is the web app for Magic
+[ZUG Arena](https://playzug.xyz) is the web app for Magic
 Chess. It runs on Solana **devnet**, so any wager uses devnet tokens.
 
 ## 1. Sign in

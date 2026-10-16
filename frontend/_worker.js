@@ -4,9 +4,20 @@
 // Match pages are static and take the ID as a query parameter
 // (`/play?id=…`, `/spectate?id=…`). Older links used `/play/<id>` and
 // `/play/<id>/spectate`, which rendered a "placeholder" match; redirect them.
+//
+// playzug.xyz serves everything (landing at /, the app at /arena, /play, ...).
+// arena.playzug.xyz always 301s there, and the old workers.dev hosts do once
+// REDIRECT_LEGACY_HOST is "true". Path and query are kept.
+const HOST = "playzug.xyz";
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
+    const moved =
+      url.hostname === `arena.${HOST}` ||
+      (url.hostname.endsWith(".workers.dev") && env.REDIRECT_LEGACY_HOST === "true");
+    if (moved) return Response.redirect(`https://${HOST}${url.pathname}${url.search}`, 301);
 
     const legacy = url.pathname.match(/^\/play\/([^/]+?)(\/spectate)?\/?$/);
     if (legacy && legacy[1] !== "placeholder") {

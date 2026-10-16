@@ -17,7 +17,8 @@ third-party audit. Do not use it with real funds.
 ## Reporting a vulnerability
 
 **Do not open a public issue.** Report privately through
-[GitHub Security Advisories](https://github.com/amalnathsathyan/magic-chess/security/advisories/new).
+[GitHub Security Advisories](https://github.com/amalnathsathyan/magic-chess/security/advisories/new),
+or email [team@playzug.xyz](mailto:team@playzug.xyz).
 
 Please include:
 
@@ -43,4 +44,4 @@ MagicBlock, Supabase) unless our integration causes them, and social engineering
 ## Past audits
 
 Internal audit reports live in the docs:
-[Security](https://amalnathsathyan.github.io/magic-chess/docs/security/).
+[Security](https://docs.playzug.xyz/docs/security/).

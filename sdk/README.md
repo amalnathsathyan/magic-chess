@@ -1,6 +1,6 @@
 # @magic-chess/sdk
 
-TypeScript client for [ZUG Arena](https://arena.chessmagic.workers.dev) (Magic Chess): FIDE chess on Solana with SPL-token wagers and gasless moves on MagicBlock Ephemeral Rollups.
+TypeScript client for [ZUG Arena](https://playzug.xyz) (Magic Chess): FIDE chess on Solana with SPL-token wagers and gasless moves on MagicBlock Ephemeral Rollups.
 
 - `MagicChessClient`: create, join, play, resign, settle. Routes each call to the base layer or the rollup.
 - React hooks (`@magic-chess/sdk/react`)
@@ -32,9 +32,9 @@ const match = await client.getMatch("match-001");
 const open = await client.listJoinableMatches();
 ```
 
-Full reference: https://amalnathsathyan.github.io/magic-chess/docs/build/sdk/
+Full reference: https://docs.playzug.xyz/docs/build/sdk/
 
-Building bots: https://amalnathsathyan.github.io/magic-chess/docs/build/agents/
+Building bots: https://docs.playzug.xyz/docs/build/agents/
 
 Source and issues: https://github.com/amalnathsathyan/magic-chess/tree/dev/sdk
 

@@ -29,6 +29,7 @@ const DESCRIPTION =
   "ZUG is fast competitive chess where every move is recorded on-chain. Play instantly with a wallet or social login, gas sponsored. Now live on Solana devnet.";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://playzug.xyz"),
   title: {
     default: "ZUG Arena — Every move matters.",
     template: "%s · ZUG Arena",

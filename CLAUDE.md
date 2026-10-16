@@ -2,7 +2,7 @@
 
 On-chain FIDE chess engine on Solana with MagicBlock Ephemeral Rollups for gasless gameplay.
 The product is branded **ZUG Arena** ("Every move matters."). It is live on devnet at
-https://arena.chessmagic.workers.dev. `dev` is the only branch, and feature PRs target `dev`.
+https://playzug.xyz (the old arena.chessmagic.workers.dev redirects there once enabled). `dev` is the only branch, and feature PRs target `dev`.
 
 ## Git workflow (required for every agent and session)
 
@@ -276,3 +276,17 @@ Next steps:
 Next steps:
 - Not tested against a live Privy session; check that the export modal opens on a phone. If Privy returns an
   error, confirm wallet export isn't blocked by a policy in the Privy dashboard.
+
+## Domain move to playzug.xyz: status and next steps (2026-10-16)
+
+- playzug.xyz serves the landing page and the app (routes like /arena, /play). arena.playzug.xyz and the old
+  arena.chessmagic.workers.dev 301 to it with path and query kept (`frontend/_worker.js`,
+  `REDIRECT_LEGACY_HOST` in `frontend/wrangler.toml`). Both domains are Worker custom domains on the `arena` Worker.
+- api.playzug.xyz is a Render custom domain (CNAME, DNS only). docs.playzug.xyz is GitHub Pages (`docs/static/CNAME`, baseUrl `/`).
+- DNS is on Cloudflare (registrar GoDaddy). Privy, Render `CORS_ORIGIN` and the Cloudflare build variables were updated by jason.
+- Email: team@playzug.xyz via Cloudflare Email Routing to a Gmail inbox, sending through Brevo SMTP.
+
+Next steps:
+- After a few weeks on the new domain, drop the workers.dev origins from `backend/src/config.ts` and Privy.
+- The live indexer reported `column "event_index" of relation "sync_events" does not exist` on 2026-10-16. The
+  migration in `backend/src/db/migrate.ts` adds it; check the Render startup logs if it persists after this deploy.

@@ -6,11 +6,11 @@
   <p><strong>Fully on-chain chess on Solana, with gasless real-time moves on MagicBlock Ephemeral Rollups.</strong></p>
 
   [![CI](https://github.com/amalnathsathyan/magic-chess/actions/workflows/ci.yml/badge.svg?branch=dev)](https://github.com/amalnathsathyan/magic-chess/actions/workflows/ci.yml)
-  [![Docs](https://img.shields.io/badge/docs-online-ff4f1a)](https://amalnathsathyan.github.io/magic-chess/docs/)
+  [![Docs](https://img.shields.io/badge/docs-online-ff4f1a)](https://docs.playzug.xyz/docs/)
   [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
   [![Network: devnet](https://img.shields.io/badge/solana-devnet-black?logo=solana)](https://explorer.solana.com/address/FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h?cluster=devnet)
 
-  **[Play ZUG Arena](https://arena.chessmagic.workers.dev)** · **[Read the docs](https://amalnathsathyan.github.io/magic-chess/docs/)**
+  **[Play ZUG Arena](https://playzug.xyz)** · **[Read the docs](https://docs.playzug.xyz/docs/)**
 </div>
 
 ---
@@ -23,7 +23,7 @@ Magic Chess is an Anchor program that enforces the full FIDE rules on-chain:
 
 During a game, the match account is delegated to a MagicBlock Ephemeral Rollup. Moves there confirm in milliseconds and cost no gas. Session keys remove wallet popups. Wagers stay in a program-owned escrow on Solana L1 and pay out when the game ends.
 
-**ZUG Arena** is the web app built on it, live on devnet at [arena.chessmagic.workers.dev](https://arena.chessmagic.workers.dev). You sign in with Privy (email, social or an external wallet like Phantom). A backend sponsor pays every network fee and rent, so players pay only their wager, and free (0-wager) games cost nothing. The app adds:
+**ZUG Arena** is the web app built on it, live on devnet at [playzug.xyz](https://playzug.xyz). You sign in with Privy (email, social or an external wallet like Phantom). A backend sponsor pays every network fee and rent, so players pay only their wager, and free (0-wager) games cost nothing. The app adds:
 
 - a lobby with open games, live games and a public Recent games list
 - live boards that stream moves from the rollup, with move and game-end sounds
@@ -66,17 +66,17 @@ flowchart LR
 2. The match is delegated to the rollup. Both players move there with no fees.
 3. When the game ends by checkmate, resignation, timeout or a draw rule, the state returns to L1. Settlement then pays the winner, minus a 1% fee, or splits the pot on a draw.
 
-Details: [Architecture overview](https://amalnathsathyan.github.io/magic-chess/docs/architecture/overview).
+Details: [Architecture overview](https://docs.playzug.xyz/docs/architecture/overview).
 
 ## Repository layout
 
 | Path | What it is |
 |------|------------|
 | [`magic-chess-program/`](magic-chess-program) | Anchor 1.1.2 program (Rust). Covers the chess engine, escrow and settlement, MagicBlock delegation, session keys and the prediction pool. |
-| [`sdk/`](sdk) | [`@magic-chess/sdk`](https://amalnathsathyan.github.io/magic-chess/docs/build/sdk/): a TypeScript client with base/rollup routing, React hooks and PDA and FEN helpers |
+| [`sdk/`](sdk) | [`@magic-chess/sdk`](https://docs.playzug.xyz/docs/build/sdk/): a TypeScript client with base/rollup routing, React hooks and PDA and FEN helpers |
 | [`frontend/`](frontend) | ZUG Arena: a Next.js 15 static export on a Cloudflare Worker, using Privy and Tailwind 4 |
 | [`backend/`](backend) | Fastify + Postgres. Runs the chain indexer, account reconciler, realtime SSE hub, gas sponsor, ratings, XP and move predictions. |
-| [`docs/`](docs) | Docusaurus source for the [docs site](https://amalnathsathyan.github.io/magic-chess/docs/) |
+| [`docs/`](docs) | Docusaurus source for the [docs site](https://docs.playzug.xyz/docs/) |
 | [`research/`](research) | Earlier R&D notes and design docs, kept for reference and no longer maintained |
 
 ## Quick start
@@ -111,17 +111,17 @@ cd ../backend && npm ci && cp .env.example .env && npm run dev
 cd ../frontend && npm ci && npm run dev
 ```
 
-The full guide is [Local setup](https://amalnathsathyan.github.io/magic-chess/docs/getting-started/local-setup).
+The full guide is [Local setup](https://docs.playzug.xyz/docs/getting-started/local-setup).
 
 ## Documentation
 
-- [How to play](https://amalnathsathyan.github.io/magic-chess/docs/getting-started/how-to-play)
-- [Program reference](https://amalnathsathyan.github.io/magic-chess/docs/architecture/program): accounts, instructions and errors
-- [MagicBlock integration](https://amalnathsathyan.github.io/magic-chess/docs/architecture/magicblock)
-- [TypeScript SDK](https://amalnathsathyan.github.io/magic-chess/docs/build/sdk/) ([npm release steps](DEPLOY.md#publish-the-sdk-magic-chesssdk))
-- [Building agents](https://amalnathsathyan.github.io/magic-chess/docs/build/agents)
-- [Security reviews](https://amalnathsathyan.github.io/magic-chess/docs/security/overview)
-- [Roadmap](https://amalnathsathyan.github.io/magic-chess/docs/roadmap)
+- [How to play](https://docs.playzug.xyz/docs/getting-started/how-to-play)
+- [Program reference](https://docs.playzug.xyz/docs/architecture/program): accounts, instructions and errors
+- [MagicBlock integration](https://docs.playzug.xyz/docs/architecture/magicblock)
+- [TypeScript SDK](https://docs.playzug.xyz/docs/build/sdk/) ([npm release steps](DEPLOY.md#publish-the-sdk-magic-chesssdk))
+- [Building agents](https://docs.playzug.xyz/docs/build/agents)
+- [Security reviews](https://docs.playzug.xyz/docs/security/overview)
+- [Roadmap](https://docs.playzug.xyz/docs/roadmap)
 
 ## Development workflow
 

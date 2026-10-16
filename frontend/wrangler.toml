@@ -14,6 +14,16 @@ main = "_worker.js"
 compatibility_date = "2026-08-08"
 compatibility_flags = ["nodejs_compat"]
 
+# Custom domains (playzug.xyz zone must be Active in this Cloudflare account,
+# otherwise `wrangler deploy` fails). Cloudflare creates the DNS records and
+# certificates. The workers.dev address stays on so the old URL keeps working
+# until _worker.js redirects it.
+workers_dev = true
+routes = [
+  { pattern = "playzug.xyz", custom_domain = true },
+  { pattern = "arena.playzug.xyz", custom_domain = true }, # redirects to playzug.xyz
+]
+
 # Serve Next.js static export as Worker assets
 [assets]
 directory = "out"
@@ -21,6 +31,8 @@ binding = "ASSETS"
 
 # Environment variables (set in Cloudflare Dashboard for secrets)
 [vars]
+# "true": the old workers.dev hosts 301 to playzug.xyz.
+REDIRECT_LEGACY_HOST = "true"
 NEXT_PUBLIC_RPC_ENDPOINT = "https://rpc.magicblock.app/devnet"
 NEXT_PUBLIC_MAGICBLOCK_ROUTER = "https://devnet-router.magicblock.app/"
 NEXT_PUBLIC_PROGRAM_ID = "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h"
@@ -29,7 +41,7 @@ NEXT_PUBLIC_WAGER_SYMBOL = "WSOL"
 NEXT_PUBLIC_WAGER_DECIMALS = "9"
 NEXT_PUBLIC_PLATFORM_FEE_BPS = "100"
 NEXT_PUBLIC_PLATFORM_FEE_WALLET = "ByBqw1sTTPjWQx6DEAvwT4srVyr4wUdf1R4V4wGoh8j6"
-NEXT_PUBLIC_API_URL = "https://magic-chess-dev.onrender.com"
+NEXT_PUBLIC_API_URL = "https://api.playzug.xyz"
 NEXT_PUBLIC_SOLANA_SPONSOR_MODE = "backend"
 NEXT_PUBLIC_SOLANA_FEE_PAYER_ADDRESS = "BuMLxTELQyTyNxroqFGHJprL1sdVMyQJ7om3MQUGToPQ"
 NEXT_PUBLIC_PRIVY_APP_ID = "cmsdk4zc7003y0cjlc22j9igy"
