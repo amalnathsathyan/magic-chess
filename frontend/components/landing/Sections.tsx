@@ -258,6 +258,7 @@ export function Footer() {
         <Link href="/leaderboard" className="hover:text-foreground">Ladder</Link>
         <a href={DOCS_URL} className="hover:text-foreground">Docs</a>
         <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="hover:text-foreground">GitHub</a>
+        <a href="mailto:team@playzug.xyz" className="hover:text-foreground">team@playzug.xyz</a>
         <span className="font-mono text-xs">Solana devnet · test tokens only</span>
       </div>
     </footer>

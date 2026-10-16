@@ -31,8 +31,8 @@ binding = "ASSETS"
 
 # Environment variables (set in Cloudflare Dashboard for secrets)
 [vars]
-# Set to "true" once playzug.xyz is tested: 301s the workers.dev hosts there.
-REDIRECT_LEGACY_HOST = "false"
+# "true": the old workers.dev hosts 301 to playzug.xyz.
+REDIRECT_LEGACY_HOST = "true"
 NEXT_PUBLIC_RPC_ENDPOINT = "https://rpc.magicblock.app/devnet"
 NEXT_PUBLIC_MAGICBLOCK_ROUTER = "https://devnet-router.magicblock.app/"
 NEXT_PUBLIC_PROGRAM_ID = "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h"

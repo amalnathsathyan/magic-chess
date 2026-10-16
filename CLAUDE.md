@@ -277,15 +277,16 @@ Next steps:
 - Not tested against a live Privy session; check that the export modal opens on a phone. If Privy returns an
   error, confirm wallet export isn't blocked by a policy in the Privy dashboard.
 
-## Domain move to playzug.xyz: status and next steps (2026-10-14)
+## Domain move to playzug.xyz: status and next steps (2026-10-16)
 
-Plan: playzug.xyz = landing and app (routes like /arena), arena.playzug.xyz 301s to it, api.playzug.xyz = backend, docs.playzug.xyz = docs.
-In the code: `frontend/wrangler.toml` attaches playzug.xyz and arena.playzug.xyz as Worker custom domains
-(needs the zone Active in Cloudflare first). `frontend/_worker.js` 301s arena.playzug.xyz to playzug.xyz and, when `REDIRECT_LEGACY_HOST = "true"`, 301s the workers.dev hosts. Backend CORS already allows the
-new origins.
+- playzug.xyz serves the landing page and the app (routes like /arena, /play). arena.playzug.xyz and the old
+  arena.chessmagic.workers.dev 301 to it with path and query kept (`frontend/_worker.js`,
+  `REDIRECT_LEGACY_HOST` in `frontend/wrangler.toml`). Both domains are Worker custom domains on the `arena` Worker.
+- api.playzug.xyz is a Render custom domain (CNAME, DNS only). docs.playzug.xyz is GitHub Pages (`docs/static/CNAME`, baseUrl `/`).
+- DNS is on Cloudflare (registrar GoDaddy). Privy, Render `CORS_ORIGIN` and the Cloudflare build variables were updated by jason.
+- Email: team@playzug.xyz via Cloudflare Email Routing to a Gmail inbox, sending through Brevo SMTP.
 
-Code is done (PR #60). Remaining dashboard steps, in order:
-- Cloudflare: playzug.xyz zone Active before merging; attach api. (Render custom domain, DNS only) and docs. (GitHub Pages, DNS only).
-- Privy: https://playzug.xyz must be an allowed origin.
-- Update `NEXT_PUBLIC_API_URL` in the Cloudflare build variables and `CORS_ORIGIN` on Render if set there.
-- After testing the new domain, set `REDIRECT_LEGACY_HOST = "true"` in `frontend/wrangler.toml`.
+Next steps:
+- After a few weeks on the new domain, drop the workers.dev origins from `backend/src/config.ts` and Privy.
+- The live indexer reported `column "event_index" of relation "sync_events" does not exist` on 2026-10-16. The
+  migration in `backend/src/db/migrate.ts` adds it; check the Render startup logs if it persists after this deploy.
