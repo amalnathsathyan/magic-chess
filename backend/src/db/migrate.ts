@@ -490,6 +490,37 @@ const migrations: Array<{ name: string; run: (s: Sql) => Promise<void> }> = [
       for (const game of games) await awardGameXp(s, String(game.matchId));
     },
   },
+  {
+    // 004 gained these event_index steps after some databases had already run
+    // it, so those databases never got them. Every step is idempotent.
+    name: "009_backfill_event_index",
+    run: async (s) => {
+      await s.unsafe(`
+        ALTER TABLE matches
+          ADD COLUMN IF NOT EXISTS last_move_signature VARCHAR(88),
+          ADD COLUMN IF NOT EXISTS last_move_event_index INTEGER
+      `);
+      await s.unsafe(`
+        ALTER TABLE moves
+          ADD COLUMN IF NOT EXISTS event_index INTEGER NOT NULL DEFAULT 0
+      `);
+      await s.unsafe(`
+        ALTER TABLE sync_events
+          ADD COLUMN IF NOT EXISTS event_index INTEGER NOT NULL DEFAULT 0
+      `);
+      await s.unsafe("ALTER TABLE sync_events DROP CONSTRAINT IF EXISTS sync_events_pkey");
+      await s.unsafe(`
+        ALTER TABLE sync_events
+          ADD CONSTRAINT sync_events_pkey
+          PRIMARY KEY (event_signature, event_type, match_id, event_index)
+      `);
+      await s.unsafe("DROP INDEX IF EXISTS idx_moves_event_sig");
+      await s.unsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_moves_event_match
+          ON moves (event_signature, match_id, event_index)
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

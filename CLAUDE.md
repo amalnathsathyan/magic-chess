@@ -87,7 +87,7 @@ L1 holds tokens + settlement. ER handles gameplay (make_move, session keys, cran
   move past move 10 (max +15), and +25 for the first win of the UTC day. A game under 6 plies earns 2 XP;
   after 5 games against the same opponent on the same day, games earn nothing. Level L→L+1 costs
   100+25·(L−1) XP. Tiers: Pawn 1, Knight 5, Bishop 10, Rook 15, Queen 20, King 30.
-- **Migrations** run on backend start (`backend/src/db/migrate.ts`, 001–008). `/api/health` reports DB
+- **Migrations** run on backend start (`backend/src/db/migrate.ts`, 001–009). `/api/health` reports DB
   readiness, the DB error with a fix hint, stored row counts, and indexer/reconciler status.
 
 ## Testing
@@ -288,5 +288,5 @@ Next steps:
 
 Next steps:
 - After a few weeks on the new domain, drop the workers.dev origins from `backend/src/config.ts` and Privy.
-- The live indexer reported `column "event_index" of relation "sync_events" does not exist` on 2026-10-16. The
-  migration in `backend/src/db/migrate.ts` adds it; check the Render startup logs if it persists after this deploy.
+- Fixed: the live indexer failed with `column "event_index" of relation "sync_events" does not exist`, because
+  that column was added to migration 004 after production had run it. Migration 009 adds it.
