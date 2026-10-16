@@ -40,6 +40,8 @@ interface PredictionPanelProps {
   pliesPlayed: number;
   isActive: boolean;
   isFinished: boolean;
+  /** The side to move ran out of time; the game waits for a timeout claim. */
+  timedOut?: boolean;
   /** Set when the viewer is a player in this match (read-only view). */
   playerColor: "white" | "black" | null;
   liveMarket: MarketSnapshot | null;
@@ -88,6 +90,7 @@ export function PredictionPanel({
   pliesPlayed,
   isActive,
   isFinished,
+  timedOut = false,
   playerColor,
   liveMarket,
   liveSettled,
@@ -240,7 +243,9 @@ export function PredictionPanel({
         <p className="mt-3 text-sm text-muted-foreground">
           {isFinished
             ? "This game is over. Open predictions were settled or refunded."
-            : "Predictions open as soon as both players are in."}
+            : timedOut
+              ? "Predictions are closed: the side to move ran out of time. Open predictions settle or refund once the game ends."
+              : "Predictions open as soon as both players are in."}
         </p>
         <MyPredictions bets={myBets} pliesPlayed={pliesPlayed} onCancel={cancel} busy={submitting} />
       </section>

@@ -51,6 +51,14 @@ export interface ApiMatch {
   betAmountPerPlayer?: string;
   /** Open move predictions spectators have placed on this match. */
   openPredictions?: number;
+  /**
+   * The side to move ran out of time (plus a grace period) and the game is
+   * waiting for the other side to claim the win.
+   */
+  timedOut?: boolean;
+  timedOutSide?: "white" | "black" | null;
+  /** When the side to move runs out of time; null when untimed. */
+  timeoutAt?: string | null;
   startedAt?: string | null;
   endedAt?: string | null;
   whiteName?: string | null;
@@ -279,12 +287,15 @@ export const api = {
   listMatches: (params?: {
     status?: string;
     player?: string;
+    /** true: only timed-out games; false: leave them out. */
+    timedOut?: boolean;
     page?: number;
     limit?: number;
   }) => {
     const qs = new URLSearchParams();
     if (params?.status) qs.set("status", params.status);
     if (params?.player) qs.set("player", params.player);
+    if (params?.timedOut !== undefined) qs.set("timedOut", String(params.timedOut));
     if (params?.page) qs.set("page", String(params.page));
     if (params?.limit) qs.set("limit", String(params.limit));
     const query = qs.toString();

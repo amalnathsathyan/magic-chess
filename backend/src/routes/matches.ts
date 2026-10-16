@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { sql } from "../db/pool.js";
 import { getFen } from "../services/boardCache.js";
 import { INITIAL_FEN, sanFromUci } from "../services/movePredictions.js";
+import { TIMED_OUT_SQL, sideToMove, timeoutState } from "../services/matchTimeout.js";
 
 const listQuerySchema = {
   type: "object",
@@ -11,6 +12,8 @@ const listQuerySchema = {
       enum: ["WaitingForOpponent", "Active", "WhiteWins", "BlackWins", "Draw", "Aborted", "Completed"],
     },
     player: { type: "string", minLength: 32, maxLength: 44 },
+    /** true: only games whose side to move ran out of time; false: leave them out. */
+    timedOut: { type: "boolean" },
     page: { type: "integer", minimum: 1, maximum: 10_000, default: 1 },
     limit: { type: "integer", minimum: 1, maximum: 100, default: 20 },
   },
@@ -19,6 +22,7 @@ const listQuerySchema = {
 interface MatchQuery {
   status?: string;
   player?: string;
+  timedOut?: boolean;
   page?: number;
   limit?: number;
 }
@@ -29,7 +33,7 @@ export function matchRoutes(app: FastifyInstance): void {
     "/api/matches",
     { schema: { querystring: listQuerySchema } },
     async (request, reply) => {
-      const { status, player, page = 1, limit = 20 } = request.query;
+      const { status, player, timedOut, page = 1, limit = 20 } = request.query;
 
       const offset = (page - 1) * Math.min(limit, 100);
       const effectiveLimit = Math.min(limit, 100);
@@ -56,6 +60,10 @@ export function matchRoutes(app: FastifyInstance): void {
           })`
         );
         params.push(player);
+      }
+
+      if (timedOut !== undefined) {
+        conditions.push(timedOut ? TIMED_OUT_SQL : `NOT ${TIMED_OUT_SQL}`);
       }
 
       const where =
@@ -89,7 +97,18 @@ export function matchRoutes(app: FastifyInstance): void {
         [...params, effectiveLimit, offset]
       );
 
+      const now = Date.now();
       const matches = rows.map((row: Record<string, unknown>) => ({
+        ...timeoutState(
+          {
+            gameStatus: row.gameStatus,
+            lastMoveAt: row.lastMoveAt,
+            moveTimeoutSeconds: row.moveTimeoutSeconds,
+            fen: (row.currentFen as string | null) ?? getFen(row.matchId as string),
+            plies: Number(row.moveCount ?? 0),
+          },
+          now
+        ),
         matchId: row.matchId,
         whitePlayer: row.whitePlayer,
         blackPlayer: row.blackPlayer,
@@ -147,7 +166,7 @@ export function matchRoutes(app: FastifyInstance): void {
 
       const m = rows[0] as Record<string, unknown>;
       const fen = (m.currentFen as string | null) ?? getFen(matchId);
-      const turn = fen ? fen.split(" ")[1] : null;
+      const plies = Number(m.moveCount ?? 0);
 
       reply.send({
         matchId: m.matchId,
@@ -160,15 +179,21 @@ export function matchRoutes(app: FastifyInstance): void {
         totalPot: String(m.totalPot ?? "0"),
         platformFeeBps: m.platformFeeBps,
         moveTimeoutSeconds: String(m.moveTimeoutSeconds),
-        currentTurn:
-          turn === "w" ? "white" : turn === "b" ? "black" : null,
+        currentTurn: sideToMove(fen),
         boardFen: fen,
         createdAt: m.createdAt,
         startedAt: m.startedAt,
         endedAt: m.endedAt,
         lastMoveAt: m.lastMoveAt,
         payoutProcessed: m.payoutProcessed,
-        moveCount: Number(m.moveCount ?? 0),
+        moveCount: plies,
+        ...timeoutState({
+          gameStatus: m.gameStatus,
+          lastMoveAt: m.lastMoveAt,
+          moveTimeoutSeconds: m.moveTimeoutSeconds,
+          fen,
+          plies,
+        }),
       });
     }
   );

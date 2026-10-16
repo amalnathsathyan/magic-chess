@@ -16,7 +16,8 @@ export function LiveGames({ excludePlayer }: { excludePlayer?: string | null }) 
 
   const load = useCallback(async () => {
     try {
-      const { matches } = await api.listMatches({ status: "Active", limit: 12 });
+      // Games whose clock ran out wait for a timeout claim; they aren't live.
+      const { matches } = await api.listMatches({ status: "Active", timedOut: false, limit: 12 });
       setGames(matches);
     } catch {
       setGames((current) => current ?? []);

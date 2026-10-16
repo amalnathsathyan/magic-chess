@@ -9,6 +9,7 @@ import { useMatches, usePlayerMatches } from "@magic-chess/sdk/react";
 import { GameStatus, type MatchInfo } from "@magic-chess/sdk";
 import { LiveGames } from "@/components/lobby/LiveGames";
 import { RecentGames } from "@/components/lobby/RecentGames";
+import { TimeoutClaims } from "@/components/lobby/TimeoutClaims";
 import { api, type ApiMatch } from "@/lib/api";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
 import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
@@ -232,6 +233,8 @@ export default function ArenaPage() {
           </button>
         </div>
       </motion.div>
+
+      <TimeoutClaims walletAddress={walletAddress} />
 
       <section className="mb-8" aria-labelledby="live-games-heading">
         <h2

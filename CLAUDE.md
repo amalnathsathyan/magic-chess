@@ -162,6 +162,46 @@ Finished games still pay out only when a player presses "Finalize and settle pay
 - Do not start step (1) without jason's explicit approval. It loosens an authorization check and needs a devnet program upgrade that jason deploys. The deployed program already lags the source (see project memory).
 - Silently signing payout transactions from the player's page (quiet-signing `process_match_settlement`) was tried and rejected, because it would sign without the player approving. Don't revisit that.
 
+### Stale timed-out games (2026-10-10)
+A game whose side to move runs out of time stays `Active` on-chain until the *waiting* player sends
+`claim_timeout_win` (only a player may sign it). Unclaimed games sat in "Live now" for days.
+
+Shipped (no program change):
+- Backend `services/matchTimeout.ts`: an `Active` game is timed out once `last_move_at + move_timeout_seconds`
+  plus a 120s grace has passed. The grace covers `last_move_at` lagging the chain by up to one reconciler sweep.
+  `/api/matches` and `/api/matches/:id` return `timedOut`, `timedOutSide` and `timeoutAt`, and
+  `/api/matches?timedOut=true|false` filters with the same rule in SQL (`TIMED_OUT_SQL`).
+- Lobby "Live now" asks for `timedOut=false`. The arena shows "You won N games on time" with a Claim win link to
+  the play page (`components/lobby/TimeoutClaims.tsx`). Spectate reads the on-chain clock: "Out of time"
+  badge, "Out" clock, who must claim, and predictions closed.
+- Tests: `backend/test/matchTimeout.test.ts` and `matchTimeout.db.test.ts` (Postgres).
+
+Next (jason, from a local checkout, with a devnet redeploy): end these games without a player.
+Two routes, both program changes:
+1. **Backend keeper (simplest).** Let anyone call `claim_timeout_win` once the clock ran out (the winner comes
+   from `current_turn` and the on-chain clock, never from the signer) and let anyone `undelegate_match` once the
+   game is terminal. A keeper then finds games with `TIMED_OUT_SQL`, claims on the rollup, undelegates and calls
+   `process_match_settlement` on base (already permissionless; pin its unchecked `payer` in the same upgrade).
+2. **Task Scheduler crank.** Findings from `.claude/skills/magicblock/references/cranks.md` against our
+   `schedule_timeout.rs`. Flipping `TASK_SCHEDULER_ENABLED` alone won't work:
+   - Availability is unclear. `make_move.rs` skips scheduling when delegated ("Magic111 Task Scheduler not
+     available on ER"), so every real game skipped it. The skill says tasks are scheduled *on the ER* through
+     the Magic program (`Magic111…`, our `TASK_SCHEDULER_ID`). Confirm on devnet with
+     `magicblock-engine-examples/crank-counter/anchor` before building on it.
+   - The commented-out CPI doesn't match the API: `ScheduleTaskArgs.instructions` is `Vec<Instruction>`
+     (we hand-roll `Vec<Vec<u8>>` and pass an empty vec, so a task would do nothing) and the account list is
+     unverified. `magicblock-magic-program-api` 0.10.1 is already a dependency; use its types.
+   - The scheduled instruction runs with `crank_signer_pda(task_authority)` as its only signer (read-only), so
+     it can't call `claim_timeout_win` as written. It needs a crank-only path that checks that derived key.
+   - Task ids are validator-global, and update/cancel only work for the same authority. Today each move is
+     scheduled by the mover, so white can't cancel black's task. Make a program PDA the task authority
+     (`invoke_signed`) so one authority schedules and cancels.
+   - Schedule and cancel apply asynchronously. Make the timeout handler a no-op when the game is no longer
+     `Active` or the clock hasn't run out, and don't rely on cancel.
+   - A task only acts on the rollup. Paying out still needs commit + undelegate, then settlement on base
+     (the Magic Actions plan above).
+   Route 1 is less work and easier to watch; the crank can come later.
+
 ### Other next steps
 - Not verified on a real phone yet: retest drag and tap moves, sound and the bottom nav on iOS Safari and Android Chrome.
 - Timeout wins for external wallets (Phantom etc.) still need a press of "Claim timeout win".
