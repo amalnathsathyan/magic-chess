@@ -13,7 +13,7 @@ milliseconds and cost players nothing. Wagers sit in program-owned escrow on
 Solana and pay out automatically to the winner.
 
 **ZUG Arena** is the reference app built on Magic Chess:
-[arena.playzug.xyz](https://arena.playzug.xyz).
+[playzug.xyz](https://playzug.xyz).
 
 :::caution Devnet only
 The program runs on **Solana devnet** and has not had a third-party audit.

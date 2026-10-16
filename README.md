@@ -10,7 +10,7 @@
   [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
   [![Network: devnet](https://img.shields.io/badge/solana-devnet-black?logo=solana)](https://explorer.solana.com/address/FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h?cluster=devnet)
 
-  **[Play ZUG Arena](https://arena.playzug.xyz)** · **[Read the docs](https://docs.playzug.xyz/docs/)**
+  **[Play ZUG Arena](https://playzug.xyz)** · **[Read the docs](https://docs.playzug.xyz/docs/)**
 </div>
 
 ---
@@ -23,7 +23,7 @@ Magic Chess is an Anchor program that enforces the full FIDE rules on-chain:
 
 During a game, the match account is delegated to a MagicBlock Ephemeral Rollup. Moves there confirm in milliseconds and cost no gas. Session keys remove wallet popups. Wagers stay in a program-owned escrow on Solana L1 and pay out when the game ends.
 
-**ZUG Arena** is the web app built on it, live on devnet at [arena.playzug.xyz](https://arena.playzug.xyz). You sign in with Privy (email, social or an external wallet like Phantom). A backend sponsor pays every network fee and rent, so players pay only their wager, and free (0-wager) games cost nothing. The app adds:
+**ZUG Arena** is the web app built on it, live on devnet at [playzug.xyz](https://playzug.xyz). You sign in with Privy (email, social or an external wallet like Phantom). A backend sponsor pays every network fee and rent, so players pay only their wager, and free (0-wager) games cost nothing. The app adds:
 
 - a lobby with open games, live games and a public Recent games list
 - live boards that stream moves from the rollup, with move and game-end sounds

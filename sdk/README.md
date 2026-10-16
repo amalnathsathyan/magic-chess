@@ -1,6 +1,6 @@
 # @magic-chess/sdk
 
-TypeScript client for [ZUG Arena](https://arena.playzug.xyz) (Magic Chess): FIDE chess on Solana with SPL-token wagers and gasless moves on MagicBlock Ephemeral Rollups.
+TypeScript client for [ZUG Arena](https://playzug.xyz) (Magic Chess): FIDE chess on Solana with SPL-token wagers and gasless moves on MagicBlock Ephemeral Rollups.
 
 - `MagicChessClient`: create, join, play, resign, settle. Routes each call to the base layer or the rollup.
 - React hooks (`@magic-chess/sdk/react`)

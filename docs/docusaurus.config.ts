@@ -83,7 +83,7 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          href: 'https://arena.playzug.xyz',
+          href: 'https://playzug.xyz',
           label: 'Play',
           position: 'right',
         },
@@ -109,7 +109,7 @@ const config: Config = {
         {
           title: 'Project',
           items: [
-            {label: 'Play ZUG Arena', href: 'https://arena.playzug.xyz'},
+            {label: 'Play ZUG Arena', href: 'https://playzug.xyz'},
             {label: 'GitHub', href: 'https://github.com/amalnathsathyan/magic-chess'},
             {label: 'Report a vulnerability', href: 'https://github.com/amalnathsathyan/magic-chess/security/advisories/new'},
           ],

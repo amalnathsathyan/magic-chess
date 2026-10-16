@@ -2,7 +2,7 @@
 
 On-chain FIDE chess engine on Solana with MagicBlock Ephemeral Rollups for gasless gameplay.
 The product is branded **ZUG Arena** ("Every move matters."). It is live on devnet at
-https://arena.playzug.xyz (the old arena.chessmagic.workers.dev redirects there once enabled). `dev` is the only branch, and feature PRs target `dev`.
+https://playzug.xyz (the old arena.chessmagic.workers.dev redirects there once enabled). `dev` is the only branch, and feature PRs target `dev`.
 
 ## Git workflow (required for every agent and session)
 
@@ -279,14 +279,13 @@ Next steps:
 
 ## Domain move to playzug.xyz: status and next steps (2026-10-14)
 
-Plan: playzug.xyz = landing, arena.playzug.xyz = app, api.playzug.xyz = backend, docs.playzug.xyz = docs.
+Plan: playzug.xyz = landing and app (routes like /arena), arena.playzug.xyz 301s to it, api.playzug.xyz = backend, docs.playzug.xyz = docs.
 In the code: `frontend/wrangler.toml` attaches playzug.xyz and arena.playzug.xyz as Worker custom domains
-(needs the zone Active in Cloudflare first). `frontend/_worker.js` sends app paths on the apex to the arena
-host and, when `REDIRECT_LEGACY_HOST = "true"`, 301s the workers.dev hosts. Backend CORS already allows the
+(needs the zone Active in Cloudflare first). `frontend/_worker.js` 301s arena.playzug.xyz to playzug.xyz and, when `REDIRECT_LEGACY_HOST = "true"`, 301s the workers.dev hosts. Backend CORS already allows the
 new origins.
 
 Code is done (PR #60). Remaining dashboard steps, in order:
 - Cloudflare: playzug.xyz zone Active before merging; attach api. (Render custom domain, DNS only) and docs. (GitHub Pages, DNS only).
-- Privy: add https://arena.playzug.xyz and https://playzug.xyz to allowed origins.
+- Privy: https://playzug.xyz must be an allowed origin.
 - Update `NEXT_PUBLIC_API_URL` in the Cloudflare build variables and `CORS_ORIGIN` on Render if set there.
 - After testing the new domain, set `REDIRECT_LEGACY_HOST = "true"` in `frontend/wrangler.toml`.

@@ -21,7 +21,7 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 routes = [
   { pattern = "playzug.xyz", custom_domain = true },
-  { pattern = "arena.playzug.xyz", custom_domain = true },
+  { pattern = "arena.playzug.xyz", custom_domain = true }, # redirects to playzug.xyz
 ]
 
 # Serve Next.js static export as Worker assets
@@ -31,7 +31,7 @@ binding = "ASSETS"
 
 # Environment variables (set in Cloudflare Dashboard for secrets)
 [vars]
-# Set to "true" once arena.playzug.xyz serves the app: 301s the workers.dev hosts there.
+# Set to "true" once playzug.xyz is tested: 301s the workers.dev hosts there.
 REDIRECT_LEGACY_HOST = "false"
 NEXT_PUBLIC_RPC_ENDPOINT = "https://rpc.magicblock.app/devnet"
 NEXT_PUBLIC_MAGICBLOCK_ROUTER = "https://devnet-router.magicblock.app/"

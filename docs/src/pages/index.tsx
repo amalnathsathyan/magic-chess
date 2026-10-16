@@ -37,7 +37,7 @@ export default function Home(): ReactNode {
             </Link>
             <Link
               className="button button--secondary button--outline button--lg"
-              href="https://arena.playzug.xyz">
+              href="https://playzug.xyz">
               Play ZUG Arena
             </Link>
           </div>
