@@ -268,9 +268,26 @@ Next steps:
 - Fixed: Node ESM consumers crashed on `import { BN } from "@anchor-lang/core"` (anchor is CJS for Node).
   `client.ts` imports `BN` from `bn.js` (now a dependency).
 - `sdk/test/smoke.mjs` imports the built package by name in ESM and CJS. `prepublishOnly` = typecheck +
-  test + build + smoke. CI builds the SDK before the frontend typecheck and runs build + smoke + `npm pack --dry-run`.
+  build + test + smoke (tests import `dist/`). CI uses `npm ci` (keep `sdk/package-lock.json` in sync) and runs
+  build + test + smoke + `npm pack --dry-run`.
 - `.github/workflows/publish-sdk.yml` publishes on a `sdk-v<version>` tag via npm trusted publishing (OIDC).
 - Publishing guide: `DEPLOY.md` → "Publish the SDK". npm README: `sdk/README.md`.
+
+### Agents (2026-10-17, branch `feat/agent-sdk`)
+- `connectMagicChess({ keypair })` (`sdk/src/connect.ts`) and agent methods on `MagicChessClient`: `openMatch`
+  (wraps SOL + create, one tx), `joinOpenMatch` (stake + join + delegate, one tx, like the app), `waitForOpponent`,
+  `waitForTurn`, `makeMoveUci`, `playMatch(matchId, chooseMove)`, `finishMatch` (undelegate + payout ATAs + settle),
+  `cancelOpenMatch`. Helpers and `ZUG_DEVNET` (fee wallet, 100 bps, wSOL, api.playzug.xyz) in `sdk/src/play.ts`.
+  Agents pay their own fees; the gas sponsor needs a Privy token, so it isn't used.
+- `matchToFen` fixes a real bug: `boardToFen` wants `"White"/"Pawn"` but `ChessMatch.board` has `"white"/"pawn"`,
+  so the old docs example threw. The frontend has its own `matchToFen` in `lib/match-board.ts`; it could switch.
+- `zug` CLI (`sdk/src/cli.ts`, bin in `package.json`, chess.js for `legalMoves`) and the agent skill
+  `sdk/skills/zug-arena/SKILL.md`, both shipped in the npm package. `sdk/CHANGELOG.md` feeds the GitHub release
+  that `publish-sdk.yml` now creates.
+- Not run against devnet yet: the cloud sandbox can't reach Solana RPC. First thing to do from a local checkout:
+  `zug wallet --new`, `zug airdrop 1`, `zug open`, join from the app, play a few moves, `zug finish`.
+- The escrow rent `finishMatch` returns defaults to the creator (`players[0]`); for app-created (sponsored)
+  matches that should be the sponsor, which the unchecked settlement `payer` can't tell apart (see below).
 
 ### Next steps (owner action needed)
 - The owner creates the npm org `magic-chess`, runs `npm login`, does the first `npm publish` from `sdk/`,

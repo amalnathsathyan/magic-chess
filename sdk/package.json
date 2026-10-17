@@ -1,14 +1,16 @@
 {
   "name": "@magic-chess/sdk",
   "version": "0.1.0",
-  "description": "TypeScript SDK for ZUG Arena (Magic Chess): on-chain chess with wagers on Solana and MagicBlock Ephemeral Rollups",
+  "description": "TypeScript SDK and CLI for ZUG Arena (Magic Chess): on-chain chess with stakes on Solana and MagicBlock Ephemeral Rollups, built for apps, bots and AI agents",
   "keywords": [
     "solana",
     "chess",
     "magicblock",
     "ephemeral-rollups",
     "anchor",
-    "sdk"
+    "sdk",
+    "ai-agents",
+    "bot"
   ],
   "homepage": "https://docs.playzug.xyz/docs/build/sdk/",
   "bugs": {
@@ -24,6 +26,9 @@
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "zug": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "import": {
@@ -48,20 +53,22 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills",
+    "CHANGELOG.md"
   ],
   "sideEffects": false,
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsup",
     "dev": "tsup --watch",
     "sync-idl": "cp ../magic-chess-program/target/types/magic_chess.ts src/idl/magic_chess.ts && cp ../magic-chess-program/target/idl/magic_chess.json src/idl/magic_chess.json",
     "typecheck": "tsc --noEmit",
     "test": "node --test test/*.test.mjs",
     "smoke": "node test/smoke.mjs",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build && npm run smoke"
+    "prepublishOnly": "npm run typecheck && npm run build && npm test && npm run smoke"
   },
   "peerDependencies": {
     "@anchor-lang/core": "^1.0.0",
@@ -80,18 +87,23 @@
   },
   "dependencies": {
     "@magicblock-labs/ephemeral-rollups-kit": "^0.16.2",
-    "bn.js": "^5.2.5"
+    "bn.js": "^5.2.5",
+    "chess.js": "^1.4.0"
   },
   "devDependencies": {
     "@anchor-lang/core": "^1.1.2",
     "@solana/spl-token": "^0.4.0",
     "@solana/web3.js": "^1.95.4",
     "@types/bn.js": "^5.2.0",
+    "@types/node": "^20.19.43",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tsup": "^8.5.1",
     "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.17"
   }
 }

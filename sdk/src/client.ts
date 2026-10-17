@@ -36,6 +36,17 @@ import {
   waitForUndelegation,
 } from "./magicblock";
 import { formatRawTokenAmount, isFreeWager } from "./wager";
+import {
+  ZUG_DEVNET,
+  buildPayoutAccountInstructions,
+  buildStakeInstructions,
+  isMatchOver,
+  matchToFen,
+  newMatchId,
+  playerColor,
+  secondsLeftToMove,
+  uciToMove,
+} from "./play";
 
 const TOKEN_PROGRAM = TOKEN_PROGRAM_ID;
 
@@ -82,6 +93,40 @@ export interface TransactionExtras {
 }
 const SYSTEM_PROGRAM = SystemProgram.programId;
 
+/** Options for {@link MagicChessClient.openMatch}. */
+export interface OpenMatchOptions {
+  /** Raw token units each player puts in (lamports for wrapped SOL). Defaults to 0, a free match. */
+  stake?: IntegerInput;
+  /** Seconds each move may take before the opponent can claim the win. Defaults to 300; 0 = untimed. */
+  moveTimeoutSeconds?: IntegerInput;
+  /** Defaults to a random `mc-…` id. */
+  matchId?: string;
+  /** Stake token. Defaults to wrapped SOL. */
+  mint?: PublicKey;
+  /** Fee terms. Default to ZUG Arena's, so the match shows in the app's lobby. */
+  platformFeeWallet?: PublicKey;
+  platformFeeBasisPoints?: number;
+  predictionEnabled?: boolean;
+}
+
+/** What {@link MagicChessClient.waitForTurn} stopped for. */
+export type TurnState = "your-turn" | "game-over" | "opponent-out-of-time";
+
+export interface WaitOptions {
+  /** Poll interval. Defaults to 1500 ms. */
+  pollMs?: number;
+  /** Give up after this long. Defaults to waiting forever. */
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}
+
+/** Called with the position before each of your moves; return a UCI move such as "e2e4". */
+export type ChooseMove = (turn: {
+  fen: string;
+  match: ChessMatch;
+  color: "white" | "black";
+}) => string | Promise<string>;
+
 /**
  * MagicChessClient — typed wrapper around @anchor-lang/core Program<MagicChess>.
  *
@@ -93,17 +138,24 @@ export class MagicChessClient {
   readonly wallet: MagicChessWallet | undefined;
   readonly programId: PublicKey;
   readonly routerEndpoint: string;
+  /**
+   * Backend that indexes games (ZUG Arena's is `ZUG_DEVNET.apiUrl`). When
+   * set, the agent workflow methods send it best-effort hints after each
+   * transaction so the game shows in the app right away.
+   */
+  readonly indexerUrl: string | undefined;
 
   constructor(
     program: Program<MagicChess>,
     wallet?: MagicChessWallet,
-    options?: { routerEndpoint?: string }
+    options?: { routerEndpoint?: string; indexerUrl?: string }
   ) {
     this.program = program;
     this.wallet = wallet;
     this.programId = program.programId;
     this.routerEndpoint =
       options?.routerEndpoint ?? MAGICBLOCK_DEVNET_ROUTER;
+    this.indexerUrl = options?.indexerUrl;
   }
 
   private requireWallet(action: string): MagicChessWallet {
@@ -307,7 +359,7 @@ export class MagicChessClient {
       const expected = integerToBigInt(params.betAmount, "betAmount");
       if (expected !== match.betAmountPlayerOne) {
         throw new Error(
-          `Stale wager: chain requires ${match.betAmountPlayerOne} raw units, received ${expected}`
+          `Stale stake: chain requires ${match.betAmountPlayerOne} raw units, received ${expected}`
         );
       }
     }
@@ -523,33 +575,9 @@ export class MagicChessClient {
     const player = this.requireWallet("delegateMatch").publicKey;
     const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
 
-    const [bufferChessMatch] = PublicKey.findProgramAddressSync(
-      [Buffer.from("buffer"), chessMatchPda.toBuffer()],
-      this.programId
-    );
-    const [delegationRecordChessMatch] = PublicKey.findProgramAddressSync(
-      [Buffer.from("delegation"), chessMatchPda.toBuffer()],
-      DELEGATION_PROGRAM_ID
-    );
-    const [delegationMetadataChessMatch] = PublicKey.findProgramAddressSync(
-      [Buffer.from("delegation-metadata"), chessMatchPda.toBuffer()],
-      DELEGATION_PROGRAM_ID
-    );
-
-    const sig = await this.program.methods
-      .delegateMatch()
-      .accountsStrict({
-        payer: rentPayer ?? player,
-        player,
-        bufferChessMatch,
-        delegationRecordChessMatch,
-        delegationMetadataChessMatch,
-        chessMatch: chessMatchPda,
-        ownerProgram: this.programId,
-        delegationProgram: DELEGATION_PROGRAM_ID,
-        systemProgram: SYSTEM_PROGRAM,
-      })
-      .rpc();
+    const sig = await this.sendBaseTransaction([
+      await this.buildDelegateInstruction(matchId, player, rentPayer ?? player),
+    ]);
 
     const runtime = await waitForDelegation(
       this.baseConnection,
@@ -788,6 +816,321 @@ export class MagicChessClient {
       })
       .map((a: any) => toMatchInfo(normalizeChessMatch(a.account)));
   }
+
+  // ── Agent workflow ───────────────────────────────────────────
+  //
+  // High-level steps for a bot or AI agent holding its own keypair. Each one
+  // pays its own base-layer fees and rent; moves on the rollup are free.
+
+  /**
+   * Open a match as White, with an optional stake, using ZUG Arena's fee
+   * terms so it shows in the app's lobby. Wraps SOL for the stake and creates
+   * the match in one transaction.
+   */
+  async openMatch(options: OpenMatchOptions = {}): Promise<{
+    matchId: string;
+    signature: TransactionSignature;
+  }> {
+    const owner = this.requireWallet("openMatch").publicKey;
+    const matchId = options.matchId ?? newMatchId();
+    const mint = options.mint ?? ZUG_DEVNET.stakeMint;
+    const stake = integerToBigInt(options.stake ?? 0, "stake");
+    const prep = await buildStakeInstructions({
+      connection: this.baseConnection,
+      owner,
+      mint,
+      amount: stake,
+    });
+    const { signature } = await this.createMatch({
+      matchId,
+      betAmount: stake,
+      moveTimeoutDuration: options.moveTimeoutSeconds ?? 300,
+      platformFeeBasisPoints: options.platformFeeBasisPoints ?? ZUG_DEVNET.platformFeeBasisPoints,
+      platformFeeWallet: options.platformFeeWallet ?? ZUG_DEVNET.platformFeeWallet,
+      bettingTokenMint: mint,
+      playerTokenAccount: prep.tokenAccount,
+      preInstructions: prep.instructions,
+      predictionEnabled: options.predictionEnabled ?? false,
+    });
+    void this.notifyIndexer("match-created", matchId, signature);
+    return { matchId, signature };
+  }
+
+  /**
+   * Join an open match as Black, matching the creator's stake, and move it
+   * to the rollup in the same transaction (as the app does), so moves are
+   * free and instant. Resolves once the rollup has the match.
+   */
+  async joinOpenMatch(matchId: string): Promise<{
+    signature: TransactionSignature;
+    ephemeralRpcEndpoint: string;
+  }> {
+    const owner = this.requireWallet("joinOpenMatch").publicKey;
+    await this.requireBaseMatch(matchId);
+    const match = await this.getMatch(matchId);
+    if (!match) throw new Error(`Match ${matchId} not found`);
+    if (match.gameStatus !== "waitingForOpponent") {
+      throw new Error(`Match ${matchId} is not open (status: ${match.gameStatus})`);
+    }
+    if (match.players[0].equals(owner)) {
+      throw new Error("You created this match; another wallet has to join it");
+    }
+
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+    const [matchEscrowPda] = findMatchEscrowPda(matchId, this.programId);
+    const prep = await buildStakeInstructions({
+      connection: this.baseConnection,
+      owner,
+      mint: match.bettingTokenMint,
+      amount: match.betAmountPlayerOne,
+    });
+    const joinIx = await this.program.methods
+      .joinMatch(new BN(match.betAmountPlayerOne.toString()))
+      .accountsPartial({
+        chessMatch: chessMatchPda,
+        playerTwoSigner: owner,
+        playerTokenAccount: prep.tokenAccount,
+        matchEscrowTokenAccount: matchEscrowPda,
+        tokenProgram: TOKEN_PROGRAM,
+        systemProgram: SYSTEM_PROGRAM,
+      })
+      .instruction();
+    const delegateIx = await this.buildDelegateInstruction(matchId, owner, owner);
+    const signature = await this.sendBaseTransaction([...prep.instructions, joinIx, delegateIx]);
+    void this.notifyIndexer("player-joined", matchId, signature);
+
+    const runtime = await waitForDelegation(
+      this.baseConnection,
+      chessMatchPda,
+      this.programId,
+      this.routerEndpoint
+    );
+    return { signature, ephemeralRpcEndpoint: runtime.connection.rpcEndpoint };
+  }
+
+  /** Cancel a match you opened that nobody joined yet; refunds your stake. */
+  async cancelOpenMatch(matchId: string): Promise<{ signature: TransactionSignature }> {
+    const owner = this.requireWallet("cancelOpenMatch").publicKey;
+    const match = await this.getMatch(matchId);
+    if (!match) throw new Error(`Match ${matchId} not found`);
+    // Recreate the refund account idempotently in case it was closed since.
+    const prep = await buildStakeInstructions({
+      connection: this.baseConnection,
+      owner,
+      mint: match.bettingTokenMint,
+      amount: 0n,
+    });
+    const result = await this.abortMatch(matchId, prep.tokenAccount, {
+      preInstructions: prep.instructions,
+    });
+    void this.notifyIndexer("match-aborted", matchId, result.signature);
+    return result;
+  }
+
+  /** Wait until someone joins a match you opened. Resolves with the match. */
+  async waitForOpponent(matchId: string, options: WaitOptions = {}): Promise<ChessMatch> {
+    return this.pollMatch(matchId, options, (match) =>
+      match.gameStatus !== "waitingForOpponent" ? match : null
+    );
+  }
+
+  /**
+   * Wait until it is your move, the game is over, or the opponent's move
+   * clock has run out (then call `claimTimeout`).
+   */
+  async waitForTurn(
+    matchId: string,
+    options: WaitOptions = {}
+  ): Promise<{ state: TurnState; match: ChessMatch }> {
+    const me = this.requireWallet("waitForTurn").publicKey;
+    return this.pollMatch(matchId, options, (match) => {
+      if (isMatchOver(match)) return { state: "game-over" as const, match };
+      if (match.gameStatus !== "active") return null;
+      const color = playerColor(match, me);
+      if (!color) throw new Error(`${me.toBase58()} is not playing in match ${matchId}`);
+      if (match.currentTurn === color) return { state: "your-turn" as const, match };
+      const left = secondsLeftToMove(match);
+      // A few seconds of grace for clock skew between this machine and the chain.
+      if (left !== null && left < -5) return { state: "opponent-out-of-time" as const, match };
+      return null;
+    });
+  }
+
+  /** Play a move in UCI notation ("e2e4", "e7e8q"). */
+  async makeMoveUci(
+    matchId: string,
+    uci: string,
+    session?: MagicChessSession
+  ): Promise<{ result: MoveResult; signature: TransactionSignature; rpcEndpoint: string }> {
+    const submission = await this.makeMove(matchId, uciToMove(uci), session);
+    void this.notifyIndexer("move-made", matchId, submission.signature, submission.rpcEndpoint);
+    return submission;
+  }
+
+  /**
+   * Play a whole game: wait for each of your turns, ask `chooseMove` for a
+   * UCI move, submit it, and claim the win if the opponent runs out of time.
+   * Resolves with the final match once it has a result. An illegal move
+   * rejects with the program's error.
+   */
+  async playMatch(
+    matchId: string,
+    chooseMove: ChooseMove,
+    options: WaitOptions & {
+      session?: MagicChessSession;
+      onMove?: (move: { uci: string; signature: string; by: "you" }) => void;
+    } = {}
+  ): Promise<ChessMatch> {
+    const me = this.requireWallet("playMatch").publicKey;
+    for (;;) {
+      const { state, match } = await this.waitForTurn(matchId, options);
+      if (state === "game-over") return match;
+      if (state === "opponent-out-of-time") {
+        try {
+          await this.claimTimeout(matchId);
+        } catch {
+          // The chain's clock may be a little behind ours; try again shortly.
+          await delay(options.pollMs ?? 1_500, options.signal);
+        }
+        continue;
+      }
+      const color = playerColor(match, me)!;
+      const uci = await chooseMove({ fen: matchToFen(match), match, color });
+      const { signature } = await this.makeMoveUci(matchId, uci, options.session);
+      options.onMove?.({ uci, signature, by: "you" });
+    }
+  }
+
+  /**
+   * Pay out a finished match: bring it back from the rollup if needed, create
+   * the payout token accounts and run settlement. Either player can do this.
+   * The escrow's rent goes to `rentRecipient`, by default the match creator.
+   */
+  async finishMatch(
+    matchId: string,
+    options: { rentRecipient?: PublicKey } = {}
+  ): Promise<{
+    undelegateSignature?: TransactionSignature;
+    settleSignature?: TransactionSignature;
+    alreadySettled: boolean;
+  }> {
+    const payer = this.requireWallet("finishMatch").publicKey;
+    let match = await this.getMatch(matchId);
+    if (!match) throw new Error(`Match ${matchId} not found`);
+    if (!isMatchOver(match) || match.gameStatus === "aborted") {
+      throw new Error(`Match ${matchId} has no result yet (status: ${match.gameStatus})`);
+    }
+    if (match.payoutProcessed) return { alreadySettled: true };
+
+    let undelegateSignature: TransactionSignature | undefined;
+    const runtime = await this.runtimeForMatch(matchId);
+    if (runtime.runtime === "ephemeral") {
+      undelegateSignature = (await this.undelegateMatch(matchId)).signature;
+      this.rollupConnections.delete(matchId);
+      match = (await this.getMatch(matchId)) ?? match;
+      if (match.payoutProcessed) return { undelegateSignature, alreadySettled: true };
+    }
+
+    const payout = buildPayoutAccountInstructions(payer, match.bettingTokenMint, [
+      match.players[0],
+      match.players[1],
+      match.platformFeeWallet,
+    ]);
+    const [playerOneAta, playerTwoAta, platformFeeAta] = payout.accounts;
+    const { signature } = await this.settleMatch(matchId, playerOneAta, playerTwoAta, platformFeeAta, {
+      preInstructions: payout.instructions,
+      rentRecipient: options.rentRecipient ?? match.players[0],
+    });
+    void this.notifyIndexer("payout", matchId, signature);
+    return { undelegateSignature, settleSignature: signature, alreadySettled: false };
+  }
+
+  private async pollMatch<T>(
+    matchId: string,
+    options: WaitOptions,
+    check: (match: ChessMatch) => T | null
+  ): Promise<T> {
+    const pollMs = options.pollMs ?? 1_500;
+    const deadline = options.timeoutMs === undefined ? Infinity : Date.now() + options.timeoutMs;
+    for (;;) {
+      options.signal?.throwIfAborted();
+      const match = await this.getMatch(matchId);
+      if (!match) throw new Error(`Match ${matchId} not found`);
+      const result = check(match);
+      if (result !== null) return result;
+      if (Date.now() + pollMs > deadline) {
+        throw new Error(`Timed out waiting on match ${matchId} (status: ${match.gameStatus})`);
+      }
+      await delay(pollMs, options.signal);
+    }
+  }
+
+  private async buildDelegateInstruction(
+    matchId: string,
+    player: PublicKey,
+    payer: PublicKey
+  ): Promise<TransactionInstruction> {
+    const [chessMatchPda] = findChessMatchPda(matchId, this.programId);
+    const [bufferChessMatch] = PublicKey.findProgramAddressSync(
+      [Buffer.from("buffer"), chessMatchPda.toBuffer()],
+      this.programId
+    );
+    const [delegationRecordChessMatch] = PublicKey.findProgramAddressSync(
+      [Buffer.from("delegation"), chessMatchPda.toBuffer()],
+      DELEGATION_PROGRAM_ID
+    );
+    const [delegationMetadataChessMatch] = PublicKey.findProgramAddressSync(
+      [Buffer.from("delegation-metadata"), chessMatchPda.toBuffer()],
+      DELEGATION_PROGRAM_ID
+    );
+    return this.program.methods
+      .delegateMatch()
+      .accountsStrict({
+        payer,
+        player,
+        bufferChessMatch,
+        delegationRecordChessMatch,
+        delegationMetadataChessMatch,
+        chessMatch: chessMatchPda,
+        ownerProgram: this.programId,
+        delegationProgram: DELEGATION_PROGRAM_ID,
+        systemProgram: SYSTEM_PROGRAM,
+      })
+      .instruction();
+  }
+
+  private async sendBaseTransaction(
+    instructions: TransactionInstruction[]
+  ): Promise<TransactionSignature> {
+    const provider = this.program.provider;
+    if (!provider.sendAndConfirm) {
+      throw new Error("The Anchor provider can't send transactions; build it with a wallet");
+    }
+    return provider.sendAndConfirm(new Transaction().add(...instructions), [], {
+      commitment: "confirmed",
+      preflightCommitment: "confirmed",
+    });
+  }
+
+  /** Best-effort indexing hint; the backend re-reads the transaction itself. */
+  private async notifyIndexer(
+    event: "match-created" | "player-joined" | "match-aborted" | "move-made" | "payout",
+    matchId: string,
+    signature: string,
+    runtimeEndpoint?: string
+  ): Promise<void> {
+    if (!this.indexerUrl) return;
+    try {
+      await fetch(`${this.indexerUrl.replace(/\/$/, "")}/api/sync/${event}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ matchId, signature, runtimeEndpoint }),
+      });
+    } catch {
+      // The chain indexer picks the transaction up on its own.
+    }
+  }
+
   // ── Prediction Market ────────────────────────────────────────
 
   async initializePredictionPool(
@@ -924,6 +1267,21 @@ export class MagicChessClient {
 }
 
 // ── Helpers ────────────────────────────────────────────────────
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(signal.reason);
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true }
+    );
+  });
+}
 
 function enumValue<T extends string>(value: unknown, label: string): T {
   if (typeof value === "string") return value as T;
