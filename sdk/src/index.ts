@@ -34,7 +34,33 @@ export type {
 
 // Client
 export { MagicChessClient } from "./client";
-export type { TransactionExtras } from "./client";
+export type {
+  TransactionExtras,
+  OpenMatchOptions,
+  TurnState,
+  WaitOptions,
+  ChooseMove,
+} from "./client";
+
+// One-call setup for bots and agents
+export { connectMagicChess, keypairWallet } from "./connect";
+export type { ConnectOptions } from "./connect";
+
+// Agent and gameplay helpers
+export {
+  ZUG_DEVNET,
+  zugPlayUrl,
+  newMatchId,
+  parseTokenAmount,
+  matchToFen,
+  uciToMove,
+  moveToUci,
+  playerColor,
+  isMatchOver,
+  secondsLeftToMove,
+  buildStakeInstructions,
+  buildPayoutAccountInstructions,
+} from "./play";
 
 // PDA helpers
 export {

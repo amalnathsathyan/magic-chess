@@ -3,8 +3,10 @@
 [`@magic-chess/sdk`](https://www.npmjs.com/package/@magic-chess/sdk) ([source](https://github.com/amalnathsathyan/magic-chess/tree/dev/sdk)) is the TypeScript client for the Magic Chess program. The ZUG Arena frontend uses it for everything on-chain. It includes:
 
 - `MagicChessClient`, a typed wrapper around the Anchor program that routes each call to the base layer or the Ephemeral Rollup
+- `connectMagicChess` and a high-level agent workflow (open, join, play, pay out)
+- the `zug` command-line tool and an agent skill
 - React hooks
-- PDA, FEN, wager and MagicBlock helpers
+- PDA, FEN, stake and MagicBlock helpers
 - the program IDL and types
 
 :::note
@@ -21,7 +23,43 @@ npm install react react-dom
 
 `@magicblock-labs/ephemeral-rollups-kit` is a direct dependency, so it installs with the SDK.
 
-## Quick start
+## Agents and bots
+
+For a program that holds its own keypair, `connectMagicChess` builds a client with ZUG Arena's devnet settings
+(`ZUG_DEVNET`: RPC, router, fee terms, wrapped-SOL stakes and the backend for indexing hints), and the
+agent methods handle token accounts, delegation and payout:
+
+```typescript
+import { connectMagicChess, zugPlayUrl } from "@magic-chess/sdk";
+
+const client = connectMagicChess({ keypair });
+const { matchId } = await client.openMatch({ stake: 10_000_000n, moveTimeoutSeconds: 300 });
+console.log(zugPlayUrl(matchId)); // share it; people can join from the app
+await client.waitForOpponent(matchId);
+await client.playMatch(matchId, ({ fen }) => pickMove(fen)); // return UCI, e.g. "e2e4"
+await client.finishMatch(matchId);
+```
+
+| Method | What it does |
+|--------|--------------|
+| `openMatch({ stake?, moveTimeoutSeconds?, matchId?, mint?, platformFeeWallet?, platformFeeBasisPoints? })` | Wraps SOL for the stake and opens the match as White in one transaction. Returns `{ matchId, signature }`. |
+| `joinOpenMatch(matchId)` | Joins as Black with the same stake and delegates in one transaction, then waits for the rollup. |
+| `cancelOpenMatch(matchId)` | Cancels your unjoined match and refunds the stake. |
+| `waitForOpponent(matchId, opts?)` | Resolves with the match once someone joins. |
+| `waitForTurn(matchId, opts?)` | Resolves with `{ state, match }`; `state` is `your-turn`, `game-over` or `opponent-out-of-time`. |
+| `makeMoveUci(matchId, "e2e4", session?)` | `makeMove` with UCI notation. |
+| `playMatch(matchId, chooseMove, opts?)` | Full game loop: waits, asks `chooseMove({ fen, match, color })` for a UCI move, submits it, claims timeouts. Resolves with the final match. |
+| `finishMatch(matchId, { rentRecipient? })` | Undelegates if needed, creates the payout token accounts and settles. Safe to repeat. |
+
+`opts` is `{ pollMs?, timeoutMs?, signal? }`. Helpers: `matchToFen`, `uciToMove`, `moveToUci`, `playerColor`,
+`secondsLeftToMove`, `isMatchOver`, `newMatchId`, `parseTokenAmount("0.01", 9)`, `zugPlayUrl`, `keypairWallet`,
+`buildStakeInstructions`, `buildPayoutAccountInstructions`.
+
+The same flow runs from a shell with the `zug` CLI (`npm install -g @magic-chess/sdk`, then `zug --help`); every
+command prints JSON, and `zug wait` lists the legal moves on your turn. The package also ships an agent skill at
+`skills/zug-arena/SKILL.md`. See [Agentic chess](./agents.md).
+
+## Quick start (apps)
 
 ```typescript
 import { AnchorProvider, Program } from "@anchor-lang/core";
@@ -65,7 +103,10 @@ await client.settleMatch("match-001", whiteAta, blackAta, feeAta);
 new MagicChessClient(
   program: Program<MagicChess>,
   wallet?: MagicChessWallet,
-  options?: { routerEndpoint?: string } // defaults to MAGICBLOCK_DEVNET_ROUTER
+  options?: {
+    routerEndpoint?: string; // defaults to MAGICBLOCK_DEVNET_ROUTER
+    indexerUrl?: string;     // backend for best-effort indexing hints from the agent methods
+  }
 )
 ```
 
@@ -79,7 +120,7 @@ The client needs a wallet only for methods that sign. Reads work without one.
 |--------|---------|---------|
 | `createMatch(params: CreateMatchParams)` | L1 | `{ match, signature }` |
 | `joinMatch({ matchId, playerTokenAccount, betAmount? })` | L1 | `{ signature }` |
-| `abortMatch(matchId, playerTokenAccount, extras?)` | L1 | `{ signature }`: creator cancels an unjoined match and gets the wager back |
+| `abortMatch(matchId, playerTokenAccount, extras?)` | L1 | `{ signature }`: creator cancels an unjoined match and gets the stake back |
 | `delegateMatch(matchId, rentPayer?)` | L1 | `{ signature, ephemeralRpcEndpoint }` |
 | `commitState(matchId)` | ER | `{ signature, baseCommitmentSignature, rpcEndpoint }` |
 | `undelegateMatch(matchId)` | ER | `{ signature, baseCommitmentSignature, rpcEndpoint }` |
@@ -187,14 +228,14 @@ function Game({ id }: { id: string }) {
 ```typescript
 import {
   findChessMatchPda, findMatchEscrowPda, findPredictionPoolPda,
-  boardToFen, fenToBoard,
+  boardToFen, fenToBoard, matchToFen,
   formatRawTokenAmount, isFreeWager,
   getDelegationStatus, resolveAccountRuntime, waitForDelegation, waitForUndelegation,
   MAGICBLOCK_DEVNET_ROUTER, MAGICBLOCK_DEVNET_RPC, DELEGATION_PROGRAM_ID,
 } from "@magic-chess/sdk";
 
 const [matchPda] = findChessMatchPda("match-001", program.programId);
-const fen = boardToFen(board, "white", castlingRights, null, 0, 1);
+const fen = matchToFen(await client.getMatch("match-001")); // the client's ChessMatch straight to FEN
 formatRawTokenAmount(10_000_000n, 9); // "0.01"
 const status = await getDelegationStatus(matchPda); // asks the router; returns isDelegated and the ER FQDN
 ```
