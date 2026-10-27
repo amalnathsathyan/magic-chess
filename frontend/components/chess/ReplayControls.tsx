@@ -28,7 +28,7 @@ export function ReplayControls({
   const moveNumber = ply === 0 ? 0 : Math.ceil(ply / 2);
 
   return (
-    <div className={cn("glass-card w-full max-w-[560px] p-2", className)}>
+    <div className={cn("panel w-full p-2", className)}>
       <div className="flex flex-wrap items-center gap-1">
         <button
           type="button"

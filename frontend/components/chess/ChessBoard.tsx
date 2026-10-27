@@ -18,6 +18,8 @@ interface ChessBoardProps {
   highlightSquares?: Record<string, { backgroundColor: string }>;
   lastMove?: { from: Square; to: Square } | null;
   className?: string;
+  /** Rank and file letters on the edge squares. Off for thumbnails. */
+  showCoordinates?: boolean;
 }
 
 export function ChessBoard({
@@ -31,6 +33,7 @@ export function ChessBoard({
   highlightSquares,
   lastMove,
   className,
+  showCoordinates = true,
 }: ChessBoardProps) {
   const [moveFrom, setMoveFrom] = useState<Square | null>(null);
   const [rightClickedSquares, setRightClickedSquares] = useState<
@@ -234,13 +237,14 @@ export function ChessBoard({
             width: boardWidth,
             height: boardWidth,
             borderRadius: 0,
-            boxShadow: "0 0 0 1px #2C3036",
+            boxShadow: "0 0 0 1px #25292E",
           },
           // Graphite and bone, per the ZUG board spec.
           darkSquareStyle: { backgroundColor: "#5F656E" },
           lightSquareStyle: { backgroundColor: "#E4DFD4" },
           darkSquareNotationStyle: { color: "#E4DFD4", fontFamily: "var(--font-jetbrains)", fontSize: "10px" },
           lightSquareNotationStyle: { color: "#5F656E", fontFamily: "var(--font-jetbrains)", fontSize: "10px" },
+          showNotation: showCoordinates,
           squareStyles,
           arrows,
         }}

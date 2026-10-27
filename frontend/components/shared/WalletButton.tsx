@@ -119,7 +119,7 @@ export function WalletButton() {
       <div
         role="status"
         aria-label="Loading wallet"
-        className="h-11 w-11 animate-pulse rounded-xl bg-card-hover motion-reduce:animate-none"
+        className="h-9 w-28 animate-pulse bg-card-hover motion-reduce:animate-none"
       />
     );
   }
@@ -132,10 +132,9 @@ export function WalletButton() {
         onClick={() => login()}
         aria-label="Sign in or connect a wallet"
         title="Sign in or connect a wallet"
-        className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        className="btn btn-primary btn-sm"
       >
-        <Wallet aria-hidden="true" className="h-5 w-5 shrink-0" />
-        <span className="sr-only">Sign in</span>
+        Sign in
       </button>
     );
   }
@@ -161,23 +160,21 @@ export function WalletButton() {
         onClick={handleCreateWallet}
         disabled={isCreatingWallet}
         aria-label={isCreatingWallet ? "Creating Solana wallet" : "Create Solana wallet"}
-        className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
+        className="btn btn-primary btn-sm"
       >
         {isCreatingWallet ? (
-          <LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin motion-reduce:animate-none" />
+          <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />
         ) : (
-          <Wallet aria-hidden="true" className="h-5 w-5" />
+          <Wallet aria-hidden="true" className="h-4 w-4" />
         )}
-        <span className="sr-only">
-          {isCreatingWallet ? "Creating wallet" : "Create wallet"}
-        </span>
+        {isCreatingWallet ? "Creating…" : "Create wallet"}
       </button>
     );
   }
 
   // ── Connected ──
   return (
-    <div ref={dropdownRef} className="relative flex h-11 w-11 shrink-0">
+    <div ref={dropdownRef} className="relative flex shrink-0">
       <button
         type="button"
         onClick={() => setDropdownOpen((prev) => !prev)}
@@ -188,25 +185,26 @@ export function WalletButton() {
         aria-label={shortAddress ? `Wallet ${shortAddress}` : "Wallet menu"}
         title={shortAddress ?? "Wallet menu"}
         className={cn(
-          "relative flex h-11 w-11 items-center justify-center rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          "flex h-9 items-center gap-2 border px-3 text-sm font-medium tnum transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           dropdownOpen
-            ? "border-success/30 bg-success/10 text-success"
-            : "border-border bg-card/50 text-primary hover:border-border-hover hover:bg-card-hover"
+            ? "border-border-hover bg-card-hover text-foreground"
+            : "border-border text-foreground hover:border-border-hover hover:bg-card-hover"
         )}
       >
         {walletAction ? (
-          <LoaderCircle aria-hidden="true" className="h-5 w-5 animate-spin motion-reduce:animate-none" />
+          <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin motion-reduce:animate-none" />
         ) : (
-          <Wallet aria-hidden="true" className="h-5 w-5" />
+          <span aria-hidden="true" className="h-2 w-2 rounded-full bg-success" />
         )}
-        <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full border border-card bg-primary" />
+        <span className="hidden sm:inline">{shortAddress ?? "Wallet"}</span>
+        <Wallet aria-hidden="true" className="h-4 w-4 sm:hidden" />
       </button>
 
       {dropdownOpen && (
         <div
           id="wallet-menu"
           aria-label="Wallet actions"
-          className="absolute bottom-full right-0 z-50 mb-3 w-[min(18rem,calc(100vw-1rem))] rounded-xl border border-border bg-card p-3 shadow-[0_8px_32px_rgba(0,0,0,0.5)] md:bottom-0 md:left-full md:right-auto md:mb-0 md:ml-3"
+          className="absolute right-0 top-full z-50 mt-2 w-[min(18rem,calc(100vw-1rem))] border border-border bg-card p-3 shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
         >
           <div className="mb-2 px-1">
             <p className="text-xs text-muted-foreground">Connected with</p>

@@ -45,9 +45,9 @@ export async function buildWagerInstruction(
   tokenAccount: PublicKey;
   payer: PublicKey;
 }> {
-  if (amount < 0n) throw new Error("Wager cannot be negative.");
+  if (amount < 0n) throw new Error("The stake can't be negative.");
   if (amount > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw new Error("Wager amount is too large for this browser client.");
+    throw new Error("That stake is too large.");
   }
 
   const provider = client.program.provider as TransactionProvider;
@@ -61,7 +61,7 @@ export async function buildWagerInstruction(
     if (BigInt(balance) < amount) {
       const requiredSol = Number(amount) / 1_000_000_000;
       throw new Error(
-        `This wager needs ${requiredSol} SOL in your wallet. Gas sponsorship covers network fees, not the wager. Fund the wallet or create a free match.`
+        `This stake needs ${requiredSol} SOL in your wallet. Network fees are covered, the stake is not. Add SOL or create a free match.`
       );
     }
   }

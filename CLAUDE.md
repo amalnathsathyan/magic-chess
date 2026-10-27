@@ -330,3 +330,28 @@ Next steps:
 - After a few weeks on the new domain, drop the workers.dev origins from `backend/src/config.ts` and Privy.
 - Fixed: the live indexer failed with `column "event_index" of relation "sync_events" does not exist`, because
   that column was added to migration 004 after production had run it. Migration 009 adds it.
+
+## UI redesign: status and next steps (2026-10-27)
+
+Branch `feat/app-redesign`. The whole frontend was restructured to show only the text that matters, in the main areas.
+No logic, hooks, SDK calls or on-chain flows changed; only layout, styling and copy.
+
+- **Shell** (`components/shared/Header.tsx`): one sticky top bar (Play, Ladder, Profile, Settings, Devnet tag, wallet) and a
+  4-tab bottom bar on phones. `app/arena/layout.tsx` no longer renders a second header. Play is active on
+  `/arena`, `/play`, `/spectate` and `/review`.
+- **Design tokens** (`app/globals.css`): component classes (`panel`, `btn`, `btn-primary`, `btn-secondary`, `btn-sm`,
+  `label`, `section-title`, `stage-tag`, `tnum`, `row-link`) live in `@layer components`, and the `*` border rule in
+  `@layer base`. Unlayered CSS beats Tailwind utilities in v4, which is why `border-primary/xx` and size utilities were
+  silently ignored before. Keep new component CSS inside a layer.
+- **Lobby** (`app/arena/page.tsx`): open matches as rows (`MatchCard`, with a `compact` variant), a right column with
+  "Your games" (In play / Finished) and "Live now", Recent games below. `CreateMatchForm` has stake presets.
+- **Game pages** (play, spectate, review): board column sized by `lib/board-size.ts` (`fitBoardWidth`) plus a 360px
+  side panel with the match facts (Stake / Pot / Clock), actions, `MatchJourney` (now one current step with a
+  progress bar and a "How this match works" disclosure), moves and predictions.
+- **Landing**: Hero, How it works (3 steps), Watch and predict / Build on ZUG, footer.
+- **Copy**: user-facing text says "stake", never "wager" or "bet" (code identifiers unchanged).
+
+Next steps:
+- Check on a real phone (iOS Safari, Android Chrome): bottom bar with the safe area, board size, drag moves.
+- Screenshots in the PR used mocked data (the cloud session couldn't reach the API or RPC). Do a pass against live devnet data.
+- The prediction panel still says "Play points"; revisit when winner prediction gets real stakes.

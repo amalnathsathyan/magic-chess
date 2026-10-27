@@ -102,7 +102,7 @@ export function MoveList({
     return (
       <div
         className={cn(
-          "glass-card flex h-full flex-col bg-background/40 p-4 backdrop-blur-md",
+          "panel flex h-full flex-col p-4",
           className
         )}
       >
@@ -121,7 +121,7 @@ export function MoveList({
   return (
     <div
       className={cn(
-        "glass-card flex h-full flex-col bg-background/40 p-4 backdrop-blur-md",
+        "panel flex h-full flex-col p-4",
         className
       )}
     >
@@ -160,7 +160,7 @@ export function MoveList({
       </div>
       <div
         ref={scrollRef}
-        className="flex-1 overflow-y-auto pr-1 font-mono text-sm"
+        className="flex-1 overflow-y-auto pr-1 text-sm tnum"
       >
         <table className="w-full">
           <tbody>
@@ -194,7 +194,7 @@ export function MoveList({
           </tbody>
         </table>
         {result && (
-          <div className="mt-2 rounded-lg bg-primary/10 px-3 py-2 text-center font-mono text-sm font-bold text-primary">
+          <div className="mt-2 rounded-lg bg-primary/10 px-3 py-2 text-center text-sm font-bold tnum text-primary">
             {result}
           </div>
         )}

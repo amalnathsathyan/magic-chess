@@ -5,6 +5,7 @@ import { useState } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useCreateWallet, useWallets } from "@privy-io/react-auth/solana";
 import { LoaderCircle, LogIn, Wallet } from "lucide-react";
+import { ZugSymbol } from "@/components/brand/ZugLogo";
 
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const { ready, authenticated } = usePrivy();
@@ -19,14 +20,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <div
         aria-live="polite"
         aria-busy="true"
-        className="flex min-h-[calc(100vh-65px)] items-center justify-center px-4"
+        className="flex min-h-[calc(100dvh-8rem)] items-center justify-center px-4"
       >
         <div className="flex items-center gap-3 text-sm text-muted-foreground">
           <LoaderCircle
             aria-hidden="true"
             className="h-5 w-5 animate-spin motion-reduce:animate-none"
           />
-          Preparing the arena...
+          Loading…
         </div>
       </div>
     );
@@ -34,24 +35,20 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (!authenticated) {
     return (
-      <div className="flex min-h-[calc(100vh-65px)] items-center justify-center px-4 py-12">
-        <div className="glass-card w-full max-w-md p-8 text-center shadow-card">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <LogIn aria-hidden="true" className="h-6 w-6" />
-          </div>
-          <h1 className="mt-5 font-heading text-2xl font-bold">
-            Sign in to enter the arena
-          </h1>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Continue with email, a social account, or your Solana wallet.
+      <div className="flex min-h-[calc(100dvh-8rem)] items-center justify-center px-4 py-12">
+        <div className="w-full max-w-sm">
+          <ZugSymbol className="h-10 w-10" />
+          <h1 className="mt-6 font-display text-4xl">Sign in to play</h1>
+          <p className="mt-3 text-muted-foreground">
+            Email, Google, Discord or a Solana wallet.
           </p>
           <button
             type="button"
             onClick={() => login()}
-            className="mt-6 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            className="btn btn-primary mt-8 w-full"
           >
             <LogIn aria-hidden="true" className="h-4 w-4" />
-            Sign in or connect wallet
+            Sign in
           </button>
         </div>
       </div>
@@ -73,16 +70,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     };
 
     return (
-      <div className="flex min-h-[calc(100vh-65px)] items-center justify-center px-4 py-12">
-        <div className="glass-card w-full max-w-md p-8 text-center shadow-card">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Wallet aria-hidden="true" className="h-6 w-6" />
-          </div>
-          <h1 className="mt-5 font-heading text-2xl font-bold">
-            Set up your Solana wallet
-          </h1>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            ZUG Arena needs a Solana wallet to create, join, and play on-chain matches.
+      <div className="flex min-h-[calc(100dvh-8rem)] items-center justify-center px-4 py-12">
+        <div className="w-full max-w-sm">
+          <ZugSymbol className="h-10 w-10" />
+          <h1 className="mt-6 font-display text-4xl">Create your wallet</h1>
+          <p className="mt-3 text-muted-foreground">
+            Your stakes and results live in a Solana wallet.
           </p>
           {walletError && (
             <p role="alert" className="mt-4 text-sm text-destructive">
@@ -94,7 +87,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             onClick={handleCreateWallet}
             disabled={isCreatingWallet}
             aria-busy={isCreatingWallet}
-            className="mt-6 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-2.5 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
+            className="btn btn-primary mt-8 w-full"
           >
             {isCreatingWallet ? (
               <LoaderCircle
@@ -104,7 +97,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
             ) : (
               <Wallet aria-hidden="true" className="h-4 w-4" />
             )}
-            {isCreatingWallet ? "Creating wallet..." : "Create Solana wallet"}
+            {isCreatingWallet ? "Creating wallet…" : "Create Solana wallet"}
           </button>
         </div>
       </div>

@@ -7,7 +7,6 @@ import {
   AlertCircle,
   ArrowLeft,
   Check,
-  Clock3,
   Copy,
   ExternalLink,
   LoaderCircle,
@@ -58,6 +57,7 @@ import {
 import { useMagicBlock } from "@/hooks/useMagicBlock";
 import { useMagicSession } from "@/components/shared/MagicSessionProvider";
 import { cn } from "@/lib/utils";
+import { fitBoardWidth } from "@/lib/board-size";
 import { isPrivyEmbeddedWallet, selectSolanaWallet } from "@/lib/privy-wallet";
 import { magicBlockTxUrl, solanaDevnetTxUrl } from "@/lib/explorer";
 import { useMoveTransactionNotifications } from "@/hooks/useMoveTransactionNotifications";
@@ -87,7 +87,7 @@ const EMPTY_PUBLIC_KEY = PublicKey.default.toBase58();
 function statusLabel(status: GameStatus): string {
   const labels: Record<GameStatus, string> = {
     [GameStatus.WaitingForOpponent]: "Waiting for opponent",
-    [GameStatus.Active]: "In progress",
+    [GameStatus.Active]: "Live",
     [GameStatus.WhiteWins]: "White won",
     [GameStatus.BlackWins]: "Black won",
     [GameStatus.Draw]: "Draw",
@@ -128,7 +128,7 @@ function describeEnd(
   const reason = match.gameEndReason;
 
   if (match.gameStatus === GameStatus.Aborted || reason === GameEndReason.Aborted) {
-    return { headline: "Match cancelled", detail: "The wager was refunded.", outcome: null };
+    return { headline: "Match cancelled", detail: "The stake was refunded.", outcome: null };
   }
 
   const detailFor = (): string => {
@@ -273,7 +273,7 @@ function PlayView() {
 
   useEffect(() => {
     const resize = () =>
-      setBoardWidth(Math.min(560, Math.max(280, window.innerWidth - 32)));
+      setBoardWidth(fitBoardWidth());
     resize();
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
@@ -602,7 +602,7 @@ function PlayView() {
 
   const handleAbort = async () => {
     if (!match || !wallet || !isWaiting || walletAddress !== whiteAddress) return;
-    if (!window.confirm("Cancel this match and refund your wager?")) return;
+    if (!window.confirm("Cancel this match and refund your stake?")) return;
     try {
       const owner = new PublicKey(wallet.address);
       // Recreate the refund ATA idempotently in case it was closed since.
@@ -612,7 +612,7 @@ function PlayView() {
           client.abortMatch(matchId, prep.tokenAccount, {
             preInstructions: prep.instructions,
           }),
-        "Match cancelled and wager refunded"
+        "Match cancelled and stake refunded"
       );
     } catch {
       // TransactionStatus contains the actionable error.
@@ -868,171 +868,177 @@ function PlayView() {
 
   return (
     <AuthGate>
-      <div className="min-h-screen bg-background">
-        <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-            <Link
-              href="/arena"
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              Arena
-            </Link>
-            <button
-              type="button"
-              onClick={() => void Promise.allSettled([refetch(), loadHistory()])}
-              disabled={loading}
-              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
-            >
-              <RefreshCw
-                className={cn("h-3.5 w-3.5", loading && "animate-spin")}
-                aria-hidden="true"
-              />
-              Refresh
-            </button>
+      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 md:py-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <Link
+            href="/arena"
+            className="inline-flex min-h-10 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Play
+          </Link>
+          <button
+            type="button"
+            onClick={() => void Promise.allSettled([refetch(), loadHistory()])}
+            disabled={loading}
+            aria-label="Refresh match"
+            title="Refresh"
+            className="btn btn-secondary btn-sm w-9 px-0"
+          >
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} aria-hidden="true" />
+          </button>
+        </div>
+
+        {loading && !match ? (
+          <div className="grid gap-8 lg:grid-cols-[auto_360px] lg:justify-center" aria-label="Loading match">
+            <div
+              className="mx-auto aspect-square animate-pulse bg-card"
+              style={{ width: boardWidth }}
+            />
+            <div className="h-64 animate-pulse bg-card" />
           </div>
-        </header>
+        ) : !match ? (
+          <div className="mx-auto max-w-md py-16">
+            <AlertCircle className="h-6 w-6 text-destructive" aria-hidden="true" />
+            <h1 className="mt-4 font-display text-3xl">Match unavailable</h1>
+            <p className="mt-3 text-sm text-muted-foreground">
+              {!matchId
+                ? "No match was selected."
+                : error?.message ||
+                  "This match isn't on Solana yet. New matches can take a few seconds; this page keeps checking."}
+            </p>
+            <Link href="/arena" className="btn btn-secondary mt-6">
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Back to Play
+            </Link>
+          </div>
+        ) : (
+          <div className="grid gap-8 lg:grid-cols-[auto_360px] lg:justify-center">
+            <section
+              className="mx-auto flex flex-col gap-3"
+              style={{ width: boardWidth }}
+              aria-label="Chess board"
+            >
+              <PlayerRow
+                address={orientation === "white" ? blackAddress : whiteAddress}
+                color={orientation === "white" ? "Black" : "White"}
+                active={
+                  isActive &&
+                  match.currentTurn ===
+                    (orientation === "white" ? "black" : "white")
+                }
+                connectedAddress={walletAddress}
+                online={
+                  orientation === "white"
+                    ? realtime.presence?.black.online
+                    : realtime.presence?.white.online
+                }
+              />
 
-        <main className="mx-auto max-w-6xl px-4 py-6">
-          {loading && !match ? (
-            <div className="grid gap-6 lg:grid-cols-[1fr_320px]" aria-label="Loading match">
-              <div className="mx-auto h-[min(560px,calc(100vw-2rem))] w-full max-w-[560px] animate-pulse rounded-xl bg-card" />
-              <div className="h-64 animate-pulse rounded-xl bg-card" />
-            </div>
-          ) : !match ? (
-            <div className="glass-card mx-auto max-w-xl p-6">
-              <div className="flex items-center gap-2 text-destructive">
-                <AlertCircle className="h-5 w-5" aria-hidden="true" />
-                <h1 className="font-heading text-lg font-semibold">Match unavailable</h1>
-              </div>
-              <p className="mt-3 text-sm text-muted-foreground">
-                {!matchId
-                  ? "No match was selected."
-                  : error?.message ||
-                    "No on-chain match was found for this ID yet. A new match can take a few seconds to appear; this page keeps checking."}
-              </p>
-              <Link
-                href="/arena"
-                className="mt-4 inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-border px-4 text-sm font-medium hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
-              >
-                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-                Back to the arena
-              </Link>
-            </div>
-          ) : (
-            <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
-              <section className="flex flex-col items-center gap-3" aria-label="Chess board">
-                <PlayerRow
-                  address={orientation === "white" ? blackAddress : whiteAddress}
-                  color={orientation === "white" ? "Black" : "White"}
-                  active={
-                    isActive &&
-                    match.currentTurn ===
-                      (orientation === "white" ? "black" : "white")
-                  }
-                  connectedAddress={walletAddress}
-                  online={
-                    orientation === "white"
-                      ? realtime.presence?.black.online
-                      : realtime.presence?.white.online
-                  }
+              {endSummary ? (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className={cn(
+                    "border-l-2 px-4 py-3",
+                    endSummary.outcome === "win"
+                      ? "border-l-primary bg-primary/10"
+                      : "border-l-border-hover bg-card"
+                  )}
+                >
+                  <p
+                    className={cn(
+                      "font-display text-2xl",
+                      endSummary.outcome === "win" ? "text-primary" : "text-foreground"
+                    )}
+                  >
+                    {endSummary.headline}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">{endSummary.detail}</p>
+                </div>
+              ) : null}
+
+              <div className="relative">
+                {displayFen ? (
+                  <ChessBoard
+                    fen={displayFen}
+                    orientation={orientation}
+                    boardWidth={boardWidth}
+                    arePiecesDraggable={canMove}
+                    onPieceDrop={handlePieceDrop}
+                    lastMove={lastMove}
+                  />
+                ) : (
+                  <div
+                    className="panel flex aspect-square items-center justify-center text-sm text-destructive"
+                    style={{ width: boardWidth }}
+                  >
+                    The on-chain board could not be read.
+                  </div>
+                )}
+                <PromotionDialog
+                  isOpen={pendingPromotion !== null}
+                  color={playerColor ?? "white"}
+                  onSelect={(piece) => {
+                    if (pendingPromotion) {
+                      void submitLegalMove(
+                        pendingPromotion.from,
+                        pendingPromotion.to,
+                        piece
+                      );
+                    }
+                    setPendingPromotion(null);
+                  }}
+                  className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
                 />
+              </div>
 
+              <PlayerRow
+                address={orientation === "white" ? whiteAddress : blackAddress}
+                color={orientation === "white" ? "White" : "Black"}
+                active={
+                  isActive &&
+                  match.currentTurn ===
+                    (orientation === "white" ? "white" : "black")
+                }
+                connectedAddress={walletAddress}
+              />
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 {isActive && isParticipant ? (
                   <p
                     aria-live="polite"
                     className={cn(
-                      "w-full max-w-[560px] rounded-lg px-3 py-2 text-center text-sm font-medium",
-                      isMyTurn || flagged
-                        ? "bg-primary/15 text-primary"
-                        : "bg-card/60 text-muted-foreground"
+                      "text-sm font-semibold",
+                      isMyTurn || flagged ? "text-primary" : "text-muted-foreground"
                     )}
                   >
                     {isBusy && txStatus === "submitting"
                       ? "Sending your move…"
                       : flagged && isMyTurn
-                        ? "Your time ran out. Your opponent can now claim the win."
+                        ? "Your time ran out."
                         : flagged
                           ? embeddedWallet && match.isDelegated
-                            ? "Your opponent ran out of time. Claiming your win…"
-                            : "Your opponent ran out of time. Claim your win."
+                            ? "Opponent ran out of time. Claiming your win…"
+                            : "Opponent ran out of time."
                           : isMyTurn
                             ? "Your move"
-                            : "Waiting for your opponent…"}
+                            : "Opponent to move…"}
                   </p>
-                ) : null}
-
-                {endSummary ? (
-                  <div
-                    role="status"
-                    aria-live="polite"
+                ) : (
+                  <span />
+                )}
+                {isActive && remainingMilliseconds !== null ? (
+                  <span
                     className={cn(
-                      "w-full max-w-[560px] border px-4 py-3 text-center",
-                      endSummary.outcome === "win"
-                        ? "border-primary/40 bg-primary/15"
-                        : "border-border bg-card/60"
+                      "text-sm font-semibold tnum lg:hidden",
+                      formatRemaining(remainingMilliseconds).isLow ? "text-primary" : "text-soft"
                     )}
+                    aria-hidden="true"
                   >
-                    <p
-                      className={cn(
-                        "font-heading text-lg font-semibold",
-                        endSummary.outcome === "win" ? "text-primary" : "text-foreground"
-                      )}
-                    >
-                      {endSummary.headline}
-                    </p>
-                    <p className="mt-0.5 text-sm text-muted-foreground">{endSummary.detail}</p>
-                    {isParticipant && !match.payoutProcessed && match.totalPot > 0n ? (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        The pot is still in escrow. Finalize the game to pay it out; either player can.
-                      </p>
-                    ) : null}
-                  </div>
+                    {formatRemaining(remainingMilliseconds).text}
+                  </span>
                 ) : null}
-
-                <div className="relative">
-                  {displayFen ? (
-                    <ChessBoard
-                      fen={displayFen}
-                      orientation={orientation}
-                      boardWidth={boardWidth}
-                      arePiecesDraggable={canMove}
-                      onPieceDrop={handlePieceDrop}
-                      lastMove={lastMove}
-                    />
-                  ) : (
-                    <div className="glass-card flex h-80 w-[min(560px,calc(100vw-2rem))] items-center justify-center text-sm text-destructive">
-                      The on-chain board could not be decoded.
-                    </div>
-                  )}
-                  <PromotionDialog
-                    isOpen={pendingPromotion !== null}
-                    color={playerColor ?? "white"}
-                    onSelect={(piece) => {
-                      if (pendingPromotion) {
-                        void submitLegalMove(
-                          pendingPromotion.from,
-                          pendingPromotion.to,
-                          piece
-                        );
-                      }
-                      setPendingPromotion(null);
-                    }}
-                    className="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-                  />
-                </div>
-
-                <PlayerRow
-                  address={orientation === "white" ? whiteAddress : blackAddress}
-                  color={orientation === "white" ? "White" : "Black"}
-                  active={
-                    isActive &&
-                    match.currentTurn ===
-                      (orientation === "white" ? "white" : "black")
-                  }
-                  connectedAddress={walletAddress}
-                />
-
                 <BoardControls
                   onFlipBoard={() =>
                     setOrientation((current) =>
@@ -1042,70 +1048,67 @@ function PlayView() {
                   onResign={handleResign}
                   canResign={isParticipant && isActive && !isBusy}
                 />
-              </section>
+              </div>
+            </section>
 
-              <aside className="flex min-h-0 flex-col gap-4">
-                <section className="glass-card p-4" aria-labelledby="match-heading">
-                  <div className="flex items-center justify-between gap-3">
-                    <h1 id="match-heading" className="truncate font-heading text-sm font-semibold">
-                      #{match.matchId}
-                    </h1>
-                    <span className="shrink-0 bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                      {flagged ? "Time ran out" : statusLabel(match.gameStatus)}
-                    </span>
+            <aside className="flex min-h-0 min-w-0 flex-col gap-4">
+              <section className="panel" aria-labelledby="match-heading">
+                <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+                  <h1 id="match-heading" className="section-title">
+                    {flagged ? "Time ran out" : statusLabel(match.gameStatus)}
+                  </h1>
+                  <span className="truncate font-mono text-xs text-muted-foreground" title={match.matchId}>
+                    {match.matchId}
+                  </span>
+                </div>
+                <dl className="grid grid-cols-3 divide-x divide-border border-b border-border">
+                  <div className="px-4 py-3">
+                    <dt className="label">Stake</dt>
+                    <dd className="mt-1 text-lg font-semibold tnum">
+                      {match.betAmountPlayerOne === 0n
+                        ? "Free"
+                        : formatOnChainTokenAmount(match.betAmountPlayerOne, wagerTokenDetail)}
+                    </dd>
                   </div>
-                  <dl className="mt-4 space-y-3 text-sm">
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-muted-foreground">Wager</dt>
-                      <dd className="font-mono font-medium">
-                        {match.betAmountPlayerOne === 0n ? (
-                          "Free"
-                        ) : (
-                          formatOnChainTokenAmount(match.betAmountPlayerOne, wagerTokenDetail)
-                        )}
-                      </dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-muted-foreground">Total pot</dt>
-                      <dd className="font-mono font-medium">
-                        {match.totalPot === 0n ? (
-                          "0"
-                        ) : (
-                          formatOnChainTokenAmount(match.totalPot, wagerTokenDetail)
-                        )}
-                      </dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="inline-flex items-center gap-1.5 text-muted-foreground">
-                        <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-                        Move timer
-                      </dt>
-                      <dd className={cn(
-                        "font-mono font-bold tabular-nums",
-                        remainingMilliseconds !== null && formatRemaining(remainingMilliseconds).isLow && "animate-pulse text-primary"
-                      )}>
-                        {remainingMilliseconds !== null
-                          ? formatRemaining(remainingMilliseconds).text
-                          : timeoutMilliseconds > 0
-                            ? `${timeoutMilliseconds / 1_000}s / move`
-                            : "No timer"}
-                      </dd>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <dt className="text-muted-foreground">Runtime</dt>
-                      <dd className="inline-flex items-center gap-1.5 font-medium">
-                        <ShieldCheck className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                        {match.isDelegated ? "MagicBlock ER" : "Solana base"}
-                      </dd>
-                    </div>
-                  </dl>
+                  <div className="px-4 py-3">
+                    <dt className="label">Pot</dt>
+                    <dd className="mt-1 text-lg font-semibold tnum">
+                      {match.totalPot === 0n
+                        ? "0"
+                        : formatOnChainTokenAmount(match.totalPot, wagerTokenDetail)}
+                    </dd>
+                  </div>
+                  <div className="px-4 py-3">
+                    <dt className="label">Clock</dt>
+                    <dd
+                      className={cn(
+                        "mt-1 text-lg font-semibold tnum",
+                        remainingMilliseconds !== null &&
+                          formatRemaining(remainingMilliseconds).isLow &&
+                          "text-primary motion-safe:animate-pulse"
+                      )}
+                    >
+                      {remainingMilliseconds !== null
+                        ? formatRemaining(remainingMilliseconds).text
+                        : timeoutMilliseconds > 0
+                          ? `${timeoutMilliseconds / 60_000 >= 1 ? `${timeoutMilliseconds / 60_000}m` : `${timeoutMilliseconds / 1_000}s`}`
+                          : "None"}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="flex flex-col gap-3 p-4">
+                  <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                    {match.isDelegated ? "Playing on the MagicBlock rollup" : "On Solana"}
+                  </p>
 
                   {isWaiting && walletAddress !== whiteAddress ? (
                     <button
                       type="button"
                       onClick={() => void handleJoin()}
                       disabled={isBusy}
-                      className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                      className="btn btn-primary w-full"
                     >
                       {isBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
                       {match.betAmountPlayerOne === 0n
@@ -1115,47 +1118,48 @@ function PlayView() {
                   ) : null}
 
                   {isWaiting && walletAddress === whiteAddress ? (
-                    <div className="mt-5 space-y-3">
-                      <p className="rounded-lg border border-border bg-card/50 p-3 text-sm text-muted-foreground">
-                        Your match is open. Send the invite link to an opponent — this page
-                        updates the moment they join.
+                    <>
+                      <p className="text-sm text-muted-foreground">
+                        Send the link. This page updates when someone joins.
                       </p>
                       <button
                         type="button"
                         onClick={() => void handleCopyInvite()}
-                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary"
+                        className="btn btn-primary w-full"
                       >
                         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                        {copied ? "Invite link copied" : "Copy invite link"}
+                        {copied ? "Link copied" : "Copy invite link"}
                       </button>
                       <ShareChannels message={inviteMessage} url={absoluteUrl(playHref(matchId))} />
-                      <button
-                        type="button"
-                        onClick={() => setInviteOpen(true)}
-                        className="inline-flex min-h-11 w-full items-center justify-center gap-2 border border-border px-4 text-sm font-semibold transition-colors hover:border-primary hover:text-primary focus-visible:ring-2 focus-visible:ring-primary"
-                      >
-                        <Share2 className="h-4 w-4" aria-hidden="true" />
-                        Share invite card
-                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setInviteOpen(true)}
+                          className="btn btn-secondary btn-sm"
+                        >
+                          <Share2 className="h-4 w-4" aria-hidden="true" />
+                          Share card
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleAbort()}
+                          disabled={isBusy}
+                          className="btn btn-secondary btn-sm text-muted-foreground hover:!border-destructive/50 hover:!text-destructive"
+                        >
+                          Cancel and refund
+                        </button>
+                      </div>
                       <ShareCardDialog
                         open={inviteOpen}
                         onOpenChange={setInviteOpen}
                         title="Send a challenge"
-                        description="A card for your open match. Whoever follows the link takes the black pieces."
+                        description="Whoever follows the link plays Black."
                         filename={`zug-challenge-${matchId}.png`}
                         message={inviteMessage}
                         url={absoluteUrl(playHref(matchId))}
                         render={renderInvite}
                       />
-                      <button
-                        type="button"
-                        onClick={() => void handleAbort()}
-                        disabled={isBusy}
-                        className="min-h-10 w-full rounded-lg border border-border px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:text-destructive focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
-                      >
-                        Cancel match and refund
-                      </button>
-                    </div>
+                    </>
                   ) : null}
 
                   {isActive && isParticipant && !match.isDelegated ? (
@@ -1163,7 +1167,7 @@ function PlayView() {
                       type="button"
                       onClick={() => void handleDelegate()}
                       disabled={isBusy}
-                      className="mt-5 min-h-11 w-full rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                      className="btn btn-primary w-full"
                     >
                       Enable fast play
                     </button>
@@ -1171,18 +1175,17 @@ function PlayView() {
 
                   {isActive && isParticipant && match.isDelegated ? (
                     fastPlayReady ? (
-                      <p className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-primary">
+                      <p className="inline-flex items-center gap-1.5 text-xs font-medium text-success">
                         <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-                        Instant moves on — no wallet popups
+                        Instant moves on
                       </p>
                     ) : (
-                      <div className="mt-4 rounded-lg border border-primary/25 bg-primary/5 p-3">
-                        <p className="text-sm font-medium text-foreground">
-                          {sessionStatus === "authorizing" ? "Setting up instant moves…" : "Enable instant moves"}
+                      <div className="border border-primary/30 p-3">
+                        <p className="text-sm font-medium">
+                          {sessionStatus === "authorizing" ? "Setting up instant moves…" : "Turn on instant moves"}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Approve once: a temporary key that can only move your pieces in this game
-                          signs each move, so there&apos;s no popup per move.
+                          Approve once and skip the wallet popup on every move.
                         </p>
                         {sessionError ? (
                           <p className="mt-2 text-xs text-destructive">{sessionError}</p>
@@ -1191,10 +1194,10 @@ function PlayView() {
                           type="button"
                           onClick={() => void handleEnableFastPlay()}
                           disabled={sessionStatus === "authorizing" || isBusy}
-                          className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-md border border-primary/40 px-3 text-xs font-semibold text-primary disabled:opacity-60"
+                          className="btn btn-sm mt-3 w-full border border-primary/50 text-primary hover:bg-primary/10"
                         >
                           <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-                          {sessionStatus === "authorizing" ? "Approve in wallet…" : "Enable with one approval"}
+                          {sessionStatus === "authorizing" ? "Approve in wallet…" : "Approve once"}
                         </button>
                       </div>
                     )
@@ -1205,7 +1208,7 @@ function PlayView() {
                       type="button"
                       onClick={() => void handleClaimTimeout()}
                       disabled={!canClaimTimeout}
-                      className="mt-3 min-h-11 w-full rounded-lg border border-primary/40 px-4 text-sm font-semibold text-primary focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                      className="btn btn-primary w-full"
                     >
                       {isBusy ? "Claiming the win…" : "Claim timeout win"}
                     </button>
@@ -1216,107 +1219,102 @@ function PlayView() {
                       type="button"
                       onClick={() => void handleFinalize()}
                       disabled={isBusy}
-                      className="mt-5 min-h-11 w-full rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-60"
+                      className="btn btn-primary w-full"
                     >
                       {settlePhase === "committing"
                         ? "Step 1 of 2: saving the result…"
                         : settlePhase === "paying"
                           ? "Step 2 of 2: paying out…"
                           : match.isDelegated
-                            ? "Finalize and settle payout"
-                            : "Settle payout"}
+                            ? "Finalize and pay out"
+                            : "Pay out"}
                     </button>
                   ) : null}
 
                   {isFinished && !isParticipant && !match.payoutProcessed ? (
-                    <p className="mt-4 text-xs text-muted-foreground">
-                      A match player must submit the final payout settlement.
+                    <p className="text-xs text-muted-foreground">
+                      Waiting for a player to pay out.
                     </p>
                   ) : null}
 
                   {match.payoutProcessed ? (
-                    <div className="mt-4 space-y-2">
-                      <p className="rounded-lg bg-primary/10 p-3 text-sm text-primary">
-                        Payout settled on Solana.
+                    <>
+                      <p className="inline-flex items-center gap-1.5 text-sm text-success">
+                        <Check className="h-4 w-4" aria-hidden="true" />
+                        Paid out on Solana
                       </p>
-                      <Link
-                        href="/arena"
-                        className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-primary/40 px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary"
-                      >
+                      <Link href="/arena" className="btn btn-secondary w-full">
                         <Sword className="h-4 w-4" aria-hidden="true" />
                         New match
                       </Link>
-                    </div>
+                    </>
                   ) : null}
 
                   {!isParticipant && !isWaiting ? (
-                    <Link
-                      href={spectateHref(matchId)}
-                      className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
-                    >
-                      Open spectator mode
+                    <Link href={spectateHref(matchId)} className="btn btn-secondary w-full">
+                      Watch as spectator
                       <ExternalLink className="h-4 w-4" aria-hidden="true" />
                     </Link>
                   ) : null}
-                </section>
+                </div>
+              </section>
 
-                <MatchJourney
-                  isWaiting={isWaiting}
-                  isActive={isActive}
-                  isFinished={isFinished}
-                  isDelegated={match.isDelegated}
-                  payoutProcessed={match.payoutProcessed}
-                  playerColor={playerColor}
-                  isCreator={walletAddress === whiteAddress}
-                  isFree={match.betAmountPlayerOne === 0n}
-                  wagerLabel={formatWager(match.betAmountPlayerOne)}
-                  moveTimeoutSeconds={Number(match.moveTimeoutDuration)}
-                  flagged={flagged}
-                  endDetail={endSummary?.detail ?? null}
-                  payoutDetail={payoutDetail}
-                  settlePhase={settlePhase}
-                />
+              <MatchJourney
+                isWaiting={isWaiting}
+                isActive={isActive}
+                isFinished={isFinished}
+                isDelegated={match.isDelegated}
+                payoutProcessed={match.payoutProcessed}
+                playerColor={playerColor}
+                isCreator={walletAddress === whiteAddress}
+                isFree={match.betAmountPlayerOne === 0n}
+                wagerLabel={formatWager(match.betAmountPlayerOne)}
+                moveTimeoutSeconds={Number(match.moveTimeoutDuration)}
+                flagged={flagged}
+                endDetail={endSummary?.detail ?? null}
+                payoutDetail={payoutDetail}
+                settlePhase={settlePhase}
+              />
 
-                <PredictionPanel
-                  matchId={matchId}
-                  fen={authoritativeFen}
-                  pliesPlayed={pliesPlayed(match)}
-                  isActive={isActive}
-                  isFinished={isFinished}
-                  playerColor={playerColor}
-                  liveMarket={realtime.predictionMarket}
-                  liveSettled={realtime.predictionSettled}
-                />
+              <TransactionStatus
+                status={txStatus}
+                signature={txSignature}
+                explorerHref={txExplorerHref}
+                error={txError}
+                onDismiss={resetTransaction}
+              />
 
-                <TransactionStatus
-                  status={txStatus}
-                  signature={txSignature}
-                  explorerHref={txExplorerHref}
-                  error={txError}
-                  onDismiss={resetTransaction}
-                />
+              <MoveList
+                moves={moves}
+                fen={displayFen ?? undefined}
+                currentMoveIndex={moves.length - 1}
+                result={
+                  match?.gameStatus === GameStatus.WhiteWins ? "1-0"
+                  : match?.gameStatus === GameStatus.BlackWins ? "0-1"
+                  : match?.gameStatus === GameStatus.Draw ? "1/2-1/2"
+                  : undefined
+                }
+                className="min-h-56"
+              />
+              {moveListBehind ? (
+                <p className="text-xs text-muted-foreground">
+                  The move list is catching up. The board always comes from the chain.
+                </p>
+              ) : null}
 
-                <MoveList
-                  moves={moves}
-                  fen={displayFen ?? undefined}
-                  currentMoveIndex={moves.length - 1}
-                  result={
-                    match?.gameStatus === GameStatus.WhiteWins ? "1-0"
-                    : match?.gameStatus === GameStatus.BlackWins ? "0-1"
-                    : match?.gameStatus === GameStatus.Draw ? "1/2-1/2"
-                    : undefined
-                  }
-                  className="min-h-56"
-                />
-                {moveListBehind ? (
-                  <p className="text-xs text-muted-foreground">
-                    Move list is catching up. The board always comes straight from the on-chain match.
-                  </p>
-                ) : null}
-              </aside>
-            </div>
-          )}
-        </main>
+              <PredictionPanel
+                matchId={matchId}
+                fen={authoritativeFen}
+                pliesPlayed={pliesPlayed(match)}
+                isActive={isActive}
+                isFinished={isFinished}
+                playerColor={playerColor}
+                liveMarket={realtime.predictionMarket}
+                liveSettled={realtime.predictionSettled}
+              />
+            </aside>
+          </div>
+        )}
       </div>
     </AuthGate>
   );

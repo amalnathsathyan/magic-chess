@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { ZugSymbol, ZugWordmark } from "@/components/brand/ZugLogo";
 
 const FILES = "abcdefgh";
@@ -29,7 +28,6 @@ function LeapBoard() {
       <div className="absolute inset-0 flex items-center justify-center">
         <ZugSymbol className="h-1/2 w-1/2" />
       </div>
-      <span className="label absolute bottom-3 right-4">N g1–f3 · The Leap</span>
     </div>
   );
 }
@@ -37,39 +35,26 @@ function LeapBoard() {
 export function Hero() {
   return (
     <section className="border-b border-border">
-      <div className="mx-auto grid max-w-6xl gap-12 px-4 py-16 sm:px-6 md:py-24 lg:grid-cols-2 lg:items-center">
-        <div className="flex flex-col gap-8">
-          <div className="flex items-center justify-between">
-            <span className="label">Real-time competitive chess</span>
-            <span className="stage-tag text-success">Live on devnet</span>
-          </div>
-          <h1 className="sr-only">ZUG — Every move matters.</h1>
-          <ZugWordmark className="h-auto w-full max-w-[420px] text-foreground" />
-          <p className="font-display text-3xl sm:text-4xl" aria-hidden="true">
+      <div className="mx-auto grid max-w-7xl gap-12 px-4 py-14 sm:px-6 md:py-24 lg:grid-cols-[1.1fr_1fr] lg:items-center lg:gap-20">
+        <div className="flex flex-col">
+          <h1 className="sr-only">ZUG. Every move matters.</h1>
+          <ZugWordmark className="h-auto w-full max-w-[460px] text-foreground" />
+          <p className="mt-8 font-display text-4xl sm:text-5xl" aria-hidden="true">
             Every move matters.
           </p>
-          <p className="max-w-lg text-lg leading-relaxed text-soft">
-            Fast competitive chess where every move is recorded on-chain. Play instantly with a
-            wallet or social login, gas sponsored.
+          <p className="mt-6 max-w-md text-lg leading-relaxed text-soft">
+            Put a stake on a game of chess. The winner takes the pot, and every move is
+            recorded on Solana.
           </p>
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              href="/arena"
-              className="inline-flex min-h-12 items-center gap-2 bg-primary px-6 font-heading text-sm font-bold uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            >
-              Play on ZUG
-              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          <div className="mt-10 flex flex-wrap items-center gap-3">
+            <Link href="/arena" className="btn btn-primary min-h-12 px-7 text-[15px]">
+              Play now
             </Link>
-            <Link
-              href="/arena#recent-games-heading"
-              className="inline-flex min-h-12 items-center gap-2 border border-border px-6 font-heading text-sm font-semibold uppercase tracking-wide transition-colors hover:border-border-hover hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              Replay recent games
+            <Link href="/arena#live-games-heading" className="btn btn-secondary min-h-12 px-7 text-[15px]">
+              Watch live games
             </Link>
           </div>
-          <p className="font-mono text-xs text-muted-foreground">
-            Solana devnet · test tokens only · sign in with email, Google, Discord or a wallet
-          </p>
+          <p className="mt-6 text-sm text-muted-foreground">Solana devnet. Test tokens only.</p>
         </div>
         <LeapBoard />
       </div>

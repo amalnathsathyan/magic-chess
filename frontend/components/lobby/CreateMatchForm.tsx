@@ -7,7 +7,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { PublicKey } from "@solana/web3.js";
 import { usePrivy } from "@privy-io/react-auth";
 import { useWallets } from "@privy-io/react-auth/solana";
-import { Check, ChevronDown, Clock, Coins, LoaderCircle, Plus, Sword, X } from "lucide-react";
+import { Check, ChevronDown, LoaderCircle, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useMagicChessClient } from "@magic-chess/sdk/react";
@@ -30,6 +30,8 @@ interface CreateMatchFormProps {
   onClose: () => void;
   className?: string;
 }
+
+const STAKE_PRESETS = ["0", "0.1", "0.5", "1"] as const;
 
 const TIME_CONTROLS = [
   { label: "Bullet", minutes: 1 },
@@ -174,37 +176,33 @@ export function CreateMatchForm({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm" />
         <Dialog.Content
           className={cn(
-            "glass-card fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 p-6 shadow-card focus:outline-none",
+            "panel fixed left-1/2 top-1/2 z-50 max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto overscroll-contain p-6 shadow-[0_24px_80px_rgba(0,0,0,0.6)] focus:outline-none sm:p-8",
             className
           )}
         >
-          <div className="mb-6 flex items-center justify-between">
-            <Dialog.Title className="font-heading text-lg font-bold">
-              Create on-chain match
+          <div className="mb-2 flex items-center justify-between">
+            <Dialog.Title className="font-display text-3xl">
+              New match
             </Dialog.Title>
             <Dialog.Close
-              className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
-              aria-label="Close create match dialog"
+              className="-mr-2 flex h-10 w-10 items-center justify-center text-muted-foreground transition-colors hover:bg-card-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              aria-label="Close"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </Dialog.Close>
           </div>
-          <Dialog.Description className="mb-5 text-sm text-muted-foreground">
-            The creator plays White. The match moves to MagicBlock after an
-            opponent joins.
+          <Dialog.Description className="mb-7 text-sm text-muted-foreground">
+            You play White. Whoever joins plays Black.
           </Dialog.Description>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* ── Token selector ── */}
             <div className="relative">
-              <label className="mb-2 flex items-center gap-2 text-sm font-medium">
-                <Coins className="h-4 w-4" aria-hidden="true" />
-                Betting token
-              </label>
+              <label className="label mb-2 block">Token</label>
               <button
                 type="button"
                 onClick={() => setTokenDropdownOpen((prev) => !prev)}
-                className="flex h-11 w-full items-center justify-between rounded-lg border border-border bg-card px-3 text-sm transition-colors hover:bg-card-hover focus-visible:ring-2 focus-visible:ring-primary"
+                className="flex h-11 w-full items-center justify-between border border-border bg-background px-3 text-sm transition-colors hover:border-border-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <span className={cn(isCustom && !customMint && "text-muted-foreground")}>
                   {isCustom
@@ -216,7 +214,7 @@ export function CreateMatchForm({
                 <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", tokenDropdownOpen && "rotate-180")} />
               </button>
               {tokenDropdownOpen && (
-                <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-64 overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
+                <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-64 overflow-y-auto border border-border bg-card p-1 shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
                   {balancesLoading && tokenList.length <= 1 && (
                     <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
                       <LoaderCircle className="h-3 w-3 animate-spin" />
@@ -274,10 +272,7 @@ export function CreateMatchForm({
             {/* ── Custom mint input ── */}
             {isCustom && (
               <div>
-                <label
-                  htmlFor="custom-mint"
-                  className="mb-2 flex items-center gap-2 text-sm font-medium"
-                >
+                <label htmlFor="custom-mint" className="label mb-2 block">
                   Token mint address
                 </label>
                 <input
@@ -285,21 +280,17 @@ export function CreateMatchForm({
                   type="text"
                   value={customMint}
                   onChange={(event) => setCustomMint(event.target.value)}
-                  placeholder="Enter SPL token mint address…"
+                  placeholder="SPL token mint address…"
                   autoComplete="off"
-                  className="h-11 w-full rounded-lg border border-border bg-card px-3 font-mono text-xs text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary"
+                  className="h-11 w-full border border-border bg-background px-3 font-mono text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 />
               </div>
             )}
 
             {/* ── Wager ── */}
             <div>
-              <label
-                htmlFor="wager-amount"
-                className="mb-2 flex items-center gap-2 text-sm font-medium"
-              >
-                <Coins className="h-4 w-4" aria-hidden="true" />
-                Wager ({isCustom ? "tokens" : selectedToken.symbol})
+              <label htmlFor="wager-amount" className="label mb-2 block">
+                Stake per player ({isCustom ? "tokens" : selectedToken.symbol})
               </label>
               <input
                 id="wager-amount"
@@ -308,21 +299,33 @@ export function CreateMatchForm({
                 value={wagerAmount}
                 onChange={(event) => setWagerAmount(event.target.value)}
                 autoComplete="off"
-                className="h-11 w-full rounded-lg border border-border bg-card px-3 font-mono text-sm text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+                className="h-12 w-full border border-border bg-background px-3 text-lg font-semibold tnum text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               />
-              <p className="mt-2 text-xs text-muted-foreground">
-                Use <button type="button" onClick={() => setWagerAmount("0")} className="underline hover:text-foreground">0</button> for a free match.
-                {selectedToken.mint === WRAPPED_SOL_MINT.toBase58()
-                  ? " Sponsorship covers network fees and account rent, not the wager."
-                  : ""}
-              </p>
+              <div className="mt-2 grid grid-cols-4 gap-2">
+                {STAKE_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setWagerAmount(preset)}
+                    aria-pressed={wagerAmount === preset}
+                    className={cn(
+                      "min-h-9 border text-xs font-semibold tnum transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      wagerAmount === preset
+                        ? "border-foreground text-foreground"
+                        : "border-border text-muted-foreground hover:border-border-hover hover:text-foreground"
+                    )}
+                  >
+                    {preset === "0" ? "Free" : preset}
+                  </button>
+                ))}
+              </div>
+              {selectedToken.mint === WRAPPED_SOL_MINT.toBase58() ? (
+                <p className="mt-2 text-xs text-muted-foreground">Network fees are on us.</p>
+              ) : null}
             </div>
 
             <fieldset>
-              <legend className="mb-2 flex items-center gap-2 text-sm font-medium">
-                <Clock className="h-4 w-4" aria-hidden="true" />
-                Per-move timeout
-              </legend>
+              <legend className="label mb-2">Time per move</legend>
               <div className="grid grid-cols-3 gap-2">
                 {TIME_CONTROLS.map((control) => (
                   <button
@@ -331,13 +334,14 @@ export function CreateMatchForm({
                     onClick={() => setTimeControl(control)}
                     aria-pressed={timeControl.label === control.label}
                     className={cn(
-                      "min-h-10 rounded-lg border px-3 py-2 text-xs font-mono transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+                      "flex min-h-14 flex-col items-center justify-center border px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                       timeControl.label === control.label
-                        ? "border-primary/50 bg-primary/10 text-primary"
-                        : "border-border hover:bg-card"
+                        ? "border-foreground text-foreground"
+                        : "border-border text-muted-foreground hover:border-border-hover hover:text-foreground"
                     )}
                   >
-                    {control.label} · {control.minutes}m
+                    <span className="text-sm font-semibold tnum">{control.minutes} min</span>
+                    <span className="text-xs text-muted-foreground">{control.label}</span>
                   </button>
                 ))}
               </div>
@@ -348,10 +352,12 @@ export function CreateMatchForm({
               onClick={handleSubmit}
               disabled={isSubmitting}
               aria-busy={isSubmitting}
-              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-3 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn btn-primary min-h-12 w-full"
             >
-              <Sword className="h-4 w-4" aria-hidden="true" />
-              {isSubmitting ? "Creating on Solana…" : "Review and create"}
+              {isSubmitting ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : null}
+              {isSubmitting ? "Creating…" : isFree ? "Create free match" : "Create match"}
             </button>
           </form>
         </Dialog.Content>
