@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { History, Trophy } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { FinishedGameCard } from "@/components/lobby/FinishedGameCard";
 import { api, type ApiMatch } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -57,69 +57,63 @@ export function RecentGames({ walletAddress }: { walletAddress?: string | null }
   }, [load]);
 
   return (
-    <section className="mt-10" aria-labelledby="recent-games-heading">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2
-          id="recent-games-heading"
-          className="flex items-center gap-2 label"
-        >
-          <History className="h-4 w-4" aria-hidden="true" />
+    <section className="panel" aria-labelledby="recent-games-heading">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+        <h2 id="recent-games-heading" className="section-title">
           Recent games
         </h2>
-        <div className="flex gap-1 rounded-lg border border-border p-0.5">
-          <ScopeTab active={scope === "all"} onClick={() => setScope("all")}>
-            All players
-          </ScopeTab>
-          {walletAddress ? (
-            <ScopeTab active={scope === "mine"} onClick={() => setScope("mine")}>
-              Your games
+        {walletAddress ? (
+          <div className="flex gap-1">
+            <ScopeTab active={scope === "all"} onClick={() => setScope("all")}>
+              Everyone
             </ScopeTab>
-          ) : null}
-        </div>
+            <ScopeTab active={scope === "mine"} onClick={() => setScope("mine")}>
+              Yours
+            </ScopeTab>
+          </div>
+        ) : null}
       </div>
 
       {games === null ? (
-        <div className="grid gap-3" aria-label="Loading recent games">
+        <div className="divide-y divide-border" aria-label="Loading recent games">
           {[0, 1, 2].map((key) => (
-            <div key={key} className="h-20 animate-pulse rounded-xl border border-border bg-card/60" />
+            <div key={key} className="h-[60px] animate-pulse bg-card-hover/40" />
           ))}
         </div>
       ) : games.length === 0 ? (
-        <div className="glass-card flex flex-col items-center gap-2 px-6 py-10 text-center">
-          <Trophy className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
-          <p className="text-sm font-medium">
+        <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+          <Trophy className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+          <p className="text-sm text-muted-foreground">
             {failed
               ? "Game history is catching up."
               : scope === "mine"
                 ? "You haven't finished a game yet."
                 : "No finished games yet."}
           </p>
-          <p className="max-w-sm text-xs text-muted-foreground">
-            Every game that ends shows up here for anyone to replay move by move.
-          </p>
         </div>
       ) : (
         <>
-          <div className="grid gap-3">
+          <div className="divide-y divide-border">
             {games.map((game) => (
               <FinishedGameCard key={game.matchId} match={game} viewer={walletAddress} />
             ))}
           </div>
-          {games.length < total ? (
-            <button
-              type="button"
-              onClick={() => setLimit((current) => current + PAGE_SIZE)}
-              className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-border text-sm font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              Show more games ({total - games.length} more)
-            </button>
-          ) : null}
-          <Link
-            href="/leaderboard"
-            className="mt-3 inline-flex text-xs font-medium text-primary hover:underline"
-          >
-            See the Ladder
-          </Link>
+          <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3">
+            {games.length < total ? (
+              <button
+                type="button"
+                onClick={() => setLimit((current) => current + PAGE_SIZE)}
+                className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                Show {Math.min(PAGE_SIZE, total - games.length)} more
+              </button>
+            ) : (
+              <span />
+            )}
+            <Link href="/leaderboard" className="text-sm font-medium text-primary hover:underline">
+              Ladder
+            </Link>
+          </div>
         </>
       )}
     </section>
@@ -141,8 +135,8 @@ function ScopeTab({
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        "min-h-9 rounded-md px-3 text-xs font-semibold transition-colors",
-        active ? "bg-primary/15 text-primary" : "text-muted-foreground hover:text-foreground"
+        "min-h-8 px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+        active ? "bg-card-hover text-foreground" : "text-muted-foreground hover:text-foreground"
       )}
     >
       {children}

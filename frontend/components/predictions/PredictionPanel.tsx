@@ -9,7 +9,6 @@ import {
   Lock,
   LoaderCircle,
   Search,
-  Sparkles,
   Trophy,
   Undo2,
   XCircle,
@@ -196,15 +195,8 @@ export function PredictionPanel({
   const header = (
     <div className="flex items-center justify-between gap-3">
       <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-primary" aria-hidden="true" />
-        <h2 className="font-heading text-sm font-semibold">Predict</h2>
-        <span className="stage-tag text-accent">Preview · play points</span>
-        {isActive ? (
-          <span className="inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" aria-hidden="true" />
-            LIVE
-          </span>
-        ) : null}
+        <h2 className="section-title">Predict the next move</h2>
+        <span className="stage-tag text-accent">Play points</span>
       </div>
       {balance !== null ? (
         <span
@@ -224,13 +216,12 @@ export function PredictionPanel({
       .filter((m) => m.ply > pliesPlayed)
       .reduce((sum, m) => sum + m.pool, 0);
     return (
-      <section className={cn("glass-card p-4", className)} aria-label="Move predictions">
+      <section className={cn("panel p-4", className)} aria-label="Move predictions">
         {header}
         <p className="mt-3 text-sm text-muted-foreground">
           {totalOpen > 0
-            ? `Spectators have ${totalOpen.toLocaleString()} points riding on upcoming moves (${nextPool.toLocaleString()} on the next one).`
-            : "Spectators can predict your upcoming moves with play points."}{" "}
-          Players can&apos;t predict their own game.
+            ? `Spectators have ${totalOpen.toLocaleString()} points on your next moves (${nextPool.toLocaleString()} on the next one).`
+            : "Spectators can predict your moves with play points."}
         </p>
       </section>
     );
@@ -238,13 +229,13 @@ export function PredictionPanel({
 
   if (!isActive) {
     return (
-      <section className={cn("glass-card p-4", className)} aria-label="Move predictions">
+      <section className={cn("panel p-4", className)} aria-label="Move predictions">
         {header}
         <p className="mt-3 text-sm text-muted-foreground">
           {isFinished
-            ? "This game is over. Open predictions were settled or refunded."
+            ? "Game over. Open picks were settled or refunded."
             : timedOut
-              ? "Predictions are closed: the side to move ran out of time. Open predictions settle or refund once the game ends."
+              ? "Closed: the side to move ran out of time."
               : "Predictions open as soon as both players are in."}
         </p>
         <MyPredictions bets={myBets} pliesPlayed={pliesPlayed} onCancel={cancel} busy={submitting} />
@@ -253,11 +244,10 @@ export function PredictionPanel({
   }
 
   return (
-    <section className={cn("glass-card p-4", className)} aria-label="Move predictions">
+    <section className={cn("panel p-4", className)} aria-label="Move predictions">
       {header}
       <p className="mt-1 text-xs text-muted-foreground">
-        Call the next move — or one further ahead. Predictions lock the instant the move
-        confirms on-chain. Play points only.
+        Pick a move. Picks lock when the move lands on-chain.
       </p>
 
       {error ? <p className="mt-3 text-xs text-destructive">{error}</p> : null}

@@ -7,7 +7,6 @@ import {
   AlertCircle,
   ArrowLeft,
   Check,
-  Clock3,
   Eye,
   Link2,
   LoaderCircle,
@@ -32,6 +31,7 @@ import { absoluteUrl, playHref, spectateHref } from "@/lib/match-links";
 import { formatRemaining, isSquare, matchToFen, pliesPlayed } from "@/lib/match-board";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { cn } from "@/lib/utils";
+import { fitBoardWidth } from "@/lib/board-size";
 
 const EMPTY_PUBLIC_KEY = "11111111111111111111111111111111";
 
@@ -109,7 +109,7 @@ function SpectateView() {
     return () => window.clearInterval(id);
   }, []);
   useEffect(() => {
-    const update = () => setBoardWidth(Math.min(560, Math.max(280, window.innerWidth - 32)));
+    const update = () => setBoardWidth(fitBoardWidth());
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
@@ -176,16 +176,15 @@ function SpectateView() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex min-w-0 items-center gap-3">
+    <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 md:py-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-4">
             <Link
               href="/arena"
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+              className="inline-flex min-h-10 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              Arena
+              Play
             </Link>
             <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
               <Eye className="h-4 w-4" aria-hidden="true" />
@@ -208,7 +207,7 @@ function SpectateView() {
             <button
               type="button"
               onClick={() => void share()}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+              className="btn btn-secondary btn-sm"
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
               {copied ? "Copied" : "Share"}
@@ -217,27 +216,26 @@ function SpectateView() {
               type="button"
               onClick={refreshAll}
               aria-label="Refresh"
-              className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+              className="btn btn-secondary btn-sm w-9 px-0"
             >
-              <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} aria-hidden="true" />
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} aria-hidden="true" />
             </button>
           </div>
         </div>
-      </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <div>
         {!matchId ? (
           <EmptyState message="No match selected." />
         ) : loading && !match ? (
-          <div className="grid gap-6 lg:grid-cols-[1fr_360px]" aria-label="Loading match">
-            <div className="mx-auto h-[min(560px,calc(100vw-2rem))] w-full max-w-[560px] animate-pulse rounded-xl bg-card" />
-            <div className="h-64 animate-pulse rounded-xl bg-card" />
+          <div className="grid gap-8 lg:grid-cols-[auto_360px] lg:justify-center" aria-label="Loading match">
+            <div className="mx-auto aspect-square animate-pulse bg-card" style={{ width: boardWidth }} />
+            <div className="h-64 animate-pulse bg-card" />
           </div>
         ) : !match ? (
           <EmptyState message={error?.message || "No on-chain match was found for this ID yet."} onRetry={refreshAll} />
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-            <section className="flex flex-col items-center gap-3" aria-label="Live board">
+          <div className="grid gap-8 lg:grid-cols-[auto_360px] lg:justify-center">
+            <section className="mx-auto flex flex-col gap-3" style={{ width: boardWidth }} aria-label="Live board">
               <PlayerRow
                 address={blackAddress}
                 color="Black"
@@ -256,7 +254,7 @@ function SpectateView() {
                   }
                 />
               ) : (
-                <div className="glass-card flex min-h-72 w-full max-w-[560px] items-center justify-center p-6 text-sm text-muted-foreground">
+                <div className="panel flex aspect-square w-full items-center justify-center p-6 text-sm text-muted-foreground">
                   Board data unavailable.
                 </div>
               )}
@@ -271,47 +269,41 @@ function SpectateView() {
                   href={playHref(matchId)}
                   className="text-sm font-medium text-primary hover:underline"
                 >
-                  You&apos;re playing this game — open the player view
+                  You&apos;re playing this game. Open your board
                 </Link>
               ) : null}
             </section>
 
-            <aside className="flex min-h-0 flex-col gap-4">
-              <section className="glass-card p-4" aria-labelledby="match-status-heading">
-                <div className="flex items-center justify-between gap-3">
-                  <h1 id="match-status-heading" className="truncate font-heading text-sm font-semibold">
-                    #{matchId}
-                  </h1>
-                  <span
+            <aside className="flex min-h-0 min-w-0 flex-col gap-4">
+              <section className="panel" aria-labelledby="match-status-heading">
+                <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+                  <h1
+                    id="match-status-heading"
                     className={cn(
-                      "shrink-0 px-2.5 py-1 text-xs font-medium",
-                      timedOut
-                        ? "bg-destructive/15 text-destructive"
-                        : isActive
-                          ? "bg-primary/15 text-primary"
-                          : "bg-muted text-muted-foreground"
+                      "section-title",
+                      timedOut ? "text-destructive" : isActive ? "text-foreground" : "text-muted-foreground"
                     )}
                   >
                     {timedOut ? "Out of time" : STATUS_LABEL[match.gameStatus] ?? match.gameStatus}
+                  </h1>
+                  <span className="truncate font-mono text-xs text-muted-foreground" title={matchId}>
+                    {matchId}
                   </span>
                 </div>
-                <dl className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="rounded-md bg-card/60 p-2">
-                    <dt className="text-muted-foreground">Moves</dt>
-                    <dd className="font-mono text-sm font-semibold tabular-nums">{pliesPlayed(match)}</dd>
+                <dl className="grid grid-cols-3 divide-x divide-border">
+                  <div className="px-4 py-3">
+                    <dt className="label">Moves</dt>
+                    <dd className="mt-1 text-lg font-semibold tnum">{pliesPlayed(match)}</dd>
                   </div>
-                  <div className="rounded-md bg-card/60 p-2">
-                    <dt className="text-muted-foreground">To move</dt>
-                    <dd className="text-sm font-semibold capitalize">{isActive ? match.currentTurn : "—"}</dd>
+                  <div className="px-4 py-3">
+                    <dt className="label">To move</dt>
+                    <dd className="mt-1 text-lg font-semibold capitalize">{isActive ? match.currentTurn : "—"}</dd>
                   </div>
-                  <div className="rounded-md bg-card/60 p-2">
-                    <dt className="inline-flex items-center gap-1 text-muted-foreground">
-                      <Clock3 className="h-3 w-3" aria-hidden="true" />
-                      Clock
-                    </dt>
+                  <div className="px-4 py-3">
+                    <dt className="label">Clock</dt>
                     <dd
                       className={cn(
-                        "font-mono text-sm font-semibold tabular-nums",
+                        "mt-1 text-lg font-semibold tnum",
                         timedOut
                           ? "text-destructive"
                           : remaining?.isLow && "animate-pulse text-primary"
@@ -322,7 +314,7 @@ function SpectateView() {
                   </div>
                 </dl>
                 {timedOut ? (
-                  <p className="mt-3 border border-border px-3 py-2 text-xs text-muted-foreground">
+                  <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
                     {viewerColor === claimant.toLowerCase() ? (
                       <>
                         {outOfTime} ran out of time, so you won.{" "}
@@ -339,7 +331,7 @@ function SpectateView() {
                   </p>
                 ) : null}
                 {match.gameEndReason ? (
-                  <p className="mt-3 text-sm">
+                  <p className="border-t border-border px-4 py-3 text-sm">
                     Result: <strong>{formatReason(match.gameEndReason)}</strong>
                   </p>
                 ) : null}
@@ -369,25 +361,23 @@ function SpectateView() {
             </aside>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }
 
 function EmptyState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="glass-card mx-auto flex max-w-xl flex-col items-start gap-4 p-6">
-      <div className="flex items-center gap-2 text-destructive">
-        <AlertCircle className="h-5 w-5" aria-hidden="true" />
-        <h1 className="font-heading text-lg font-semibold">Match unavailable</h1>
-      </div>
+    <div className="mx-auto flex max-w-md flex-col items-start gap-4 py-16">
+      <AlertCircle className="h-6 w-6 text-destructive" aria-hidden="true" />
+      <h1 className="font-display text-3xl">Match unavailable</h1>
       <p className="text-sm text-muted-foreground">{message}</p>
       <div className="flex gap-2">
         {onRetry ? (
           <button
             type="button"
             onClick={onRetry}
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-medium hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
+            className="btn btn-secondary"
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             Try again
@@ -395,7 +385,7 @@ function EmptyState({ message, onRetry }: { message: string; onRetry?: () => voi
         ) : null}
         <Link
           href="/arena"
-          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary"
+          className="btn btn-primary"
         >
           Browse live games
         </Link>

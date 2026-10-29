@@ -7,12 +7,9 @@ import {
   AlertCircle,
   ArrowLeft,
   Check,
-  Clock3,
-  Coins,
   Link2,
   RefreshCw,
   Share2,
-  Trophy,
 } from "lucide-react";
 import { ChessBoard } from "@/components/chess/ChessBoard";
 import { MoveList } from "@/components/chess/MoveList";
@@ -37,6 +34,7 @@ import { compactAmount, drawMatchCard, renderCard, type MatchCardSide } from "@/
 import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
 
 import { cn } from "@/lib/utils";
+import { fitBoardWidth } from "@/lib/board-size";
 
 export default function ReviewPage() {
   return (
@@ -80,7 +78,7 @@ function ReviewView() {
   }, [load]);
 
   useEffect(() => {
-    const update = () => setBoardWidth(Math.min(560, Math.max(280, window.innerWidth - 32)));
+    const update = () => setBoardWidth(fitBoardWidth());
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
@@ -158,42 +156,40 @@ function ReviewView() {
   });
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
+    <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 md:py-6">
+        <div className="mb-4 flex items-center justify-between gap-3">
           <Link
             href="/arena"
-            className="inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+            className="inline-flex min-h-10 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            Arena
+            Play
           </Link>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => void share()}
-              className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-border px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
+              className="btn btn-secondary btn-sm"
             >
               {copied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
               {copied ? "Copied" : "Share position"}
             </button>
           </div>
         </div>
-      </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-6">
+      <div>
         {!matchId ? (
           <ReviewEmpty message="No game selected." />
         ) : loading && !history ? (
-          <div className="grid gap-6 lg:grid-cols-[1fr_360px]" aria-label="Loading game">
-            <div className="mx-auto h-[min(560px,calc(100vw-2rem))] w-full max-w-[560px] animate-pulse rounded-xl bg-card" />
-            <div className="h-72 animate-pulse rounded-xl bg-card" />
+          <div className="grid gap-8 lg:grid-cols-[auto_360px] lg:justify-center" aria-label="Loading game">
+            <div className="mx-auto aspect-square animate-pulse bg-card" style={{ width: boardWidth }} />
+            <div className="h-72 animate-pulse bg-card" />
           </div>
         ) : !history ? (
           <ReviewEmpty message={error ?? "This game isn't available."} onRetry={load} />
         ) : (
-          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
-            <section className="flex flex-col items-center gap-3" aria-label="Game replay">
+          <div className="grid gap-8 lg:grid-cols-[auto_360px] lg:justify-center">
+            <section className="mx-auto flex flex-col gap-3" style={{ width: boardWidth }} aria-label="Game replay">
               <ReviewPlayer color={topColor} {...side(topColor)} />
               <ChessBoard
                 fen={boardFen}
@@ -209,43 +205,43 @@ function ReviewView() {
               />
             </section>
 
-            <aside className="flex min-h-0 flex-col gap-4">
-              <section className="glass-card p-4" aria-labelledby="game-result-heading">
+            <aside className="flex min-h-0 min-w-0 flex-col gap-4">
+              <section className="panel p-4" aria-labelledby="game-result-heading">
                 <div className="flex items-center justify-between gap-3">
-                  <h1 id="game-result-heading" className="flex items-center gap-2 font-heading text-base font-semibold">
-                    <Trophy className="h-4 w-4 text-primary" aria-hidden="true" />
+                  <h1 id="game-result-heading" className="font-display text-2xl">
                     {resultHeadline(status)}
                   </h1>
-                  <span className="shrink-0 bg-primary/15 px-2.5 py-1 font-mono text-xs font-semibold text-primary">
+                  <span className="shrink-0 bg-primary/15 px-2.5 py-1 text-xs font-semibold tnum text-primary">
                     {resultScore(status) ?? "—"}
                   </span>
                 </div>
                 {reason ? (
                   <p className="mt-1 text-sm text-muted-foreground">by {reason.toLowerCase()}</p>
                 ) : null}
-                <dl className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="rounded-md bg-card/60 p-2">
-                    <dt className="text-muted-foreground">Moves</dt>
-                    <dd className="font-mono text-sm font-semibold tabular-nums">
+                <dl className="-mx-4 mt-4 grid grid-cols-3 divide-x divide-border border-y border-border">
+                  <div className="px-4 py-3">
+                    <dt className="label">Moves</dt>
+                    <dd className="mt-1 text-lg font-semibold tnum">
                       {moveCount}
                     </dd>
                   </div>
-                  <div className="rounded-md bg-card/60 p-2">
-                    <dt className="inline-flex items-center gap-1 text-muted-foreground">
-                      <Clock3 className="h-3 w-3" aria-hidden="true" />
-                      Length
-                    </dt>
-                    <dd className="font-mono text-sm font-semibold tabular-nums">{duration ?? "—"}</dd>
+                  <div className="px-4 py-3">
+                    <dt className="label">Length</dt>
+                    <dd className="mt-1 text-lg font-semibold tnum">{duration ?? "—"}</dd>
                   </div>
-                  <div className="rounded-md bg-card/60 p-2">
-                    <dt className="inline-flex items-center gap-1 text-muted-foreground">
-                      <Coins className="h-3 w-3" aria-hidden="true" />
-                      Wager
-                    </dt>
-                    <dd className="font-mono text-sm font-semibold tabular-nums">
-                      {wager > 0n
-                        ? `${formatTokenAmount(wager)} ${solanaConfig.wagerSymbol}`
-                        : "Free"}
+                  <div className="px-4 py-3">
+                    <dt className="label">Stake</dt>
+                    <dd className="mt-1 text-lg font-semibold tnum">
+                      {wager > 0n ? (
+                        <>
+                          {formatTokenAmount(wager)}
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">
+                            {solanaConfig.wagerSymbol}
+                          </span>
+                        </>
+                      ) : (
+                        "Free"
+                      )}
                     </dd>
                   </div>
                 </dl>
@@ -257,13 +253,13 @@ function ReviewView() {
                   </p>
                 ) : null}
                 <p className="mt-3 text-xs text-muted-foreground">
-                  Played {timeAgo(history.endedAt ?? history.createdAt)} · #{matchId}
+                  Played {timeAgo(history.endedAt ?? history.createdAt)}
                 </p>
                 {finished ? (
                   <button
                     type="button"
                     onClick={() => setSharingCard(true)}
-                    className="mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 bg-primary px-4 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary"
+                    className="btn btn-primary mt-4 w-full"
                   >
                     <Share2 className="h-4 w-4" aria-hidden="true" />
                     Share result card
@@ -272,9 +268,9 @@ function ReviewView() {
                 {!finished ? (
                   <Link
                     href={status === "Active" ? spectateHref(matchId) : playHref(matchId)}
-                    className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg border border-primary/40 px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary"
+                    className="btn btn-secondary mt-4 w-full"
                   >
-                    This game is still going — open it live
+                    Still in play. Watch it live
                   </Link>
                 ) : null}
               </section>
@@ -292,7 +288,7 @@ function ReviewView() {
                 <button
                   type="button"
                   onClick={() => void load()}
-                  className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-border px-4 text-sm font-medium hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
+                  className="btn btn-secondary"
                 >
                   <RefreshCw className="h-4 w-4" aria-hidden="true" />
                   Reload game
@@ -301,7 +297,7 @@ function ReviewView() {
             </aside>
           </div>
         )}
-      </main>
+      </div>
 
       {history && finished ? (
         <ShareCardDialog
@@ -318,7 +314,7 @@ function ReviewView() {
               <div className="flex items-center justify-between gap-4 border border-border px-4 py-3">
                 <div>
                   <p id="show-wager-label" className="text-sm font-medium">
-                    Show wager
+                    Show stake
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Stake {stakeLabel} each, {potLabel} pot.
@@ -385,7 +381,7 @@ function ReviewPlayer({
 }) {
   const delta = formatRatingChange(meta?.ratingChange);
   return (
-    <div className="flex min-h-12 w-full max-w-[560px] items-center justify-between gap-3 rounded-lg border border-border bg-card/40 px-3 py-2">
+    <div className="flex min-h-12 w-full items-center justify-between gap-3">
       <div className="flex min-w-0 items-center gap-3">
         {address ? <PlayerAvatar wallet={address} avatar={meta?.avatar} /> : null}
         <div className="min-w-0">
@@ -403,7 +399,7 @@ function ReviewPlayer({
         </div>
       </div>
       {meta?.rating != null ? (
-        <span className="shrink-0 font-mono text-sm tabular-nums">
+        <span className="shrink-0 text-sm tnum">
           {meta.rating}
           {delta ? (
             <span
@@ -425,18 +421,16 @@ function ReviewPlayer({
 
 function ReviewEmpty({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
-    <div className="glass-card mx-auto flex max-w-xl flex-col items-start gap-4 p-6">
-      <div className="flex items-center gap-2 text-destructive">
-        <AlertCircle className="h-5 w-5" aria-hidden="true" />
-        <h1 className="font-heading text-lg font-semibold">Game unavailable</h1>
-      </div>
+    <div className="mx-auto flex max-w-md flex-col items-start gap-4 py-16">
+      <AlertCircle className="h-6 w-6 text-destructive" aria-hidden="true" />
+      <h1 className="font-display text-3xl">Game unavailable</h1>
       <p className="text-sm text-muted-foreground">{message}</p>
       <div className="flex gap-2">
         {onRetry ? (
           <button
             type="button"
             onClick={onRetry}
-            className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-medium hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
+            className="btn btn-secondary"
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             Try again
@@ -444,9 +438,9 @@ function ReviewEmpty({ message, onRetry }: { message: string; onRetry?: () => vo
         ) : null}
         <Link
           href="/arena"
-          className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground focus-visible:ring-2 focus-visible:ring-primary"
+          className="btn btn-primary"
         >
-          Back to the arena
+          Back to Play
         </Link>
       </div>
     </div>

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
-import { Trophy, Medal, Sparkles } from "lucide-react";
+import { Trophy } from "lucide-react";
 import Link from "next/link";
 import { api, type ApiLeaderboardEntry } from "@/lib/api";
 import { PlayerAvatar } from "@/components/shared/PlayerAvatar";
@@ -34,32 +33,32 @@ export default function LeaderboardPage() {
       .finally(() => setLoading(false));
   }, [sortBy]);
 
-  const rankIcon = (rank: number) => {
-    if (rank === 1) return <Trophy className="h-5 w-5 text-accent" />;
-    if (rank === 2) return <Medal className="h-5 w-5 text-gray-300" />;
-    if (rank === 3) return <Medal className="h-5 w-5 text-accent" />;
-    return <span className="text-sm text-muted-foreground w-5 text-center">{rank}</span>;
-  };
+  const rankIcon = (rank: number) => (
+    <span
+      className={`inline-block w-6 text-sm tnum ${
+        rank <= 3 ? "font-bold text-primary" : "text-muted-foreground"
+      }`}
+    >
+      {rank}
+    </span>
+  );
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="font-display text-4xl sm:text-5xl">Ladder</h1>
-        <p className="mt-1 text-muted-foreground">
-          Rating measures strength: everyone starts at 1200. XP rewards playing: every finished game earns it.
-        </p>
-      </motion.div>
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 md:py-12">
+      <h1 className="font-display text-5xl sm:text-6xl">Ladder</h1>
+      <p className="mt-3 text-muted-foreground">Everyone starts at 1200. Every finished game earns XP.</p>
 
       {/* Sort controls */}
-      <div className="mt-6 flex flex-wrap gap-2">
+      <div className="mt-8 flex flex-wrap gap-1" role="group" aria-label="Sort by">
         {(["rating", "xp", "wins", "winRate", "totalGames"] as const).map((s) => (
           <button
             key={s}
             onClick={() => setSortBy(s)}
-            className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+            aria-pressed={sortBy === s}
+            className={`min-h-9 border px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
               sortBy === s
-                ? "border-primary/50 bg-primary/10 text-primary"
-                : "border-border text-muted-foreground hover:border-border-hover"
+                ? "border-foreground text-foreground"
+                : "border-border text-muted-foreground hover:border-border-hover hover:text-foreground"
             }`}
           >
             {s === "rating"
@@ -67,24 +66,24 @@ export default function LeaderboardPage() {
               : s === "xp"
                 ? "XP"
                 : s === "wins"
-                ? "Most Wins"
+                ? "Wins"
                 : s === "winRate"
-                  ? "Win Rate"
-                  : "Most Games"}
+                  ? "Win rate"
+                  : "Games"}
           </button>
         ))}
       </div>
 
       {/* Leaderboard table */}
-      <div className="mt-4 glass-card overflow-hidden">
+      <div className="panel mt-4 overflow-x-auto">
         {loading ? (
-          <div className="flex justify-center py-12 text-muted-foreground">Loading...</div>
+          <div className="flex justify-center py-12 text-muted-foreground">Loading…</div>
         ) : error ? (
           <div className="flex justify-center py-12 text-destructive">{error}</div>
         ) : entries.length === 0 ? (
           <div className="flex flex-col items-center py-12 text-muted-foreground">
-            <Trophy className="mb-3 h-10 w-10" />
-            <p>No players yet. Play a match to appear here.</p>
+            <Trophy className="mb-3 h-6 w-6" aria-hidden="true" />
+            <p className="text-sm">No players yet. Finish a game to appear here.</p>
           </div>
         ) : (
           <table className="w-full">
@@ -98,14 +97,14 @@ export default function LeaderboardPage() {
                 <th className="py-3 px-2 text-right">Wins</th>
                 <th className="hidden py-3 px-2 text-right sm:table-cell">Losses</th>
                 <th className="hidden py-3 px-2 text-right sm:table-cell">Draws</th>
-                <th className="hidden py-3 pr-4 pl-2 text-right sm:table-cell">Win Rate</th>
+                <th className="hidden py-3 pr-4 pl-2 text-right sm:table-cell">Win rate</th>
               </tr>
             </thead>
             <tbody>
               {entries.map((entry) => (
                 <tr
                   key={entry.playerPubkey}
-                  className="border-b border-border/50 hover:bg-card/50 transition-colors"
+                  className="border-b border-border last:border-0 transition-colors hover:bg-card-hover"
                 >
                   <td className="py-3 pl-4 pr-2">{rankIcon(entry.rank)}</td>
                   <td className="py-3 px-2">
@@ -119,10 +118,10 @@ export default function LeaderboardPage() {
                       </span>
                     </Link>
                   </td>
-                  <td className="py-3 px-2 text-right font-mono text-sm font-semibold tabular-nums">
+                  <td className="py-3 px-2 text-right text-sm font-semibold tnum">
                     {entry.rating ?? "—"}
                   </td>
-                  <td className="py-3 px-2 text-right font-mono text-xs tabular-nums text-muted-foreground">
+                  <td className="py-3 px-2 text-right text-xs tnum text-muted-foreground">
                     {entry.level ? (
                       <span title={`${entry.xp ?? 0} XP`}>
                         {entry.level} <span className="hidden sm:inline">{entry.tier}</span>
@@ -145,20 +144,17 @@ export default function LeaderboardPage() {
         )}
       </div>
 
-      <section className="mt-10" aria-labelledby="predictors-heading">
-        <h2 id="predictors-heading" className="flex items-center gap-2 font-heading text-xl font-bold">
-          <Sparkles className="h-5 w-5 text-accent" aria-hidden="true" />
+      <section className="mt-14" aria-labelledby="predictors-heading">
+        <h2 id="predictors-heading" className="font-display text-3xl">
           Top predictors
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Spectators who best call moves in live games. Play points only.
-        </p>
-        <div className="mt-4 glass-card overflow-hidden">
+        <p className="mt-2 text-sm text-muted-foreground">Play points from calling moves in live games.</p>
+        <div className="panel mt-4 overflow-x-auto">
           {predictors === null ? (
-            <div className="flex justify-center py-8 text-sm text-muted-foreground">Loading...</div>
+            <div className="flex justify-center py-8 text-sm text-muted-foreground">Loading…</div>
           ) : predictors.length === 0 ? (
             <div className="flex justify-center py-8 text-sm text-muted-foreground">
-              No predictions settled yet. Watch a live game and call the next move.
+              No predictions settled yet.
             </div>
           ) : (
             <table className="w-full">
@@ -173,14 +169,14 @@ export default function LeaderboardPage() {
               </thead>
               <tbody>
                 {predictors.map((entry) => (
-                  <tr key={entry.wallet} className="border-b border-border/50 hover:bg-card/50 transition-colors">
+                  <tr key={entry.wallet} className="border-b border-border last:border-0 transition-colors hover:bg-card-hover">
                     <td className="py-3 pl-4 pr-2">{rankIcon(entry.rank)}</td>
                     <td className="py-3 px-2 font-mono text-xs">
                       {entry.wallet.slice(0, 4)}...{entry.wallet.slice(-4)}
                     </td>
                     <td className="py-3 px-2 text-right text-sm text-success">{entry.betsWon}</td>
                     <td className="py-3 px-2 text-right text-sm text-muted-foreground">{entry.betsLost}</td>
-                    <td className="py-3 pr-4 pl-2 text-right font-mono text-sm font-medium">
+                    <td className="py-3 pr-4 pl-2 text-right text-sm font-medium tnum">
                       {entry.balance.toLocaleString()}
                     </td>
                   </tr>

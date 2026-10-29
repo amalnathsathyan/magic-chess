@@ -57,7 +57,7 @@ export function getPlatformFeeWallet(): PublicKey {
 export function parseTokenAmount(value: string, decimals: number): bigint {
   const normalized = value.trim();
   if (!/^\d+(\.\d+)?$/.test(normalized)) {
-    throw new Error("Enter a valid wager amount.");
+    throw new Error("Enter a valid stake.");
   }
 
   const [whole, fraction = ""] = normalized.split(".");

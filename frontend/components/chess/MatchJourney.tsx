@@ -77,21 +77,21 @@ export function MatchJourney(props: MatchJourneyProps) {
       title: "Match created",
       state: "done",
       body: isFree
-        ? "Free game: no wager, nothing to pay out."
-        : `${wagerLabel} from White is locked in an on-chain escrow.`,
+        ? "Free game: nothing to pay out."
+        : `White's ${wagerLabel} stake is locked in escrow on Solana.`,
     },
     {
       title: "Opponent joins",
       state: isWaiting ? "current" : "done",
       body: isWaiting
         ? isCreator
-          ? "Share the invite link. Until someone joins you can cancel and get your wager back."
+          ? "Share the invite link. Until someone joins you can cancel for a refund."
           : isFree
             ? "Join to start the game."
-            : `Joining locks your ${wagerLabel} in the same escrow and starts the game.`
+            : `Joining locks your ${wagerLabel} stake in the same escrow and starts the game.`
         : isFree
-          ? "Both players are in. The game moved to MagicBlock for instant, fee-free moves."
-          : "Both wagers are in escrow. The game moved to MagicBlock for instant, fee-free moves.",
+          ? "Both players are in."
+          : "Both stakes are in escrow.",
     },
     {
       title: "Play",
@@ -101,7 +101,7 @@ export function MatchJourney(props: MatchJourneyProps) {
         : flagged
           ? "A clock ran out. The other player can now claim the win."
           : moveTimeoutSeconds > 0
-            ? `Every move is recorded on-chain. Each side has ${formatSeconds(moveTimeoutSeconds)} per move; run out and the other player can claim the win.`
+            ? `${formatSeconds(moveTimeoutSeconds)} per move. Run out and the other player can claim the win.`
             : "Every move is recorded on-chain.",
     },
     {
@@ -109,12 +109,12 @@ export function MatchJourney(props: MatchJourneyProps) {
       state: !isFinished ? "todo" : needsCommit ? "current" : "done",
       busy: settlePhase === "committing",
       body: !isFinished
-        ? "When the game ends, the final board moves from MagicBlock back to Solana."
+        ? "The final board moves back to Solana."
         : settlePhase === "committing"
           ? "Saving the final board to Solana…"
           : needsCommit
             ? isPlayer
-              ? "Nothing is paid until the result is on Solana. Press Finalize below; either player can."
+              ? "Press Finalize to pay out. Either player can."
               : "Waiting for a player to finalize the game."
             : "The final board is saved on Solana.",
     },
@@ -129,57 +129,83 @@ export function MatchJourney(props: MatchJourneyProps) {
         : settlePhase === "paying"
           ? "Sending the payout…"
           : needsPayout && isPlayer
-            ? `${payoutDetail ?? "Closes the match."} Press Settle payout below; either player can.`
+            ? `${payoutDetail ?? "Closes the match."} Either player can settle.`
             : needsPayout
               ? "Waiting for a player to settle the payout."
               : payoutDetail ?? "The escrow pays out once the result is on Solana.",
     },
   ];
 
+  const currentIndex = Math.max(
+    0,
+    steps.findIndex((step) => step.state === "current")
+  );
+  const allDone = steps.every((step) => step.state === "done");
+  const current = allDone ? steps[steps.length - 1] : steps[currentIndex];
+
   return (
-    <section className={cn("glass-card p-4", className)} aria-labelledby="journey-heading">
-      <h2 id="journey-heading" className="font-heading text-sm font-semibold">
-        What&apos;s happening
-      </h2>
-      <ol className="mt-3 space-y-3">
-        {steps.map((step, index) => (
-          <li key={step.title} className="flex gap-3" aria-current={step.state === "current" ? "step" : undefined}>
-            <span
-              className={cn(
-                "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold",
-                step.state === "done" && "border-primary bg-primary text-primary-foreground",
-                step.state === "current" && "border-primary text-primary",
-                step.state === "todo" && "border-border text-muted-foreground"
-              )}
-              aria-hidden="true"
-            >
-              {step.busy ? (
-                <LoaderCircle className="h-3 w-3 animate-spin" />
-              ) : step.state === "done" ? (
-                <Check className="h-3 w-3" />
-              ) : (
-                index + 1
-              )}
+    <section className={cn("panel p-4", className)} aria-labelledby="journey-heading">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 id="journey-heading" className="section-title flex items-center gap-2">
+          {current.busy ? (
+            <LoaderCircle className="h-3.5 w-3.5 animate-spin text-primary" aria-hidden="true" />
+          ) : null}
+          {current.title}
+        </h2>
+        <span className="text-xs text-muted-foreground tnum">
+          {allDone ? "Done" : `Step ${currentIndex + 1} of ${steps.length}`}
+        </span>
+      </div>
+      <ol className="mt-3 grid grid-cols-5 gap-1" aria-label="Match progress">
+        {steps.map((step) => (
+          <li
+            key={step.title}
+            aria-current={step.state === "current" ? "step" : undefined}
+            className={cn(
+              "h-1",
+              step.state === "done" && "bg-primary",
+              step.state === "current" && "bg-primary/45",
+              step.state === "todo" && "bg-border"
+            )}
+          >
+            <span className="sr-only">
+              {step.title}
+              {step.state === "done" ? " (done)" : step.state === "current" ? " (now)" : ""}
             </span>
-            <div className="min-w-0">
-              <p
-                className={cn(
-                  "text-sm font-medium",
-                  step.state === "todo" ? "text-muted-foreground" : "text-foreground"
-                )}
-              >
-                {step.title}
-                <span className="sr-only">
-                  {step.state === "done" ? " (done)" : step.state === "current" ? " (now)" : ""}
-                </span>
-              </p>
-              {step.state !== "todo" || index === steps.findIndex((s) => s.state === "todo") ? (
-                <p className="mt-0.5 text-xs text-muted-foreground">{step.body}</p>
-              ) : null}
-            </div>
           </li>
         ))}
       </ol>
+      <p className="mt-3 text-sm text-muted-foreground">{current.body}</p>
+
+      <details className="group mt-3">
+        <summary className="cursor-pointer list-none text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary [&::-webkit-details-marker]:hidden">
+          <span className="group-open:hidden">How this match works</span>
+          <span className="hidden group-open:inline">Hide steps</span>
+        </summary>
+        <ol className="mt-3 space-y-3 border-t border-border pt-3">
+          {steps.map((step, index) => (
+            <li key={step.title} className="flex gap-3">
+              <span
+                className={cn(
+                  "mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center text-[10px] font-semibold",
+                  step.state === "done" && "bg-primary text-primary-foreground",
+                  step.state === "current" && "border border-primary text-primary",
+                  step.state === "todo" && "border border-border text-muted-foreground"
+                )}
+                aria-hidden="true"
+              >
+                {step.state === "done" ? <Check className="h-3 w-3" /> : index + 1}
+              </span>
+              <div className="min-w-0">
+                <p className={cn("text-sm font-medium", step.state === "todo" && "text-muted-foreground")}>
+                  {step.title}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">{step.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      </details>
     </section>
   );
 }

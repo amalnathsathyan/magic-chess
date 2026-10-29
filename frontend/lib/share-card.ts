@@ -273,7 +273,7 @@ export function drawPnlCard(ctx: Ctx, card: PnlCard) {
   );
 
   cells(ctx, 440, PAD, 620, [
-    { label: "Wagered", value: `${card.wagered}` },
+    { label: "Staked", value: `${card.wagered}` },
     { label: "Returned", value: `${card.returned}`, color: INK.success },
     { label: "W · L · D", value: card.record },
   ]);

@@ -61,7 +61,7 @@ export function RatingChart({
         />
         <circle cx={x(points.length - 1)} cy={y(last.rating)} r={3.5} fill={stroke} />
       </svg>
-      <figcaption className="mt-1 flex justify-between font-mono text-[11px] text-muted-foreground">
+      <figcaption className="mt-1 flex justify-between text-xs tnum text-muted-foreground">
         <span>{min}</span>
         <span>last {points.length} rated games</span>
         <span>{max}</span>

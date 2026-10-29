@@ -13,7 +13,7 @@ interface BoardControlsProps {
 }
 
 const controlClass =
-  "inline-flex min-h-10 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors duration-100 active:translate-y-px focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transform-none disabled:cursor-not-allowed disabled:opacity-40";
+  "inline-flex min-h-10 items-center justify-center gap-1.5 border border-border px-3 text-xs font-medium transition-colors duration-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-40";
 
 export function BoardControls({
   onFlipBoard,
@@ -32,18 +32,18 @@ export function BoardControls({
 
   return (
     <div
-      className={cn("glass-card flex min-h-12 items-center justify-center gap-1 p-1.5", className)}
+      className={cn("flex min-h-10 flex-wrap items-center justify-end gap-2", className)}
       onKeyDown={(event) => {
         if (event.key === "Escape") setConfirmingResign(false);
       }}
     >
       {confirmingResign ? (
         <>
-          <span className="px-2 text-xs text-muted-foreground">Resign this game?</span>
+          <span className="mr-auto px-1 text-sm text-muted-foreground">Resign this game?</span>
           <button
             type="button"
             onClick={() => setConfirmingResign(false)}
-            className={cn(controlClass, "text-muted-foreground hover:bg-card hover:text-foreground")}
+            className={cn(controlClass, "text-muted-foreground hover:border-border-hover hover:text-foreground")}
           >
             <X className="h-4 w-4" aria-hidden="true" />
             Cancel
@@ -65,7 +65,7 @@ export function BoardControls({
           <button
             type="button"
             onClick={onFlipBoard}
-            className={cn(controlClass, "text-muted-foreground hover:bg-card hover:text-foreground")}
+            className={cn(controlClass, "text-muted-foreground hover:border-border-hover hover:text-foreground")}
             aria-label="Flip board"
           >
             <FlipVertical className="h-4 w-4" aria-hidden="true" />
@@ -75,19 +75,17 @@ export function BoardControls({
           <button
             onClick={() => setConfirmingResign(true)}
             disabled={!canResign}
-            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
+            className={cn(controlClass, "text-muted-foreground hover:border-destructive/50 hover:text-destructive")}
             title="Resign"
           >
             <Flag className="h-4 w-4" />
             <span className="hidden sm:inline">Resign</span>
           </button>
 
-          <span className="h-5 w-px bg-border" aria-hidden="true" />
-
           <button
             type="button"
             onClick={toggleMute}
-            className={cn(controlClass, "min-w-10 text-muted-foreground hover:bg-card hover:text-foreground")}
+            className={cn(controlClass, "min-w-10 text-muted-foreground hover:border-border-hover hover:text-foreground")}
             aria-label={isMuted ? "Turn move sounds on" : "Mute move sounds"}
             aria-pressed={isMuted}
           >

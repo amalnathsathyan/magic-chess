@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion } from "framer-motion";
 import { AlertCircle, History, Plus, RefreshCw, Search, Swords, Activity } from "lucide-react";
 import { PublicKey } from "@solana/web3.js";
 import { useWallets } from "@privy-io/react-auth/solana";
@@ -101,9 +100,9 @@ function useMyMatches(walletAddress: string | null, chainMatches: MatchInfo[]) {
 function gameStatusToResult(status: GameStatus): string | undefined {
   switch (status) {
     case GameStatus.WhiteWins:
-      return "White Wins";
+      return "White won";
     case GameStatus.BlackWins:
-      return "Black Wins";
+      return "Black won";
     case GameStatus.Draw:
       return "Draw";
     case GameStatus.Aborted:
@@ -188,294 +187,220 @@ export default function ArenaPage() {
       });
   }, [matches, search, walletAddress]);
 
+  const yourLive = playerMatches.filter((m) => m.gameStatus === GameStatus.Active);
+  const yourPast = playerMatches.filter(
+    (m) => m.gameStatus !== GameStatus.WaitingForOpponent && m.gameStatus !== GameStatus.Active
+  );
+  const yourTab = activeTab ?? (yourLive.length > 0 ? "live" : "past");
+  const yourList = yourTab === "live" ? yourLive : yourPast;
+
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"
-      >
-        <div>
-          <div className="flex items-baseline gap-3">
-            <h1 className="font-display text-4xl sm:text-5xl">Lobby</h1>
-          </div>
-          <p className="mt-1 text-muted-foreground">
-            Join an open match or create your own. Every move goes on the record.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 md:py-12">
+      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <h1 className="font-display text-5xl sm:text-6xl">Play</h1>
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            aria-label="Refresh match list"
-            className="relative inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm font-medium transition-colors hover:bg-card focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50"
+            aria-label="Refresh matches"
+            title="Refresh"
+            className="btn btn-secondary w-11 px-0"
           >
             <RefreshCw
-              className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
+              className={`h-4 w-4 ${isRefreshing || loading ? "animate-spin" : ""}`}
               aria-hidden="true"
             />
-            <span className="hidden sm:inline">Refresh</span>
-            {/* Pulsing dot indicator while fetching */}
-            {(loading || isRefreshing) && (
-              <span className="absolute -right-1 -top-1 flex h-3 w-3">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                <span className="relative inline-flex h-3 w-3 rounded-full bg-primary" />
-              </span>
-            )}
           </button>
-          <button
-            onClick={() => setShowCreate(true)}
-            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-          >
+          <button type="button" onClick={() => setShowCreate(true)} className="btn btn-primary">
             <Plus className="h-4 w-4" aria-hidden="true" />
-            Create match
+            New match
           </button>
-        </div>
-      </motion.div>
-
-      <TimeoutClaims walletAddress={walletAddress} />
-
-      <section className="mb-8" aria-labelledby="live-games-heading">
-        <h2
-          id="live-games-heading"
-          className="mb-3 flex items-center gap-2 label"
-        >
-          <span className="h-2 w-2 animate-pulse rounded-full bg-primary" aria-hidden="true" />
-          Live now · watch &amp; predict
-        </h2>
-        <LiveGames excludePlayer={walletAddress} />
-      </section>
-
-      <h2 className="mb-3 label">
-        Open matches
-      </h2>
-
-      <div className="mb-6">
-        <label htmlFor="match-search" className="sr-only">
-          Search open matches
-        </label>
-        <div className="relative max-w-sm">
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            aria-hidden="true"
-          />
-          <input
-            id="match-search"
-            type="search"
-            placeholder="Search by match or player"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="h-11 w-full rounded-lg border border-border bg-card pl-10 pr-3 font-mono text-sm text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary"
-          />
         </div>
       </div>
+
+      <TimeoutClaims walletAddress={walletAddress} />
 
       <CreateMatchForm
         isOpen={showCreate}
         onClose={() => setShowCreate(false)}
       />
 
-      {loading && matchCards.length === 0 ? (
-        <div className="grid gap-4" aria-label="Loading open matches">
-          {[0, 1, 2].map((index) => (
-            <div
-              key={index}
-              className="h-40 animate-pulse rounded-xl border border-border bg-card/60"
-            />
-          ))}
-        </div>
-      ) : error ? (
-        <div className="glass-card flex flex-col items-center py-16 text-center">
-          <AlertCircle className="mb-3 h-10 w-10 text-destructive" aria-hidden="true" />
-          <h2 className="font-heading text-lg font-semibold">
-            Couldn&apos;t load on-chain matches
-          </h2>
-          <p className="mt-2 max-w-md text-sm text-muted-foreground">
-            {error.message}
-          </p>
-          <button
-            onClick={handleRefresh}
-            className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-lg border border-border px-4 text-sm font-medium hover:bg-card focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            <RefreshCw className="h-4 w-4" aria-hidden="true" />
-            Retry
-          </button>
-        </div>
-      ) : matchCards.length === 0 ? (
-        // Empty state — different for search vs no matches
-        search ? (
-          <div className="glass-card flex flex-col items-center justify-center py-16 text-center">
-            <Search className="mb-3 h-10 w-10 text-muted-foreground" aria-hidden="true" />
-            <h2 className="font-heading text-lg font-semibold">
-              No matches found
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Try another player address or match ID.
-            </p>
-          </div>
-        ) : (
-          <div className="glass-card flex flex-col items-center justify-center py-16 text-center">
-            <Swords className="mb-3 h-10 w-10 text-muted-foreground" aria-hidden="true" />
-            <h2 className="font-heading text-lg font-semibold">
-              No open matches
-            </h2>
-            <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-              The arena is quiet. Create the first on-chain match and invite an opponent.
-            </p>
-            <button
-              onClick={() => setShowCreate(true)}
-              className="mt-5 inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" />
-              Create match
-            </button>
-          </div>
-        )
-      ) : (
-        <div className="grid gap-4">
-          {matchCards.map((match) => (
-            <MatchCard key={match.matchId} match={match} />
-          ))}
-        </div>
-      )}
-
-      <RecentGames walletAddress={walletAddress} />
-
-      {/* ── Your live matches ── */}
-      {walletAddress && (
-        <section className="mt-10">
-          {/* Tab bar */}
-          <div className="mb-4 flex gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveTab(activeTab === "live" ? null : "live")}
-              className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors ${
-                activeTab === "live"
-                  ? "border-accent bg-accent/10 text-accent"
-                  : "border-border hover:bg-card"
-              }`}
-            >
-              <Activity className="h-4 w-4" aria-hidden="true" />
-              Live matches
-              {!playerMatchesLoading && (
-                <span className=" bg-accent/20 px-2 py-0.5 text-xs text-accent">
-                  {playerMatches.filter((m) => m.gameStatus === GameStatus.Active).length}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab(activeTab === "past" ? null : "past")}
-              className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-semibold transition-colors ${
-                activeTab === "past"
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border hover:bg-card"
-              }`}
-            >
-              <History className="h-4 w-4" aria-hidden="true" />
-              Your past matches
-              {!playerMatchesLoading && (
-                <span className=" bg-muted px-2 py-0.5 text-xs">
-                  {playerMatches.filter((m) => m.gameStatus !== GameStatus.WaitingForOpponent && m.gameStatus !== GameStatus.Active).length}
-                </span>
-              )}
-            </button>
-          </div>
-
-          {/* Live matches tab */}
-          {activeTab === "live" && (
-            <div className="grid gap-3">
-              {playerMatchesLoading ? (
-                [0, 1].map((i) => (
-                  <div key={i} className="h-24 animate-pulse rounded-xl border border-border bg-card/60" />
-                ))
-              ) : playerMatchesError && playerMatches.length === 0 ? (
-                <div className="flex flex-col items-center py-10 text-center">
-                  <AlertCircle className="mb-2 h-8 w-8 text-destructive" aria-hidden="true" />
-                  <p className="text-sm text-muted-foreground">{playerMatchesError.message}</p>
-                </div>
-              ) : (() => {
-                const live = playerMatches.filter((m) => m.gameStatus === GameStatus.Active);
-                if (live.length === 0) {
-                  return (
-                    <p className="py-8 text-center text-sm text-muted-foreground">
-                      No live matches right now.
-                    </p>
-                  );
-                }
-                return live.slice(0, 20).map((m) => (
-                  <MatchCard
-                    key={m.matchId}
-                    match={{
-                      matchId: m.matchId,
-                      whitePlayer: m.players[0].toBase58(),
-                      blackPlayer: m.players[1].equals(PublicKey.default)
-                        ? undefined
-                        : m.players[1].toBase58(),
-                      wagerAmount: formatTokenAmount(m.betAmountPlayerOne),
-                      wagerToken: solanaConfig.wagerSymbol,
-                      timeControl: `${Number(m.moveTimeoutDuration)}s / move`,
-                      status: "in_progress",
-                      isOwn: true,
-                      createdAt: Number(m.lastMoveTimestamp) * 1_000,
-                      moveCount: m.fullmoveNumber,
-                    }}
-                  />
-                ));
-              })()}
+      {/* One column on phones (open, yours, live, recent); two on desktop with
+          the sidebar spanning both rows. */}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+          <section className="panel min-w-0" aria-labelledby="open-matches-heading">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <h2 id="open-matches-heading" className="section-title">
+                Open matches
+                {matchCards.length > 0 ? (
+                  <span className="ml-2 font-normal text-muted-foreground tnum">{matchCards.length}</span>
+                ) : null}
+              </h2>
+              <div className="relative w-full sm:w-64">
+                <label htmlFor="match-search" className="sr-only">
+                  Search open matches
+                </label>
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <input
+                  id="match-search"
+                  type="search"
+                  autoComplete="off"
+                  spellCheck={false}
+                  placeholder="Player or match ID…"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  className="h-9 w-full border border-border bg-background pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-border-hover focus-visible:outline-none"
+                />
+              </div>
             </div>
-          )}
 
-          {/* Past matches tab */}
-          {activeTab === "past" && (
-            <div className="grid gap-3">
-              {playerMatchesLoading ? (
-                [0, 1].map((i) => (
-                  <div key={i} className="h-24 animate-pulse rounded-xl border border-border bg-card/60" />
-                ))
-              ) : playerMatchesError && playerMatches.length === 0 ? (
-                <div className="flex flex-col items-center py-10 text-center">
-                  <AlertCircle className="mb-2 h-8 w-8 text-destructive" aria-hidden="true" />
-                  <p className="text-sm text-muted-foreground">{playerMatchesError.message}</p>
+            {loading && matchCards.length === 0 ? (
+              <div className="divide-y divide-border" aria-label="Loading open matches">
+                {[0, 1, 2].map((index) => (
+                  <div key={index} className="h-[68px] animate-pulse bg-card-hover/40" />
+                ))}
+              </div>
+            ) : error ? (
+              <div className="flex flex-col items-center px-6 py-12 text-center">
+                <AlertCircle className="mb-3 h-6 w-6 text-destructive" aria-hidden="true" />
+                <p className="text-sm font-medium">Couldn&apos;t load matches from Solana.</p>
+                <p className="mt-1 max-w-md text-xs text-muted-foreground">{error.message}</p>
+                <button onClick={handleRefresh} className="btn btn-secondary btn-sm mt-4">
+                  <RefreshCw className="h-4 w-4" aria-hidden="true" />
+                  Retry
+                </button>
+              </div>
+            ) : matchCards.length === 0 ? (
+              search ? (
+                <p className="px-6 py-12 text-center text-sm text-muted-foreground">
+                  No open match matches &ldquo;{search}&rdquo;.
+                </p>
+              ) : (
+                <div className="flex flex-col items-center px-6 py-14 text-center">
+                  <Swords className="mb-3 h-6 w-6 text-muted-foreground" aria-hidden="true" />
+                  <p className="text-sm font-medium">No open matches</p>
+                  <p className="mt-1 text-sm text-muted-foreground">Start one and send the link.</p>
+                  <button onClick={() => setShowCreate(true)} className="btn btn-primary btn-sm mt-5">
+                    <Plus className="h-4 w-4" aria-hidden="true" />
+                    New match
+                  </button>
                 </div>
-              ) : (() => {
-                const past = playerMatches.filter(
-                  (m) =>
-                    m.gameStatus !== GameStatus.WaitingForOpponent &&
-                    m.gameStatus !== GameStatus.Active
-                );
-                if (past.length === 0) {
-                  return (
-                    <p className="py-8 text-center text-sm text-muted-foreground">
-                      No completed matches yet.
-                    </p>
-                  );
-                }
-                return past.slice(0, 20).map((m) => (
-                  <MatchCard
-                    key={m.matchId}
-                    match={{
-                      matchId: m.matchId,
-                      whitePlayer: m.players[0].toBase58(),
-                      blackPlayer: m.players[1].equals(PublicKey.default)
-                        ? undefined
-                        : m.players[1].toBase58(),
-                      wagerAmount: formatTokenAmount(m.betAmountPlayerOne),
-                      wagerToken: solanaConfig.wagerSymbol,
-                      timeControl: `${Number(m.moveTimeoutDuration)}s / move`,
-                      status: "completed",
-                      createdAt: Number(m.lastMoveTimestamp) * 1_000,
-                      result: gameStatusToResult(m.gameStatus),
-                      moveCount: m.fullmoveNumber,
-                    }}
-                  />
-                ));
-              })()}
+              )
+            ) : (
+              <div className="divide-y divide-border">
+                {matchCards.map((match) => (
+                  <MatchCard key={match.matchId} match={match} />
+                ))}
+              </div>
+            )}
+          </section>
+
+        <aside className="flex min-w-0 flex-col gap-6 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+          {walletAddress ? (
+            <section className="panel" aria-labelledby="your-games-heading">
+              <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+                <h2 id="your-games-heading" className="section-title">
+                  Your games
+                </h2>
+                <div className="flex gap-1">
+                  <YourTab active={yourTab === "live"} onClick={() => setActiveTab("live")}>
+                    <Activity className="h-3.5 w-3.5" aria-hidden="true" />
+                    In play
+                    {!playerMatchesLoading ? <span className="tnum">{yourLive.length}</span> : null}
+                  </YourTab>
+                  <YourTab active={yourTab === "past"} onClick={() => setActiveTab("past")}>
+                    <History className="h-3.5 w-3.5" aria-hidden="true" />
+                    Finished
+                    {!playerMatchesLoading ? <span className="tnum">{yourPast.length}</span> : null}
+                  </YourTab>
+                </div>
+              </div>
+              {playerMatchesLoading ? (
+                <div className="divide-y divide-border">
+                  {[0, 1].map((i) => (
+                    <div key={i} className="h-[68px] animate-pulse bg-card-hover/40" />
+                  ))}
+                </div>
+              ) : playerMatchesError && playerMatches.length === 0 ? (
+                <p className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+                  {playerMatchesError.message}
+                </p>
+              ) : yourList.length === 0 ? (
+                <p className="p-4 text-sm text-muted-foreground">
+                  {yourTab === "live" ? "No games in play." : "No finished games yet."}
+                </p>
+              ) : (
+                <div className="max-h-[22rem] divide-y divide-border overflow-y-auto overscroll-contain">
+                  {yourList.slice(0, 20).map((m) => (
+                    <MatchCard
+                      key={m.matchId}
+                      compact
+                      match={{
+                        matchId: m.matchId,
+                        whitePlayer: m.players[0].toBase58(),
+                        blackPlayer: m.players[1].equals(PublicKey.default)
+                          ? undefined
+                          : m.players[1].toBase58(),
+                        wagerAmount: formatTokenAmount(m.betAmountPlayerOne),
+                        wagerToken: solanaConfig.wagerSymbol,
+                        timeControl: `${Number(m.moveTimeoutDuration)}s / move`,
+                        status: yourTab === "live" ? "in_progress" : "completed",
+                        isOwn: true,
+                        createdAt: Number(m.lastMoveTimestamp) * 1_000,
+                        result: yourTab === "live" ? undefined : gameStatusToResult(m.gameStatus),
+                        moveCount: m.fullmoveNumber,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          <section className="panel" aria-labelledby="live-games-heading">
+            <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
+              <h2 id="live-games-heading" className="section-title flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-primary motion-safe:animate-pulse" aria-hidden="true" />
+                Live now
+              </h2>
+              <span className="text-xs text-muted-foreground">Watch and predict</span>
             </div>
-          )}
-        </section>
-      )}
+            <LiveGames excludePlayer={walletAddress} />
+          </section>
+        </aside>
+
+        <div className="min-w-0 lg:col-start-1 lg:row-start-2">
+          <RecentGames walletAddress={walletAddress} />
+        </div>
+      </div>
     </div>
+  );
+}
+
+function YourTab({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inline-flex min-h-8 items-center gap-1.5 px-2.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+        active ? "bg-card-hover text-foreground" : "text-muted-foreground hover:text-foreground"
+      }`}
+    >
+      {children}
+    </button>
   );
 }

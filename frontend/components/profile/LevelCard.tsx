@@ -31,12 +31,12 @@ export function LevelCard({
           </h2>
           <p className="mt-2 flex items-baseline gap-3">
             <span className="font-display text-4xl tabular-nums">{level.level}</span>
-            <span className="font-mono text-sm uppercase tracking-widest text-primary">
+            <span className="text-sm font-semibold text-primary">
               {level.tier}
             </span>
           </p>
         </div>
-        <p className="font-mono text-xs tabular-nums text-muted-foreground">
+        <p className="text-xs tnum text-muted-foreground">
           {level.xp.toLocaleString()} XP total
         </p>
       </div>
@@ -51,7 +51,7 @@ export function LevelCard({
       >
         <div className="h-full bg-primary" style={{ width: `${progress * 100}%` }} />
       </div>
-      <p className="mt-1.5 font-mono text-[11px] tabular-nums text-muted-foreground">
+      <p className="mt-1.5 text-[11px] tnum text-muted-foreground">
         {level.levelXp} / {level.levelSpan} XP to level {level.level + 1}
       </p>
 
@@ -69,7 +69,7 @@ export function LevelCard({
                   .join(" · ")}
                 {entry.earnedAt ? ` · ${timeAgo(entry.earnedAt)}` : ""}
               </Link>
-              <span className="shrink-0 font-mono font-semibold tabular-nums text-primary">
+              <span className="shrink-0 font-semibold tnum text-primary">
                 +{entry.amount} XP
               </span>
             </li>

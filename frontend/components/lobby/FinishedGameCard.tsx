@@ -39,25 +39,25 @@ export function FinishedGameCard({
     <Link
       href={reviewHref(match.matchId)}
       className={cn(
-        "group glass-card flex items-center gap-3 p-3 transition-all hover:border-border-hover hover:shadow-glow focus-visible:ring-2 focus-visible:ring-primary",
-        outcome === "win" && "border-l-2 border-l-success/60",
-        outcome === "loss" && "border-l-2 border-l-destructive/60",
-        outcome === "draw" && "border-l-2 border-l-accent/60",
+        "row-link group flex items-center gap-3 px-4 py-3",
         className
       )}
     >
       {outcome ? (
         <span
           className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border font-mono text-sm font-bold",
-            outcome === "win" && "border-success/20 bg-success/10 text-success",
-            outcome === "loss" && "border-destructive/20 bg-destructive/10 text-destructive",
-            outcome === "draw" && "border-accent/20 bg-accent/10 text-accent"
+            "flex h-7 w-7 shrink-0 items-center justify-center text-xs font-bold",
+            outcome === "win" && "bg-success/15 text-success",
+            outcome === "loss" && "bg-destructive/15 text-destructive",
+            outcome === "draw" && "bg-accent/15 text-accent"
           )}
           aria-label={outcome === "win" ? "Win" : outcome === "loss" ? "Loss" : "Draw"}
         >
           {outcome === "win" ? "W" : outcome === "loss" ? "L" : "D"}
         </span>
+      ) : viewer ? (
+        // Keeps rows aligned when the viewer didn't play this one.
+        <span className="w-7 shrink-0" aria-hidden="true" />
       ) : null}
 
       <div className="min-w-0 flex-1">
@@ -68,7 +68,7 @@ export function FinishedGameCard({
             rating={match.whiteRating}
             change={match.whiteRatingChange}
           />
-          <span className="hidden shrink-0 font-mono text-xs font-semibold text-muted-foreground sm:inline">
+          <span className="hidden shrink-0 text-xs font-semibold tnum text-muted-foreground sm:inline">
             {score ?? "vs"}
           </span>
           {match.blackPlayer ? (
@@ -81,19 +81,23 @@ export function FinishedGameCard({
           ) : null}
         </div>
         <p className="mt-1 truncate text-xs text-muted-foreground">
-          {score ? <span className="font-mono font-semibold text-foreground sm:hidden">{score} · </span> : null}
-          {reason ? `${reason} · ` : ""}
-          {match.moveCount} moves
-          {wager > 0n ? ` · ${formatTokenAmount(wager)} ${solanaConfig.wagerSymbol}` : " · Free"}
-          {" · "}
-          {timeAgo(match.endedAt ?? match.lastMoveAt)}
+          {score ? <span className="font-semibold tnum text-foreground sm:hidden">{score}, </span> : null}
+          {reason ? `${reason}, ` : ""}
+          {match.moveCount} moves, {timeAgo(match.endedAt ?? match.lastMoveAt)}
         </p>
       </div>
 
-      <span className="hidden shrink-0 items-center gap-1 text-xs font-semibold text-primary group-hover:underline sm:inline-flex">
-        Replay
-        <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+      <span className="w-24 shrink-0 text-right text-sm font-semibold tnum">
+        {wager > 0n ? (
+          <>
+            {formatTokenAmount(wager)}
+            <span className="ml-1 text-xs font-normal text-muted-foreground">{solanaConfig.wagerSymbol}</span>
+          </>
+        ) : (
+          <span className="font-normal text-muted-foreground">Free</span>
+        )}
       </span>
+      <ChevronRight className="hidden h-4 w-4 shrink-0 text-muted-foreground group-hover:text-foreground sm:block" aria-hidden="true" />
     </Link>
   );
 }
@@ -130,7 +134,7 @@ function Side({
       <PlayerAvatar wallet={wallet} size="sm" />
       <span className="truncate text-sm font-medium">{playerLabel(wallet, name)}</span>
       {rating != null ? (
-        <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
+        <span className="hidden shrink-0 text-xs tnum text-muted-foreground sm:inline">
           {rating}
           <RatingDelta change={change} />
         </span>

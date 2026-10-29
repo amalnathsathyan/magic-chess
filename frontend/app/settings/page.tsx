@@ -58,21 +58,16 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-      <div className="mb-8">
-        <h1 className="font-display text-4xl sm:text-5xl">Settings</h1>
-        <p className="mt-1 text-muted-foreground">
-          Sound, board and account preferences for ZUG Arena.
-        </p>
-      </div>
+    <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 md:py-12">
+      <h1 className="mb-10 font-display text-5xl sm:text-6xl">Settings</h1>
 
       {/* ── Wallet ── */}
       <section className="mb-8">
-        <h2 className="mb-3 flex items-center gap-2 font-heading text-lg font-semibold">
-          <Wallet className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+        <h2 className="section-title mb-3 flex items-center gap-2">
+          <Wallet className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           Wallet
         </h2>
-        <div className="glass-card p-5">
+        <div className="panel p-5">
           {authenticated && wallet ? (
             <>
               <div className="flex flex-wrap items-center justify-between gap-4">
@@ -137,7 +132,7 @@ export default function SettingsPage() {
           ) : (
             <div className="flex items-center gap-4">
               <div className="flex h-10 w-10 items-center justify-center bg-muted/30">
-                <Wallet className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                <Wallet className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
               </div>
               <div>
                 <p className="text-sm font-medium">No wallet connected</p>
@@ -152,13 +147,13 @@ export default function SettingsPage() {
 
       {/* ── Preferences ── */}
       <section className="mb-8">
-        <h2 className="mb-3 flex items-center gap-2 font-heading text-lg font-semibold">
-          <Volume2 className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+        <h2 className="section-title mb-3 flex items-center gap-2">
+          <Volume2 className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           Preferences
         </h2>
         <div className="space-y-3">
           {/* Sound toggle */}
-          <div className="glass-card flex items-center justify-between gap-4 p-4">
+          <div className="panel flex items-center justify-between gap-4 p-4">
             <div className="flex items-center gap-3">
               {soundEnabled ? (
                 <Volume2
@@ -203,7 +198,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Board theme placeholder */}
-          <div className="glass-card flex items-center justify-between gap-4 p-4">
+          <div className="panel flex items-center justify-between gap-4 p-4">
             <div className="flex items-center gap-3">
               <Palette className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
               <div>
@@ -213,7 +208,7 @@ export default function SettingsPage() {
                 </p>
               </div>
             </div>
-            <span className="inline-flex shrink-0 items-center border border-border bg-muted px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <span className="inline-flex shrink-0 items-center border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
               Coming soon
             </span>
           </div>
@@ -222,11 +217,11 @@ export default function SettingsPage() {
 
       {/* ── About ── */}
       <section>
-        <h2 className="mb-3 flex items-center gap-2 font-heading text-lg font-semibold">
-          <BookOpen className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+        <h2 className="section-title mb-3 flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           About
         </h2>
-        <div className="glass-card p-5">
+        <div className="panel p-5">
           <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
             <div>
               <p className="text-xs text-muted-foreground">Version</p>

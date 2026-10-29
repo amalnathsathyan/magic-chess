@@ -3,7 +3,8 @@
 import { playHref, reviewHref, spectateHref } from "@/lib/match-links";
 import Link from "next/link";
 import { useMemo } from "react";
-import { Castle, Clock, Coins, Crown, Swords, User, Zap } from "lucide-react";
+import { PlayerAvatar } from "@/components/shared/PlayerAvatar";
+import { playerLabel } from "@/lib/players";
 import { cn } from "@/lib/utils";
 
 export interface MatchCardData {
@@ -26,25 +27,15 @@ export interface MatchCardData {
 interface MatchCardProps {
   match: MatchCardData;
   className?: string;
+  /** Narrow list (a sidebar): no clock column and no action button. */
+  compact?: boolean;
 }
 
-function shortenAddress(addr: string): string {
-  return `${addr.slice(0, 4)}...${addr.slice(-4)}`;
-}
-
-/** Map time control label to a chess piece icon. */
-function getTimeControlIcon(timeControl: string) {
-  const seconds = timeControl.match(/^(\d+)/)?.[1];
-  switch (seconds) {
-    case "60":
-      return Swords; // Bullet — fast, aggressive
-    case "180":
-      return Castle; // Blitz — classic
-    case "600":
-      return Crown; // Rapid — thoughtful, kingly
-    default:
-      return Clock;
-  }
+/** "60s / move" → "1 min", "600s / move" → "10 min". */
+function clockLabel(timeControl: string): string {
+  const seconds = Number(timeControl.match(/^(\d+)/)?.[1]);
+  if (!Number.isFinite(seconds) || seconds <= 0) return timeControl;
+  return seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds}s`;
 }
 
 /**
@@ -71,18 +62,37 @@ function relativeTime(timestampMs: number): string {
   return `${weeks}w ago`;
 }
 
-export function MatchCard({ match, className }: MatchCardProps) {
+/**
+ * One match as a row: who, the stake, the move clock and the one thing to do
+ * (join, resume, watch or replay). Rows sit in a bordered list.
+ */
+export function MatchCard({ match, className, compact = false }: MatchCardProps) {
   const isOpen = match.status === "open";
   const isInProgress = match.status === "in_progress";
   const isCompleted = match.status === "completed";
-  const TimeIcon = useMemo(
-    () => getTimeControlIcon(match.timeControl),
-    [match.timeControl]
-  );
   const relativeCreatedAt = useMemo(
     () => relativeTime(match.createdAt),
     [match.createdAt]
   );
+  const isFree = Number(match.wagerAmount) === 0;
+
+  const action = isOpen
+    ? match.isOwn
+      ? "Open"
+      : "Join"
+    : isInProgress
+      ? match.isOwn
+        ? "Resume"
+        : "Watch"
+      : "Replay";
+
+  const detail = isOpen
+    ? match.isOwn
+      ? `Your match, ${relativeCreatedAt}`
+      : relativeCreatedAt
+    : isInProgress
+      ? `Move ${match.moveCount ?? 1}`
+      : match.result ?? "Finished";
 
   return (
     <Link
@@ -93,122 +103,44 @@ export function MatchCard({ match, className }: MatchCardProps) {
             ? playHref(match.matchId)
             : spectateHref(match.matchId)
       }
-      className={cn(
-        "group glass-card block p-5 transition-all hover:border-border-hover hover:shadow-glow",
-        className
-      )}
+      className={cn("row-link group flex items-center gap-3 px-4 py-3.5 sm:gap-4", className)}
     >
-      {/* Header row */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-xs text-muted">
-            #{match.matchId.slice(0, 8)}
-          </span>
-          <span className="text-[11px] text-muted-foreground">
-            {relativeCreatedAt}
-          </span>
-          {isCompleted && match.moveCount != null && (
-            <span className="text-[11px] text-muted-foreground">
-              &middot; {match.moveCount} moves
-            </span>
-          )}
-          {isInProgress && match.moveCount != null && (
-            <span className="text-[11px] text-muted-foreground">
-              &middot; move {match.moveCount}
-            </span>
-          )}
-        </div>
-        <span
-          className={cn(
-            " px-2.5 py-0.5 text-xs font-medium",
-            isOpen && "bg-primary/10 text-primary",
-            isInProgress && "bg-accent/10 text-accent",
-            isCompleted && "bg-muted/10 text-muted-foreground"
-          )}
-        >
-          {isOpen
-            ? "Open"
-            : isInProgress
-              ? "Live"
-              : match.result ?? "Completed"}
-        </span>
+      <PlayerAvatar wallet={match.whitePlayer} size="md" className="hidden sm:inline-flex" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">
+          {playerLabel(match.whitePlayer)}
+          {match.blackPlayer ? (
+            <span className="text-muted-foreground"> vs {playerLabel(match.blackPlayer)}</span>
+          ) : null}
+        </p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">{detail}</p>
       </div>
 
-      {/* Players */}
-      <div className="mt-4 flex items-center gap-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center bg-primary/10">
-            <User className="h-4 w-4 text-primary" />
-          </div>
-          <span className="font-mono text-sm">
-            {shortenAddress(match.whitePlayer)}
-          </span>
-        </div>
-        <span className="text-sm text-muted">vs</span>
-        {match.blackPlayer ? (
-          <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center bg-accent/10">
-              <User className="h-4 w-4 text-accent" />
-            </div>
-            <span className="font-mono text-sm">
-              {shortenAddress(match.blackPlayer)}
-            </span>
-          </div>
-        ) : (
-          <span className="text-sm italic text-muted-foreground">
-            Waiting for opponent
-          </span>
+      <div className={cn("hidden w-20 text-right", !compact && "sm:block")}>
+        <p className="text-sm tnum text-soft">{clockLabel(match.timeControl)}</p>
+        <p className="text-xs text-muted-foreground">per move</p>
+      </div>
+
+      <div className="w-20 shrink-0 text-right sm:w-24">
+        <p className={cn("text-base font-semibold tnum", isFree ? "text-soft" : "text-foreground")}>
+          {isFree ? "Free" : match.wagerAmount}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {isFree ? "no stake" : match.wagerToken}
+        </p>
+      </div>
+
+      <span
+        className={cn(
+          "btn btn-sm w-[4.5rem] shrink-0",
+          compact && "hidden",
+          (isOpen && !match.isOwn) || (isInProgress && match.isOwn)
+            ? "bg-primary/15 text-primary group-hover:bg-primary group-hover:text-primary-foreground"
+            : "border border-border text-soft group-hover:border-border-hover group-hover:text-foreground"
         )}
-      </div>
-
-      {/* Match details */}
-      <div className="mt-4 flex items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-4">
-          {/* Wager — more prominent */}
-          <div className="flex items-center gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-1.5">
-            <Coins className="h-4 w-4 text-accent" aria-hidden="true" />
-            <span className="font-mono text-base font-bold text-accent">
-              {match.wagerAmount}
-            </span>
-            <span className="text-xs font-medium text-accent/70">
-              {match.wagerToken}
-            </span>
-          </div>
-          {/* Time control with piece icon */}
-          <div className="flex items-center gap-1.5">
-            <TimeIcon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-            <span className="font-mono text-sm text-muted-foreground">
-              {match.timeControl}
-            </span>
-          </div>
-          {/* On-chain badge */}
-          <div className="flex items-center gap-1.5 border border-primary/20 bg-primary/5 px-2 py-0.5">
-            <Zap className="h-3 w-3 text-primary" aria-hidden="true" />
-            <span className="font-mono text-xs text-primary/90">On-chain</span>
-          </div>
-        </div>
-
-        {/* Action button */}
-        <div className="shrink-0">
-          {isOpen ? (
-            <span className="inline-flex items-center justify-center rounded-lg bg-primary/20 px-3 py-1.5 text-xs font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-              {match.isOwn ? "Open" : "Join Match"}
-            </span>
-          ) : isInProgress && match.isOwn ? (
-            <span className="inline-flex items-center justify-center rounded-lg bg-primary/20 px-3 py-1.5 text-xs font-semibold text-primary transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
-              Resume
-            </span>
-          ) : isInProgress ? (
-            <span className="inline-flex items-center justify-center rounded-lg bg-accent/20 px-3 py-1.5 text-xs font-semibold text-accent transition-colors group-hover:bg-accent group-hover:text-accent-foreground">
-              Spectate
-            </span>
-          ) : (
-            <span className="inline-flex items-center justify-center rounded-lg bg-muted/20 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors group-hover:bg-muted group-hover:text-foreground">
-              Replay
-            </span>
-          )}
-        </div>
-      </div>
+      >
+        {action}
+      </span>
     </Link>
   );
 }

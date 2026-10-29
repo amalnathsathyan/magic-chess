@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   AlertCircle,
-  ArrowLeft,
   Check,
   Copy,
   Crown,
@@ -209,7 +208,7 @@ function ProfileView() {
   const roi = wagered > 0n ? `${net >= 0n ? "+" : "−"}${(Math.abs(Number((net * 1000n) / wagered)) / 10).toFixed(1)}%` : "0%";
   const shareMessage =
     sharing === "pnl"
-      ? `Wagered ${compactAmount(formatTokenAmount(wagered))} ${symbol} on @zugxyz, took home ${compactAmount(formatTokenAmount(returned))}. ${net >= 0n ? "+" : "−"}${netLabel} ${symbol} net (${roi} ROI). Every move matters.`
+      ? `Staked ${compactAmount(formatTokenAmount(wagered))} ${symbol} on @zugxyz, took home ${compactAmount(formatTokenAmount(returned))}. ${net >= 0n ? "+" : "−"}${netLabel} ${symbol} net (${roi} ROI). Every move matters.`
       : isOwnProfile
         ? `Rated ${profile.rating}${profile.rank ? `, #${profile.rank} on the ladder` : ""}${profile.xp ? `, Lv ${profile.xp.level} ${profile.xp.tier}` : ""} on @zugxyz. ${stats.wins} wins and counting. Come take my spot.`
         : `${name} is rated ${profile.rating}${profile.rank ? ` (#${profile.rank})` : ""} on @zugxyz. Think you can take them?`;
@@ -224,14 +223,14 @@ function ProfileView() {
             <h1 className="font-heading text-2xl font-bold">
               {playerLabel(profile.wallet, profile.displayName)}
             </h1>
-            <span className="inline-flex items-center gap-1.5 border border-primary/20 bg-primary/10 px-3 py-1 font-mono text-sm font-semibold text-primary">
+            <span className="inline-flex items-center gap-1.5 border border-primary/20 bg-primary/10 px-3 py-1 tnum text-sm font-semibold text-primary">
               {profile.rating}
               {profile.provisional ? (
                 <span className="text-[11px] font-normal text-primary/70">provisional</span>
               ) : null}
             </span>
             {profile.xp ? (
-              <span className="inline-flex items-center border border-border px-3 py-1 font-mono text-xs uppercase tracking-widest text-muted-foreground">
+              <span className="inline-flex items-center border border-border px-3 py-1 text-xs font-medium text-muted-foreground">
                 Lv {profile.xp.level} · {profile.xp.tier}
               </span>
             ) : null}
@@ -306,7 +305,7 @@ function ProfileView() {
               <TrendingUp className="h-4 w-4 text-primary" aria-hidden="true" />
               Rating
             </h2>
-            <span className="font-mono text-xs text-muted-foreground">
+            <span className="tnum text-xs text-muted-foreground">
               peak {profile.peakRating} · {profile.ratedGames} rated
             </span>
           </div>
@@ -326,7 +325,7 @@ function ProfileView() {
                     key={game.matchId}
                     title={game.result}
                     className={cn(
-                      "flex h-6 w-6 items-center justify-center rounded font-mono text-[11px] font-bold",
+                      "flex h-6 w-6 items-center justify-center rounded tnum text-[11px] font-bold",
                       game.result === "win" && "bg-success/15 text-success",
                       game.result === "loss" && "bg-destructive/15 text-destructive",
                       game.result === "draw" && "bg-accent/15 text-accent"
@@ -343,9 +342,9 @@ function ProfileView() {
         <div className="glass-card flex flex-col justify-between gap-4 p-5">
           <div>
             <h2 className="font-heading text-sm font-semibold">Record</h2>
-            <p className="mt-2 font-mono text-3xl font-bold tabular-nums">{stats.totalGames}</p>
+            <p className="mt-2 tnum text-3xl font-bold tabular-nums">{stats.totalGames}</p>
             <p className="text-xs text-muted-foreground">games played</p>
-            <div className="mt-2 flex items-center gap-3 font-mono text-xs tabular-nums">
+            <div className="mt-2 flex items-center gap-3 tnum text-xs tabular-nums">
               <span className="text-success">{stats.wins}W</span>
               <span className="text-destructive">{stats.losses}L</span>
               <span className="text-accent">{stats.draws}D</span>
@@ -387,7 +386,7 @@ function ProfileView() {
                     {ending.outcome === "win" ? "Won" : ending.outcome === "loss" ? "Lost" : "Drew"} by{" "}
                     {formatEndReason(ending.reason)?.toLowerCase() ?? "unknown"}
                   </span>
-                  <span className="font-mono tabular-nums">{ending.count}</span>
+                  <span className="tnum">{ending.count}</span>
                 </li>
               ))}
             </ul>
@@ -413,8 +412,8 @@ function ProfileView() {
       <section className="glass-card mb-8 flex flex-wrap items-center gap-6 p-5">
         <Wallet className="h-5 w-5 text-primary" aria-hidden="true" />
         <div>
-          <p className="text-xs text-muted-foreground">Wagered</p>
-          <p className="font-mono text-lg font-bold tabular-nums">
+          <p className="text-xs text-muted-foreground">Staked</p>
+          <p className="tnum text-lg font-bold tabular-nums">
             {formatTokenAmount(stats.totalWagered)} {solanaConfig.wagerSymbol}
           </p>
         </div>
@@ -422,7 +421,7 @@ function ProfileView() {
           <p className="text-xs text-muted-foreground">Won</p>
           <p
             className={cn(
-              "font-mono text-lg font-bold tabular-nums",
+              "tnum text-lg font-bold tabular-nums",
               BigInt(stats.totalWon) > 0n ? "text-success" : "text-muted-foreground"
             )}
           >
@@ -432,14 +431,14 @@ function ProfileView() {
         {profile.activeGames > 0 ? (
           <div>
             <p className="text-xs text-muted-foreground">In progress</p>
-            <p className="font-mono text-lg font-bold tabular-nums">{profile.activeGames}</p>
+            <p className="tnum text-lg font-bold tabular-nums">{profile.activeGames}</p>
           </div>
         ) : null}
         {isOwnProfile && wagered > 0n ? (
           <button
             type="button"
             onClick={() => setSharing("pnl")}
-            className="ml-auto inline-flex min-h-10 items-center gap-2 bg-primary px-4 font-heading text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary"
+            className="btn btn-secondary ml-auto"
           >
             <Share2 className="h-4 w-4" aria-hidden="true" />
             Share P&amp;L
@@ -453,8 +452,8 @@ function ProfileView() {
         title={sharing === "pnl" ? "Share your P&L" : "Share player card"}
         description={
           sharing === "pnl"
-            ? "Your wagering ledger as a card. Post it, send it, or keep it."
-            : "Rating, rank, level and record on one card, ready to flex."
+            ? "Your stakes and returns on one card."
+            : "Rating, rank, level and record on one card."
         }
         filename={sharing === "pnl" ? "zug-pnl.png" : "zug-player-card.png"}
         message={shareMessage}
@@ -506,7 +505,7 @@ function ProfileView() {
           <h2 id="games-heading" className="font-heading text-lg font-semibold">
             Games
           </h2>
-          <div className="flex gap-1 rounded-lg border border-border p-0.5">
+          <div className="flex gap-1">
             {FILTERS.map((option) => (
               <button
                 key={option.key}
@@ -514,9 +513,9 @@ function ProfileView() {
                 onClick={() => setFilter(option.key)}
                 aria-pressed={filter === option.key}
                 className={cn(
-                  "min-h-9 rounded-md px-3 text-xs font-semibold transition-colors",
+                  "min-h-8 px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                   filter === option.key
-                    ? "bg-primary/15 text-primary"
+                    ? "bg-card-hover text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -532,7 +531,7 @@ function ProfileView() {
               <Link
                 key={match.matchId}
                 href={isOwnProfile ? playHref(match.matchId) : spectateHref(match.matchId)}
-                className="glass-card flex items-center justify-between gap-3 p-3 transition-colors hover:border-border-hover"
+                className="panel row-link flex items-center justify-between gap-3 p-3"
               >
                 <span className="inline-flex items-center gap-2 text-sm">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" aria-hidden="true" />
@@ -556,12 +555,9 @@ function ProfileView() {
             <p className="text-sm font-medium">
               {filter === "all" ? "No finished games yet" : `No ${filter}s yet`}
             </p>
-            <p className="max-w-sm text-xs text-muted-foreground">
-              Finished games can be replayed move by move from here.
-            </p>
           </div>
         ) : (
-          <div className="grid gap-3">
+          <div className="panel divide-y divide-border">
             {finishedMatches.map((match) => (
               <FinishedGameCard key={match.matchId} match={match} viewer={profile.wallet} />
             ))}
@@ -574,14 +570,7 @@ function ProfileView() {
 
 function ProfileShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <Link
-        href="/arena"
-        className="mb-6 inline-flex min-h-10 items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-        Back to Arena
-      </Link>
+    <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 md:py-12">
       {children}
     </div>
   );
@@ -593,7 +582,7 @@ function ColorRow({ label, tally }: { label: string; tally: ApiTally }) {
     <div className="mt-3">
       <div className="flex justify-between text-xs">
         <span className="text-muted-foreground">{label}</span>
-        <span className="font-mono tabular-nums">
+        <span className="tnum">
           {tally.wins}/{tally.draws}/{tally.losses}
         </span>
       </div>
@@ -620,8 +609,8 @@ function OpeningList({
       <ul className="mt-1 space-y-1">
         {openings.map((opening) => (
           <li key={opening.move} className="flex justify-between gap-3">
-            <span className="truncate font-mono">{opening.move}</span>
-            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+            <span className="truncate tnum">{opening.move}</span>
+            <span className="tnum text-xs tabular-nums text-muted-foreground">
               {opening.games} · {Math.round((opening.wins / opening.games) * 100)}%
             </span>
           </li>

@@ -26,7 +26,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 const DESCRIPTION =
-  "ZUG is fast competitive chess where every move is recorded on-chain. Play instantly with a wallet or social login, gas sponsored. Now live on Solana devnet.";
+  "Put a stake on a game of chess. The winner takes the pot. Every move is recorded on Solana. Live on devnet.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://playzug.xyz"),
@@ -76,20 +76,21 @@ export default function RootLayout({
       className={`${archivo.variable} ${geist.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
-      <body className="flex min-h-screen flex-col md:flex-row bg-background font-body text-foreground antialiased pb-[calc(72px+env(safe-area-inset-bottom))] md:pb-0">
+      <body className="flex min-h-screen flex-col bg-background font-body text-foreground antialiased pb-[calc(64px+env(safe-area-inset-bottom))] md:pb-0">
         <Providers>
           <Header />
-          <main className="flex-1 overflow-x-hidden">
+          <main id="main" className="flex-1 overflow-x-clip">
             {children}
           </main>
         </Providers>
         <Toaster
           position="bottom-right"
+          mobileOffset={{ bottom: "calc(76px + env(safe-area-inset-bottom))" }}
           toastOptions={{
             style: {
-              background: "#16181B",
+              background: "#141619",
               color: "#ECE8DF",
-              border: "1px solid #2C3036",
+              border: "1px solid #25292E",
               borderRadius: 0,
               fontFamily: "var(--font-geist)",
             },
