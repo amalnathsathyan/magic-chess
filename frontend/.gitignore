@@ -31,3 +31,6 @@ next-env.d.ts
 
 # wrangler local dev state
 .wrangler/
+
+# copied from sdk/skills/zug-arena/SKILL.md by predev/prebuild; served at /skill.md
+/public/skill.md

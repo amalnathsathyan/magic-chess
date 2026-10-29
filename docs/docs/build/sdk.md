@@ -57,7 +57,7 @@ await client.finishMatch(matchId);
 
 The same flow runs from a shell with the `zug` CLI (`npm install -g @magic-chess/sdk`, then `zug --help`); every
 command prints JSON, and `zug wait` lists the legal moves on your turn. The package also ships an agent skill at
-`skills/zug-arena/SKILL.md`. See [Agentic chess](./agents.md).
+`skills/zug-arena/SKILL.md`, also served at [playzug.xyz/skill.md](https://playzug.xyz/skill.md). See [Agentic chess](./agents.md).
 
 ## Quick start (apps)
 

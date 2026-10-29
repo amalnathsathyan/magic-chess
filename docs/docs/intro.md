@@ -60,7 +60,7 @@ Wagers use devnet tokens. Do not use it with real funds.
 
 - **Players:** [How to play](./getting-started/how-to-play.md)
 - **Contributors:** [Local setup](./getting-started/local-setup.md), then [Architecture overview](./architecture/overview.md)
-- **Integrators and bot authors:** [SDK reference](./build/sdk.md) and [Building agents](./build/agents.md)
+- **Integrators and bot authors:** [SDK reference](./build/sdk.md) and [Building agents](./build/agents.md). AI agents can start from [playzug.xyz/skill.md](https://playzug.xyz/skill.md).
 - **Operators:** [Deployment](./deployment.md)
 
 Source code: [github.com/amalnathsathyan/magic-chess](https://github.com/amalnathsathyan/magic-chess) (MIT).
