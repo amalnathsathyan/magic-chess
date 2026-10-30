@@ -8,7 +8,7 @@
     "dev": "next dev --turbopack",
     "prebuild": "cd ../sdk && npm ci --include=dev && npm run build && cp skills/zug-arena/SKILL.md ../frontend/public/skill.md",
     "build": "next build",
-    "postbuild": "cp _worker.js out/_worker.js",
+    "postbuild": "cp _worker.js out/_worker.js && node scripts/stamp-sw.mjs",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit --incremental false"

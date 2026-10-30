@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Archivo, Geist, JetBrains_Mono } from "next/font/google";
 import { Providers } from "@/components/shared/Providers";
 import { Header } from "@/components/shared/Header";
+import { ServiceWorkerRegistration } from "@/components/shared/ServiceWorkerRegistration";
 import { Toaster } from "sonner";
 import "@/app/globals.css";
 
@@ -36,6 +37,15 @@ export const metadata: Metadata = {
   },
   description: DESCRIPTION,
   applicationName: "ZUG Arena",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "ZUG",
+    statusBarStyle: "black-translucent",
+  },
+  // Next emits the standard `mobile-web-app-capable`; iOS before 17.4 only
+  // reads the Apple-prefixed tag.
+  other: { "apple-mobile-web-app-capable": "yes" },
   keywords: ["chess", "competitive chess", "solana", "on-chain", "magicblock", "ZUG"],
   icons: {
     icon: [
@@ -63,6 +73,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: "#0D0E10",
   colorScheme: "dark",
+  // Lets the standalone app paint under the notch and home indicator.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -83,6 +95,7 @@ export default function RootLayout({
             {children}
           </main>
         </Providers>
+        <ServiceWorkerRegistration />
         <Toaster
           position="bottom-right"
           mobileOffset={{ bottom: "calc(76px + env(safe-area-inset-bottom))" }}

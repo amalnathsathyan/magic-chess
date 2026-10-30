@@ -1,0 +1,7 @@
+# Cloudflare Workers static assets. The service worker and manifest must not be
+# cached by the browser, so a deploy is picked up on the next launch.
+/sw.js
+  Cache-Control: no-cache
+  Service-Worker-Allowed: /
+/manifest.webmanifest
+  Cache-Control: no-cache
