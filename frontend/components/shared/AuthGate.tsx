@@ -40,7 +40,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
           <ZugSymbol className="h-10 w-10" />
           <h1 className="mt-6 font-display text-4xl">Sign in to play</h1>
           <p className="mt-3 text-muted-foreground">
-            Email, Google, Discord or a Solana wallet.
+            Email, Google or Discord is enough: we create a Solana wallet for you. Already have
+            Phantom or another wallet? Connect it instead.
           </p>
           <button
             type="button"
@@ -73,9 +74,10 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-[calc(100dvh-8rem)] items-center justify-center px-4 py-12">
         <div className="w-full max-w-sm">
           <ZugSymbol className="h-10 w-10" />
-          <h1 className="mt-6 font-display text-4xl">Create your wallet</h1>
+          <h1 className="mt-6 font-display text-4xl">One more step</h1>
           <p className="mt-3 text-muted-foreground">
-            Your stakes and results live in a Solana wallet.
+            Your stakes and results live in a Solana wallet. We create one for you now; no
+            seed phrase to write down, and you can export it later from Settings.
           </p>
           {walletError && (
             <p role="alert" className="mt-4 text-sm text-destructive">

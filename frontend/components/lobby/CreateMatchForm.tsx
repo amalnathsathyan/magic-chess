@@ -32,10 +32,21 @@ import { FaucetBanner } from "@/components/lobby/FaucetBanner";
 import { syncMatchCreated } from "@/lib/sync";
 import { solanaDevnetTxUrl } from "@/lib/explorer";
 
+/** Prefilled values, e.g. from a rematch link. */
+export interface CreateMatchInitial {
+  /** Stake per player as a decimal string in the token's units. */
+  stake?: string;
+  /** Token mint of the stake. */
+  mint?: string;
+  /** Seconds per move; snaps to the nearest offered clock. */
+  clockSeconds?: number;
+}
+
 interface CreateMatchFormProps {
   isOpen: boolean;
   onClose: () => void;
   className?: string;
+  initial?: CreateMatchInitial;
 }
 
 const TIME_CONTROLS = [
@@ -83,16 +94,26 @@ export function CreateMatchForm({
   isOpen,
   onClose,
   className,
+  initial,
 }: CreateMatchFormProps) {
-  const [wagerAmount, setWagerAmount] = useState("0");
+  const [wagerAmount, setWagerAmount] = useState(initial?.stake ?? "0");
   const [timeControl, setTimeControl] = useState<
     (typeof TIME_CONTROLS)[number]
-  >(TIME_CONTROLS[1]);
+  >(() => {
+    const seconds = initial?.clockSeconds;
+    if (!seconds) return TIME_CONTROLS[1];
+    return TIME_CONTROLS.reduce((best, control) =>
+      Math.abs(control.minutes * 60 - seconds) < Math.abs(best.minutes * 60 - seconds) ? control : best
+    );
+  });
   const [startOption, setStartOption] = useState<StartOption>("now");
   const [customStart, setCustomStart] = useState(() =>
     toLocalInputValue(new Date(Date.now() + 60 * 60_000))
   );
-  const [selectedTokenIndex, setSelectedTokenIndex] = useState(0);
+  const [selectedTokenIndex, setSelectedTokenIndex] = useState(() => {
+    const index = initial?.mint ? STAKE_TOKENS.findIndex((token) => token.mint === initial.mint) : -1;
+    return index >= 0 ? index : 0;
+  });
   const [customMint, setCustomMint] = useState("");
   const [tokenDropdownOpen, setTokenDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -256,7 +277,8 @@ export function CreateMatchForm({
             </Dialog.Close>
           </div>
           <Dialog.Description className="mb-7 text-sm text-muted-foreground">
-            You play White. Whoever joins plays Black.
+            You play White and move first. Whoever opens your link plays Black. Both of you put in
+            the same stake, and the winner takes the pot.
           </Dialog.Description>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -374,7 +396,7 @@ export function CreateMatchForm({
             {/* ── Wager ── */}
             <div>
               <label htmlFor="wager-amount" className="label mb-2 block">
-                Stake per player ({isCustom ? "tokens" : selectedToken.symbol})
+                Stake per player ({isCustom ? "tokens" : selectedToken.symbol}). Pick Free to play for nothing.
               </label>
               <input
                 id="wager-amount"
@@ -407,13 +429,15 @@ export function CreateMatchForm({
                 <p className="mt-2 text-xs text-muted-foreground">
                   {stakeShort
                     ? `You hold ${selectedToken.uiAmount.toLocaleString("en-US")} ${selectedToken.symbol}. Network fees are on us; the stake is yours.`
-                    : "Network fees are on us."}
+                    : isFree
+                      ? "Free games count for rating and XP too. Network fees are on us."
+                      : "Your stake waits in escrow until the game ends. Network fees are on us."}
                 </p>
               ) : null}
             </div>
 
             <fieldset>
-              <legend className="label mb-2">Time per move</legend>
+              <legend className="label mb-2">Time per move. Run out and your opponent can claim the win.</legend>
               <div className="grid grid-cols-3 gap-2">
                 {TIME_CONTROLS.map((control) => (
                   <button

@@ -97,9 +97,11 @@ pub fn handle_initialize_match(
         ChessError::InvalidPlatformFeeWallet
     );
 
-    // 5. Validate move_timeout_duration is non-negative
+    // 5. Every match needs a real move clock. Without one the only exits are
+    // checkmate, a draw rule or resignation, so an opponent who leaves would
+    // lock the stake forever.
     require!(
-        move_timeout_duration_arg >= 0,
+        (MIN_MOVE_TIMEOUT_SECONDS..=MAX_MOVE_TIMEOUT_SECONDS).contains(&move_timeout_duration_arg),
         ChessError::InvalidTimeoutDuration
     );
 
@@ -176,6 +178,5 @@ pub fn handle_initialize_match(
         platform_fee_basis_points: platform_fee_basis_points_arg,
     });
 
-    msg!("Match created: {}", chess_match_account.match_id);
     Ok(())
 }

@@ -8,8 +8,6 @@ use crate::events::*;
 use crate::state::*;
 use crate::utils::chess_logic;
 
-use super::schedule_timeout;
-
 #[derive(Accounts, Session)]
 #[instruction(args: MakeMoveArgs)]
 pub struct MakeMove<'info> {
@@ -36,7 +34,20 @@ pub struct MakeMoveArgs {
     pub from_col: u8,
     pub to_row: u8,
     pub to_col: u8,
-    pub promotion: Option<PieceType>, // Ensure PieceType is correctly imported/namespaced
+    pub promotion: Option<PieceType>,
+}
+
+/// Who won and why, for the game-end bookkeeping shared by every terminal move.
+fn end_game(chess_match: &mut ChessMatch, status: GameStatus, reason: GameEndReason, winner: Option<PlayerColor>, now: i64) {
+    chess_match.game_status = status;
+    chess_match.game_end_reason = Some(reason);
+    chess_match.last_move_timestamp = now;
+    emit!(GameEndedEvent {
+        match_id: chess_match.match_id.clone(),
+        status,
+        winner,
+        reason,
+    });
 }
 
 #[session_auth_or(
@@ -47,10 +58,8 @@ pub struct MakeMoveArgs {
     ChessError::UnauthorizedSigner
 )]
 pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()> {
-    let chess_match_key = ctx.accounts.chess_match.key();
     let chess_match = &mut ctx.accounts.chess_match;
-    let clock = Clock::get()?;
-    let now = clock.unix_timestamp;
+    let now = Clock::get()?.unix_timestamp;
 
     // 1. Ensure game is active
     require!(
@@ -63,137 +72,75 @@ pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()
     // unexpired fast-play signer, or a valid SessionTokenV2 bound to the
     // current player's wallet.
     let player_authority = chess_match.current_player_key();
-    let player_color_making_move = chess_match.current_turn; // Color of the player making the move
+    let mover = chess_match.current_turn;
 
-    // 3. Check move timeout (if move_timeout_duration is set > 0)
-    if chess_match.move_timeout_duration > 0 {
-        if now.saturating_sub(chess_match.last_move_timestamp) > chess_match.move_timeout_duration {
-            chess_match.game_status = match player_color_making_move {
-                PlayerColor::White => GameStatus::BlackWins,
-                PlayerColor::Black => GameStatus::WhiteWins,
-            };
-            chess_match.game_end_reason = Some(GameEndReason::Timeout);
-            chess_match.last_move_timestamp = now; // Update timestamp for game end
-
-            emit!(GameEndedEvent {
-                match_id: chess_match.match_id.clone(), // Assuming match_id in ChessMatch state is String
-                status: chess_match.game_status,
-                winner: Some(player_color_making_move.opponent()),
-                reason: GameEndReason::Timeout,
-            });
-            msg!("Player {:?} timed out. Opponent {:?} wins.", player_color_making_move, player_color_making_move.opponent());
-            return Ok(());
-        }
+    // 3. A move that arrives after the clock ran out loses on time instead.
+    if chess_match.move_timeout_duration > 0
+        && now.saturating_sub(chess_match.last_move_timestamp) > chess_match.move_timeout_duration
+    {
+        let status = match mover {
+            PlayerColor::White => GameStatus::BlackWins,
+            PlayerColor::Black => GameStatus::WhiteWins,
+        };
+        end_game(chess_match, status, GameEndReason::Timeout, Some(mover.opponent()), now);
+        return Ok(());
     }
 
-    // 4. Call the core chess logic (Bounds checks are handled inside chess_logic)
-    msg!("Calling validate_and_apply_move for player: {:?}", player_color_making_move);
-    msg!("Move: ({},{}) to ({},{}) promo: {:?}", args.from_row, args.from_col, args.to_row, args.to_col, args.promotion);
-    
-    // CORRECTED CALL: Pass the mutable chess_match account directly
+    // 4. Validate and apply the move. Bounds and rules live in chess_logic;
+    // it updates board, castling rights, en passant, clocks and the turn.
     let move_result = chess_logic::validate_and_apply_move(
-        chess_match, // Pass the whole mutable ChessMatch state
+        chess_match,
         args.from_row,
         args.from_col,
         args.to_row,
         args.to_col,
-        player_color_making_move, // Pass the color of the current player
+        mover,
         args.promotion,
     )?;
-    msg!("Move result: {:?}", move_result);
-    // chess_match is now updated by chess_logic::validate_and_apply_move for fields like:
-    // board, castling_rights, en_passant_target, halfmove_clock, fullmove_number, current_turn.
 
-    // 5. Update game state based on move_result (primarily setting game_status and player_idx)
+    // 5. Game status after the move.
     match move_result {
         MoveResult::Normal => {
-            // current_turn was already updated by chess_logic.
-            // Update current_player_idx to match the new current_turn.
             chess_match.current_player_idx = if chess_match.current_turn == PlayerColor::White { 0 } else { 1 };
             chess_match.last_move_timestamp = now;
         }
         MoveResult::Checkmate => {
-            // player_color_making_move is the winner
-            chess_match.game_status = if player_color_making_move == PlayerColor::White {
-                GameStatus::WhiteWins
-            } else {
-                GameStatus::BlackWins
-            };
-            chess_match.game_end_reason = Some(GameEndReason::Checkmate);
-            chess_match.last_move_timestamp = now; // Record time of game-ending move
-
-            emit!(GameEndedEvent {
-                match_id: chess_match.match_id.clone(), // Assuming String
-                status: chess_match.game_status,
-                winner: Some(player_color_making_move),
-                reason: GameEndReason::Checkmate,
-            });
+            let status = if mover == PlayerColor::White { GameStatus::WhiteWins } else { GameStatus::BlackWins };
+            end_game(chess_match, status, GameEndReason::Checkmate, Some(mover), now);
         }
-        MoveResult::Stalemate => {
-            chess_match.game_status = GameStatus::Draw;
-            chess_match.game_end_reason = Some(GameEndReason::Stalemate);
-            chess_match.last_move_timestamp = now;
-
-            emit!(GameEndedEvent {
-                match_id: chess_match.match_id.clone(),
-                status: chess_match.game_status,
-                winner: None,
-                reason: GameEndReason::Stalemate,
-            });
-        }
-        MoveResult::FiftyMoveRule => {
-            chess_match.game_status = GameStatus::Draw;
-            chess_match.game_end_reason = Some(GameEndReason::FiftyMoveRule);
-            chess_match.last_move_timestamp = now;
-
-            emit!(GameEndedEvent {
-                match_id: chess_match.match_id.clone(),
-                status: chess_match.game_status,
-                winner: None,
-                reason: GameEndReason::FiftyMoveRule,
-            });
-        }
+        MoveResult::Stalemate => end_game(chess_match, GameStatus::Draw, GameEndReason::Stalemate, None, now),
+        MoveResult::FiftyMoveRule => end_game(chess_match, GameStatus::Draw, GameEndReason::FiftyMoveRule, None, now),
         MoveResult::InsufficientMaterial => {
-            chess_match.game_status = GameStatus::Draw;
-            chess_match.game_end_reason = Some(GameEndReason::InsufficientMaterial);
-            chess_match.last_move_timestamp = now;
-
-            emit!(GameEndedEvent {
-                match_id: chess_match.match_id.clone(),
-                status: chess_match.game_status,
-                winner: None,
-                reason: GameEndReason::InsufficientMaterial,
-            });
+            end_game(chess_match, GameStatus::Draw, GameEndReason::InsufficientMaterial, None, now)
         }
         MoveResult::ThreefoldRepetition => {
-            chess_match.game_status = GameStatus::Draw;
-            chess_match.game_end_reason = Some(GameEndReason::ThreefoldRepetition);
-            chess_match.last_move_timestamp = now;
-
-            emit!(GameEndedEvent {
-                match_id: chess_match.match_id.clone(),
-                status: chess_match.game_status,
-                winner: None,
-                reason: GameEndReason::ThreefoldRepetition,
-            });
+            end_game(chess_match, GameStatus::Draw, GameEndReason::ThreefoldRepetition, None, now)
         }
     }
 
-    // 6. Emit MoveMadeEvent
-    let from_sq = format!("{}{}", (b'a' + args.from_col) as char, args.from_row + 1);
-    let to_sq = format!("{}{}", (b'a' + args.to_col) as char, args.to_row + 1);
-    let promo_char_str = match args.promotion { // Renamed for clarity
-        Some(PieceType::Queen) => "q", Some(PieceType::Rook) => "r",
-        Some(PieceType::Bishop) => "b", Some(PieceType::Knight) => "n",
+    // 6. Emit MoveMadeEvent. The indexer reads the move and the FEN from it.
+    let promo_char = match args.promotion {
+        Some(PieceType::Queen) => "q",
+        Some(PieceType::Rook) => "r",
+        Some(PieceType::Bishop) => "b",
+        Some(PieceType::Knight) => "n",
         _ => "",
     };
-    let algebraic_move_string = format!("{}{}{}", from_sq, to_sq, promo_char_str);
+    let algebraic_move_string = format!(
+        "{}{}{}{}{}",
+        (b'a' + args.from_col) as char,
+        args.from_row + 1,
+        (b'a' + args.to_col) as char,
+        args.to_row + 1,
+        promo_char
+    );
+    let game_over = move_result != MoveResult::Normal;
 
     emit!(MoveMadeEvent {
-        match_id: chess_match.match_id.clone(), // Assuming String
+        match_id: chess_match.match_id.clone(),
         // Attribute the move to the player's wallet, never the temporary key.
         player: player_authority,
-        player_color: player_color_making_move, // The color that just moved
+        player_color: mover,
         algebraic_move: algebraic_move_string,
         from_row: args.from_row,
         from_col: args.from_col,
@@ -201,42 +148,12 @@ pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()
         to_col: args.to_col,
         promotion_piece: args.promotion,
         board_fen: chess_logic::generate_fen(chess_match),
-        // Check status for the *next* player (whose turn it is now, after chess_logic updated current_turn)
-        is_check: if chess_match.game_status == GameStatus::Active { 
-            chess_logic::is_king_in_check(&chess_match.board, chess_match.current_turn)
-        } else { false },
+        // Check status for the side to move now. A checkmate is reported
+        // through is_checkmate; other game-over results leave no check.
+        is_check: !game_over && chess_logic::is_king_in_check(&chess_match.board, chess_match.current_turn),
         is_checkmate: move_result == MoveResult::Checkmate,
-        is_stalemate: move_result == MoveResult::Stalemate || move_result == MoveResult::ThreefoldRepetition || move_result == MoveResult::InsufficientMaterial || move_result == MoveResult::FiftyMoveRule,
+        is_stalemate: game_over && move_result != MoveResult::Checkmate,
     });
-
-    // 7. Schedule timeout crank task for opponent if game is still active.
-    // Skip when delegated — Magic111 Task Scheduler not available on ER.
-    if chess_match.game_status == GameStatus::Active
-        && chess_match.move_timeout_duration > 0
-        && !chess_match.is_delegated
-    {
-        // Cancel previous task (opponent's now-obsolete timeout)
-        if chess_match.active_task_id >= 0 {
-            schedule_timeout::invoke_cancel_task(
-                chess_match.active_task_id,
-                &ctx.accounts.player.to_account_info(),
-            )?;
-        }
-
-        // Generate unique task_id from match account key + move counter
-        let base_id = i64::from_le_bytes(chess_match_key.as_ref()[..8].try_into().unwrap());
-        let new_task_id = base_id.wrapping_add(chess_match.fullmove_number as i64 * 2);
-        let timeout_ms = chess_match.move_timeout_duration.checked_mul(1000).unwrap_or(0);
-
-        schedule_timeout::invoke_schedule_task(
-            new_task_id,
-            timeout_ms,
-            1,
-            &ctx.accounts.player.to_account_info(),
-        )?;
-
-        chess_match.active_task_id = new_task_id;
-    }
 
     Ok(())
 }

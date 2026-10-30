@@ -6,7 +6,7 @@ import type { ApiMatch } from "@/lib/api";
 import { formatEndReason, outcomeFor, resultScore, timeAgo } from "@/lib/game-result";
 import { reviewHref } from "@/lib/match-links";
 import { formatRatingChange, playerLabel } from "@/lib/players";
-import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
+import { formatStake } from "@/lib/stake-tokens";
 import { PlayerAvatar } from "@/components/shared/PlayerAvatar";
 import { cn } from "@/lib/utils";
 
@@ -89,10 +89,15 @@ export function FinishedGameCard({
 
       <span className="w-24 shrink-0 text-right text-sm font-semibold tnum">
         {wager > 0n ? (
-          <>
-            {formatTokenAmount(wager)}
-            <span className="ml-1 text-xs font-normal text-muted-foreground">{solanaConfig.wagerSymbol}</span>
-          </>
+          (() => {
+            const [amount, symbol] = formatStake(wager, match.bettingTokenMint).split(" ");
+            return (
+              <>
+                {amount}
+                {symbol ? <span className="ml-1 text-xs font-normal text-muted-foreground">{symbol}</span> : null}
+              </>
+            );
+          })()
         ) : (
           <span className="font-normal text-muted-foreground">Free</span>
         )}

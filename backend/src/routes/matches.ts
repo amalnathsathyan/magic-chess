@@ -125,6 +125,15 @@ export function matchRoutes(app: FastifyInstance): void {
         createdAt: row.createdAt,
         lastMoveAt: row.lastMoveAt,
         boardFen: row.currentFen ?? getFen(row.matchId as string),
+        // Whose move it is, so the lobby can flag "your move" without a
+        // per-match request. Null once the game is over.
+        currentTurn:
+          row.gameStatus === "Active"
+            ? sideToMove(
+                ((row.currentFen as string | null) ?? getFen(row.matchId as string)) as string | null,
+                Number(row.moveCount ?? 0)
+              )
+            : null,
         moveCount: Number(row.moveCount ?? 0),
         betAmountPerPlayer: String(row.betAmountPerPlayer ?? "0"),
         openPredictions: Number(row.openPredictions ?? 0),

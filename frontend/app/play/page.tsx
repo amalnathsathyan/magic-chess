@@ -12,6 +12,7 @@ import {
   ExternalLink,
   LoaderCircle,
   RefreshCw,
+  RotateCcw,
   Share2,
   ShieldCheck,
   Sword,
@@ -51,7 +52,7 @@ import { FaucetBanner } from "@/components/lobby/FaucetBanner";
 import { DEFAULT_STAKE_TOKEN, formatStake } from "@/lib/stake-tokens";
 import { api, type ApiMatchHistory } from "@/lib/api";
 import { sounds } from "@/lib/sounds";
-import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
+import { solanaConfig } from "@/lib/solana-config";
 import {
   buildSettlementInstructions,
   buildWagerInstruction,
@@ -75,6 +76,7 @@ import { PredictionPanel } from "@/components/predictions/PredictionPanel";
 import { useMatchRealtime } from "@/hooks/useMatchRealtime";
 import { copyToClipboard } from "@/lib/clipboard";
 import { absoluteUrl, playHref, reviewHref, spectateHref } from "@/lib/match-links";
+import { findStakeToken } from "@/lib/stake-tokens";
 import { playerLabel } from "@/lib/players";
 import {
   formatCountdown,
@@ -82,7 +84,8 @@ import {
   formatStartTimeWithZone,
   getMatchStart,
 } from "@/lib/match-start";
-import { drawInviteCard, renderCard } from "@/lib/share-card";
+import { compactAmount, drawInviteCard, drawMatchCard, renderCard, type MatchCardSide } from "@/lib/share-card";
+import { formatDuration, formatEndReason, resultHeadline, resultScore } from "@/lib/game-result";
 import {
   formatRemaining,
   isSquare,
@@ -195,6 +198,7 @@ function PlayView() {
   const { match, loading, error, refetch } = useMatch(matchId || null);
   const [copied, setCopied] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [resultOpen, setResultOpen] = useState(false);
   const { wallets } = useWallets();
   const wallet = selectSolanaWallet(wallets);
   const embeddedWallet = wallet ? isPrivyEmbeddedWallet(wallet) : false;
@@ -686,6 +690,82 @@ function PlayView() {
       })
     );
   };
+
+  // The result card: the same card the review page draws, so a player can
+  // post the game the moment it ends, before or after the payout.
+  const resultStatus =
+    match?.gameStatus === GameStatus.WhiteWins
+      ? "WhiteWins"
+      : match?.gameStatus === GameStatus.BlackWins
+        ? "BlackWins"
+        : match?.gameStatus === GameStatus.Draw
+          ? "Draw"
+          : null;
+  const resultCaption = (() => {
+    if (!match || !resultStatus) return "";
+    const white = playerLabel(whiteAddress, history?.white?.name);
+    const black = playerLabel(blackAddress, history?.black?.name);
+    const reason = formatEndReason(match.gameEndReason ?? history?.gameEndReason);
+    const how = reason ? ` by ${reason.toLowerCase()}` : "";
+    const outcome =
+      resultStatus === "WhiteWins"
+        ? `${white} beat ${black}${how}`
+        : resultStatus === "BlackWins"
+          ? `${black} beat ${white}${how}`
+          : `${white} and ${black} drew${how}`;
+    const mine = playerColor
+      ? endSummary?.outcome === "win"
+        ? "I won"
+        : endSummary?.outcome === "loss"
+          ? "I lost"
+          : "We drew"
+      : null;
+    const stakes = match.totalPot > 0n ? ` with ${formatWager(match.totalPot)} on the line` : "";
+    return `${mine ? `${mine} on @zugxyz: ` : ""}${outcome} in ${Math.ceil(pliesPlayed(match) / 2)} moves${stakes}. Every move matters.`;
+  })();
+  const renderResult = async () => {
+    if (!match || !resultStatus) throw new Error("The game is not over.");
+    const detail = await api.getMatchHistory(matchId).catch(() => null);
+    const side = (color: "white" | "black"): MatchCardSide => {
+      const address = color === "white" ? whiteAddress : blackAddress;
+      const meta = color === "white" ? detail?.white : detail?.black;
+      return {
+        name: playerLabel(address, meta?.name),
+        rating: meta?.rating ?? null,
+        ratingChange: meta?.ratingChange ?? null,
+        xp: meta?.xp ?? null,
+      };
+    };
+    const reason = formatEndReason(match.gameEndReason ?? detail?.gameEndReason);
+    return renderCard((ctx) =>
+      drawMatchCard(ctx, {
+        headline: resultHeadline(resultStatus),
+        reason,
+        score: resultScore(resultStatus) ?? "",
+        winner: resultStatus === "WhiteWins" ? "white" : resultStatus === "BlackWins" ? "black" : null,
+        white: side("white"),
+        black: side("black"),
+        moves: Math.ceil(pliesPlayed(match) / 2),
+        length: formatDuration(detail?.startedAt, detail?.endedAt),
+        stake: match.betAmountPlayerOne > 0n ? compactAmount(formatWager(match.betAmountPlayerOne)) : "FREE",
+        pot: match.totalPot > 0n ? compactAmount(formatWager(match.totalPot)) : null,
+      })
+    );
+  };
+  // "Rematch" opens the create form with this game's stake, token and clock.
+  const rematchHref = (() => {
+    if (!match) return "/arena?new=1";
+    const token = findStakeToken(match.bettingTokenMint);
+    const params = new URLSearchParams({ new: "1", clock: String(Number(match.moveTimeoutDuration)) });
+    if (token) {
+      params.set("mint", token.mint);
+      const base = 10n ** BigInt(token.decimals);
+      const whole = match.betAmountPlayerOne / base;
+      const fraction = (match.betAmountPlayerOne % base).toString().padStart(token.decimals, "0").replace(/0+$/, "");
+      params.set("stake", fraction ? `${whole}.${fraction}` : whole.toString());
+    }
+    return `/arena?${params.toString()}`;
+  })();
 
   const handleAbort = async () => {
     if (!match || !wallet || !isWaiting || walletAddress !== whiteAddress) return;
@@ -1202,9 +1282,16 @@ function PlayView() {
                 </dl>
 
                 <div className="flex flex-col gap-3 p-4">
-                  <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <p
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                    title={match.isDelegated ? "The match is delegated to a MagicBlock ephemeral rollup" : "The match account lives on Solana devnet"}
+                  >
                     <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                    {match.isDelegated ? "Playing on the MagicBlock rollup" : "On Solana"}
+                    {match.isDelegated
+                      ? "Moves are instant and free. Every one is checked on-chain."
+                      : isWaiting
+                        ? "Your stake is locked in escrow on Solana."
+                        : "Recorded on Solana."}
                   </p>
 
                   {isWaiting &&
@@ -1332,7 +1419,8 @@ function PlayView() {
                           {sessionStatus === "authorizing" ? "Setting up instant moves…" : "Turn on instant moves"}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Approve once and skip the wallet popup on every move.
+                          One approval now, then no wallet popups for the rest of this game. Your tokens stay
+                          where they are; the key can only make chess moves.
                         </p>
                         {sessionError ? (
                           <p className="mt-2 text-xs text-destructive">{sessionError}</p>
@@ -1372,6 +1460,19 @@ function PlayView() {
                     />
                   ) : null}
 
+                  {isFinished && isParticipant && resultStatus ? (
+                    <div className="grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => setResultOpen(true)} className="btn btn-secondary btn-sm">
+                        <Share2 className="h-4 w-4" aria-hidden="true" />
+                        Share result
+                      </button>
+                      <Link href={rematchHref} className="btn btn-secondary btn-sm">
+                        <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                        Rematch
+                      </Link>
+                    </div>
+                  ) : null}
+
                   {isFinished && isParticipant && !match.payoutProcessed ? (
                     <button
                       type="button"
@@ -1387,10 +1488,12 @@ function PlayView() {
                             : "Step 2 of 2: paying out…"
                           : match.totalPot === 0n
                             ? match.isDelegated
-                              ? "Finalize and close"
+                              ? "Save result to Solana"
                               : "Close match"
                             : match.isDelegated
-                              ? "Finalize and pay out"
+                              ? endSummary?.outcome === "win"
+                                ? "Collect the pot"
+                                : "Save result and pay out"
                               : "Pay out"}
                     </button>
                   ) : null}
@@ -1421,14 +1524,14 @@ function PlayView() {
                           </Link>
                         ) : null}
                         <Link
-                          href="/arena"
+                          href={match.gameStatus === GameStatus.Aborted ? rematchHref : "/arena?new=1"}
                           className={cn(
                             "btn btn-secondary",
                             match.gameStatus === GameStatus.Aborted && "col-span-2"
                           )}
                         >
                           <Sword className="h-4 w-4" aria-hidden="true" />
-                          New match
+                          {match.gameStatus === GameStatus.Aborted ? "Start it again" : "New match"}
                         </Link>
                       </div>
                     </>
@@ -1442,6 +1545,19 @@ function PlayView() {
                   ) : null}
                 </div>
               </section>
+
+              {resultStatus ? (
+                <ShareCardDialog
+                  open={resultOpen}
+                  onOpenChange={setResultOpen}
+                  title="Share the result"
+                  description="Both players, the result and how it ended, on one card."
+                  filename={`zug-game-${matchId}.png`}
+                  message={resultCaption}
+                  url={absoluteUrl(reviewHref(matchId))}
+                  render={renderResult}
+                />
+              ) : null}
 
               <MatchJourney
                 isWaiting={isWaiting}

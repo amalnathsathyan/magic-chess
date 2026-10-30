@@ -80,14 +80,17 @@ flowchart LR
 is finished and back on L1, because every account is checked against the
 match: player token accounts must belong to the players, all must use the match
 mint, and no account can appear twice. Settlement runs once
-(`PayoutAlreadyProcessed`) and closes the escrow account. Its rent goes to the
-signer, or to the sponsor when the backend paid for it.
+(`PayoutAlreadyProcessed`) and closes the escrow account. Its rent goes to
+`payer`, which the program pins to a player or the platform fee wallet; the
+sponsored app flow names the platform wallet, so rent the sponsor paid comes
+back to the house.
 
 After settlement, `close_match` closes the `ChessMatch` account and returns
 its rent.
 
 ## Today vs planned
 
-Players currently press **Finalize and settle payout** in the app, which runs
-`undelegate_match` on the rollup and then `process_match_settlement` on L1.
+Players currently press **Collect the pot** (winner) or **Save result and pay
+out** in the app, which runs `undelegate_match` on the rollup and then
+`process_match_settlement` on L1.
 Automating this is on the [Roadmap](../roadmap.md).

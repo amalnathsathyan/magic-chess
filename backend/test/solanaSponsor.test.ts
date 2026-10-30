@@ -326,6 +326,36 @@ test("rejects settlement that redirects sponsor-funded escrow rent", () => {
   );
 });
 
+test("accepts settlement that refunds escrow rent to the platform fee wallet", () => {
+  // The program only lets settlement send the escrow rent to a player or the
+  // platform wallet, so the sponsored flow names the platform wallet.
+  const sponsor = Keypair.generate();
+  const player = Keypair.generate();
+  const platform = Keypair.generate().publicKey;
+  const mint = Keypair.generate().publicKey;
+  const atas = [0, 1, 2].map(() => Keypair.generate().publicKey);
+  const transaction = new Transaction({ feePayer: sponsor.publicKey }).add(
+    settleInstruction(platform, atas),
+    memo(player.publicKey)
+  );
+
+  assert.doesNotThrow(() =>
+    validateSponsoredTransaction(serializePartiallySigned(transaction, player), {
+      ...policy(sponsor.publicKey, player.publicKey, mint),
+      platformFeeWallet: platform,
+    })
+  );
+  // Without a configured platform wallet the same transaction is refused.
+  assert.throws(
+    () =>
+      validateSponsoredTransaction(
+        serializePartiallySigned(transaction, player),
+        policy(sponsor.publicKey, player.publicKey, mint)
+      ),
+    /refund rent to the sponsor/
+  );
+});
+
 test("rejects join_match signed by a different wallet", () => {
   const sponsor = Keypair.generate();
   const player = Keypair.generate();

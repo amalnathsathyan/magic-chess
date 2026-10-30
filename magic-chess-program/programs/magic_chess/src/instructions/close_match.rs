@@ -31,8 +31,6 @@ pub struct CloseMatch<'info> {
 pub fn handle_close_match(ctx: Context<CloseMatch>) -> Result<()> {
     let chess_match = &ctx.accounts.chess_match;
 
-    msg!("Closing chess_match PDA for match: {}", chess_match.match_id);
-
     // Emit MatchClosedEvent before the account is closed (data is still readable)
     emit!(MatchClosedEvent {
         match_id: chess_match.match_id.clone(),
@@ -42,6 +40,5 @@ pub fn handle_close_match(ctx: Context<CloseMatch>) -> Result<()> {
     // - Transfers lamports from chess_match PDA to payer
     // - Zeroes out the account data
 
-    msg!("Match closed: {}", chess_match.match_id);
     Ok(())
 }

@@ -80,8 +80,8 @@ export function MatchJourney(props: MatchJourneyProps) {
       title: "Match created",
       state: "done",
       body: isFree
-        ? "Free game: nothing to pay out."
-        : `White's ${wagerLabel} stake is locked in escrow on Solana.`,
+        ? "Free game: nothing to pay out, but it still counts for rating and XP."
+        : `White's ${wagerLabel} stake is locked in escrow on Solana. Nobody can touch it until the game ends.`,
     },
     {
       title: "Opponent joins",
@@ -126,8 +126,8 @@ export function MatchJourney(props: MatchJourneyProps) {
           : needsCommit
             ? isPlayer
               ? isFree
-                ? "Press Finalize to close the match. Either player can."
-                : "Press Finalize to pay out. Either player can."
+                ? "Press “Save result to Solana” to close the match. Either player can."
+                : "Press “Collect the pot” (or “Save result and pay out”) to finish. Either player can, and the escrow pays out on its own after that."
               : "Waiting for a player to finalize the game."
             : "The final board is saved on Solana.",
     },

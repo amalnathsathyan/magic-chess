@@ -19,10 +19,14 @@ pub fn process_payout<'info>( // Explicitly adding 'info lifetime here
     match_escrow_token_account_data: &Account<'info, TokenAccount>,
 ) -> Result<()> {
     // 1. Derive the PDA which is the authority of the match_escrow_token_account
-    let (pda_authority, bump_seed) = Pubkey::find_program_address(
-        &[MATCH_ESCROW_SEED, &chess_match.match_id.as_bytes()],
+    // The escrow's bump is stored at initialize_match and checked by the
+    // settlement account constraints, so no bump search is needed here.
+    let bump_seed = chess_match.match_escrow_bump;
+    let pda_authority = Pubkey::create_program_address(
+        &[MATCH_ESCROW_SEED, chess_match.match_id.as_bytes(), &[bump_seed]],
         program_id,
-    );
+    )
+    .map_err(|_| error!(ChessError::InvalidEscrowAccount))?;
 
     // 2. Verify that the derived PDA is indeed the owner of the escrow token account
     // This check is crucial for security.
@@ -77,7 +81,6 @@ pub fn process_payout<'info>( // Explicitly adding 'info lifetime here
     // because `from.owner` is the PDA.
 
     if fee > 0 {
-        msg!("Transferring platform fee: {}", fee);
         token::transfer(
             CpiContext::new_with_signer(
                 token_program.key(),
@@ -94,7 +97,6 @@ pub fn process_payout<'info>( // Explicitly adding 'info lifetime here
 
 
     if winner_amount > 0 {
-        msg!("Transferring winner amount: {}", winner_amount);
         token::transfer(
             CpiContext::new_with_signer(
                 token_program.key(),
@@ -122,10 +124,14 @@ pub fn process_draw_payout<'info>( // Explicitly adding 'info lifetime here
     program_id: &Pubkey,
     match_escrow_token_account_data: &Account<'info, TokenAccount>,
 ) -> Result<()> {
-    let (pda_authority, bump_seed) = Pubkey::find_program_address(
-        &[MATCH_ESCROW_SEED, &chess_match.match_id.as_bytes()],
+    // The escrow's bump is stored at initialize_match and checked by the
+    // settlement account constraints, so no bump search is needed here.
+    let bump_seed = chess_match.match_escrow_bump;
+    let pda_authority = Pubkey::create_program_address(
+        &[MATCH_ESCROW_SEED, chess_match.match_id.as_bytes(), &[bump_seed]],
         program_id,
-    );
+    )
+    .map_err(|_| error!(ChessError::InvalidEscrowAccount))?;
 
     if match_escrow_token_account_data.owner != pda_authority {
         return err!(ChessError::InvalidEscrowAccount);
@@ -159,7 +165,6 @@ pub fn process_draw_payout<'info>( // Explicitly adding 'info lifetime here
 
 
     if fee > 0 {
-        msg!("Transferring platform fee in draw: {}", fee);
         token::transfer(
             CpiContext::new_with_signer(
                 token_program.key(),
@@ -175,7 +180,6 @@ pub fn process_draw_payout<'info>( // Explicitly adding 'info lifetime here
     }
 
     if player_one_refund > 0 {
-        msg!("Transferring player one refund: {}", player_one_refund);
         token::transfer(
             CpiContext::new_with_signer(
                 token_program.key(),
@@ -191,7 +195,6 @@ pub fn process_draw_payout<'info>( // Explicitly adding 'info lifetime here
     }
 
     if player_two_refund > 0 {
-        msg!("Transferring player two refund: {}", player_two_refund);
         token::transfer(
             CpiContext::new_with_signer(
                 token_program.key(),

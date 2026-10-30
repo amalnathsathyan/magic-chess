@@ -121,8 +121,9 @@ const MAGIC_CHESS_RULES = new Map<string, MagicChessRule>(
       [[78, 77, 152, 203, 222, 211, 208, 233], { name: "make_move", role: "player", index: 1 }],
       [[13, 147, 179, 38, 67, 1, 69, 132], { name: "set_session_key", role: "player", index: 1 }],
       [[81, 192, 32, 110, 104, 116, 144, 151], { name: "revoke_session_key", role: "player", index: 1 }],
-      // Escrow rent from settlement is refunded to `payer` (index 5); it
-      // must be the sponsor that originally funded it, never the caller.
+      // Escrow rent from settlement is refunded to `payer` (index 5): the
+      // sponsor that funded it, or the platform fee wallet (the only
+      // non-player destination the program accepts), never the caller.
       [[236, 106, 133, 178, 45, 221, 98, 116], { name: "process_match_settlement", role: "sponsor", index: 5 }],
       // close_match refunds the match account rent to `payer` (index 1).
       [[79, 174, 36, 80, 233, 185, 176, 239], { name: "close_match", role: "sponsor", index: 1 }],
@@ -239,9 +240,15 @@ function validateMagicChessInstruction(
     return rule;
   }
   if (rule.role === "sponsor") {
+    // Rent the sponsor paid comes back to the house: the fee payer itself, or
+    // the platform fee wallet (the program only lets settlement send escrow
+    // rent to a player or that wallet).
     const key = instruction.keys[rule.index];
-    if (!key?.pubkey.equals(policy.feePayer) || !key.isWritable) {
-      throw new SponsorError(`${rule.name} must refund rent to the sponsor`, 403);
+    const toHouse =
+      key?.pubkey.equals(policy.feePayer) ||
+      (policy.platformFeeWallet !== undefined && key?.pubkey.equals(policy.platformFeeWallet));
+    if (!key || !toHouse || !key.isWritable) {
+      throw new SponsorError(`${rule.name} must refund rent to the sponsor or the platform wallet`, 403);
     }
     return rule;
   }

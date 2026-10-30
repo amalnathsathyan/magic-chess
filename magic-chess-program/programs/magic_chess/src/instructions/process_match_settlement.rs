@@ -56,9 +56,18 @@ pub struct ProcessMatchSettlement<'info> {
     )]
     pub platform_fee_ata: Box<Account<'info, TokenAccount>>, // Platform's Associated Token Account
 
-    /// Rent destination for escrow account closure — receives lamports back.
-    /// CHECK: this account only receives rent lamports from the closed escrow token account.
-    #[account(mut)]
+    /// Receives the escrow account's rent when it closes. Settlement is
+    /// permissionless, so the destination is pinned to a player or the
+    /// platform wallet; otherwise whoever settled first could name anyone.
+    /// CHECK: only receives lamports; the constraint pins who it can be.
+    #[account(
+        mut,
+        constraint = (
+            payer.key() == chess_match.players[0] ||
+            payer.key() == chess_match.players[1] ||
+            payer.key() == PLATFORM_FEE_WALLET
+        ) @ ChessError::InvalidRentRecipient,
+    )]
     pub payer: UncheckedAccount<'info>,
 
     pub token_program: Program<'info, Token>,
@@ -110,13 +119,8 @@ pub fn handle_process_match_settlement(ctx: Context<ProcessMatchSettlement>) -> 
     let token_program_info = &ctx.accounts.token_program;
     let current_program_id = ctx.program_id; // program_id is implicitly available via ctx.program_id
 
-    msg!("Processing settlement for match: {}", match_id);
-    msg!("Game status: {:?}", game_status);
-    msg!("Total pot: {}", total_pot);
-
     match game_status {
         GameStatus::WhiteWins => {
-            msg!("White wins. Payout to player 1: {}", players[0]);
             payout_logic::process_payout(
                 chess_match,                     // &Account<'info, ChessMatch>
                 &match_escrow_info,              // &AccountInfo<'info>
@@ -135,7 +139,6 @@ pub fn handle_process_match_settlement(ctx: Context<ProcessMatchSettlement>) -> 
             });
         }
         GameStatus::BlackWins => {
-            msg!("Black wins. Payout to player 2: {}", players[1]);
             if players[1] == Pubkey::default() {
                 return err!(ChessError::InvalidGameStateForPayout);
             }
@@ -157,11 +160,6 @@ pub fn handle_process_match_settlement(ctx: Context<ProcessMatchSettlement>) -> 
             });
         }
         GameStatus::Draw => {
-            msg!("Game is a draw. Refunding players.");
-            if players[1] == Pubkey::default() && players[0] != Pubkey::default() {
-                msg!("Draw detected but player 2 is not set. This state is unexpected for a draw payout.");
-                return err!(ChessError::InvalidGameStateForPayout);
-            }
             if players[0] == Pubkey::default() || players[1] == Pubkey::default() {
                 return err!(ChessError::InvalidGameStateForPayout);
             }
@@ -197,7 +195,6 @@ pub fn handle_process_match_settlement(ctx: Context<ProcessMatchSettlement>) -> 
     chess_match.payout_processed = true;
 
     // Close the escrow token account and return rent to payer
-    msg!("Closing escrow token account for match: {}", match_id);
     let escrow_info = match_escrow_info.clone();
     let payer_info = ctx.accounts.payer.to_account_info();
 
@@ -222,6 +219,5 @@ pub fn handle_process_match_settlement(ctx: Context<ProcessMatchSettlement>) -> 
         ),
     )?;
 
-    msg!("Settlement processed successfully for match: {}", match_id);
     Ok(())
 }

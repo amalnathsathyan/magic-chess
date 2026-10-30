@@ -33,9 +33,9 @@ See [Architecture → Overview](../architecture/overview.md) for the full pictur
 
 These need a program upgrade. They are tracked on the [Roadmap](../roadmap.md).
 
-- `close_match` doesn't restrict who receives the closed account's rent.
-- `process_match_settlement` lets the caller choose where the escrow rent goes.
+- Fixed in source, live once the next devnet deploy lands: `close_match` and `process_match_settlement` only send rent to a player or the platform wallet; the creator can no longer set an arbitrary fee or fee wallet; a match must have a move clock (30 s to 7 days); the unused task-scheduler instructions are gone. See the [2026-10-30 program audit](https://github.com/amalnathsathyan/magic-chess/blob/dev/research/agent-findings/19-program-audit-2026-10-30.md).
 - `abort_match` returns escrow rent to the creator even when a sponsor paid it, and leaves the `ChessMatch` account open.
 - `delegate_match` doesn't pin an ER validator.
+- Predictions can be placed on the base layer after the result is known on the rollup. Predictions carry play points only until this is closed.
 
 None of these let anyone take wagers. They only affect rent lamports and rollup routing.

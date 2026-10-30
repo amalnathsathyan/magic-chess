@@ -24,7 +24,7 @@ fn setup_match_for_prediction(
     let init_ix = initialize_match_ix(
         &match_pda, p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet, true,
+        bet_amount, 600, 200, &platform_fee_wallet, true,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -102,7 +102,7 @@ fn test_cannot_init_pool_without_prediction_enabled() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, "pred-noenable",
-        100_000, 0, 200, &platform_fee_wallet, false,
+        100_000, 600, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -551,7 +551,7 @@ fn test_cancel_bet_when_aborted() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, "pred-cancel-001",
-        100_000, 0, 200, &pfw, true,
+        100_000, 600, 200, &pfw, true,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -648,7 +648,7 @@ fn test_full_prediction_flow_with_platform_fee() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, "pred-fullflow",
-        100_000, 0, 200, &platform_fee_wallet, true,
+        100_000, 600, 200, &platform_fee_wallet, true,
     );
     svm.send_ix(init_ix, &[]);
 

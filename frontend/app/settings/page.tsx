@@ -12,7 +12,6 @@ import {
   Github,
   KeyRound,
   LoaderCircle,
-  Palette,
   Smartphone,
   User,
   Volume2,
@@ -27,7 +26,7 @@ import { InstallAppCard } from "@/components/settings/InstallAppCard";
 
 const APP_VERSION = "0.1.0";
 const GITHUB_URL = "https://github.com/amalnathsathyan/magic-chess";
-const DOCS_URL = "https://github.com/amalnathsathyan/magic-chess/tree/dev/docs";
+const DOCS_URL = "https://docs.playzug.xyz/docs/";
 
 export default function SettingsPage() {
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -206,22 +205,6 @@ export default function SettingsPage() {
                 }`}
               />
             </button>
-          </div>
-
-          {/* Board theme placeholder */}
-          <div className="panel flex items-center justify-between gap-4 p-4">
-            <div className="flex items-center gap-3">
-              <Palette className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <div>
-                <p className="text-sm font-medium">Board theme</p>
-                <p className="text-xs text-muted-foreground">
-                  Choose a visual theme for the chess board.
-                </p>
-              </div>
-            </div>
-            <span className="inline-flex shrink-0 items-center border border-border bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
-              Coming soon
-            </span>
           </div>
         </div>
       </section>

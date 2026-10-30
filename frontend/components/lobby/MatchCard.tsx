@@ -25,6 +25,8 @@ export interface MatchCardData {
   moveCount?: number;
   /** When an open match starts and whether it can be joined yet. */
   start?: MatchStartState;
+  /** In play and it is the viewer's turn. */
+  yourMove?: boolean;
 }
 
 interface MatchCardProps {
@@ -97,7 +99,9 @@ export function MatchCard({ match, className, compact = false }: MatchCardProps)
           : "Join"
     : isInProgress
       ? match.isOwn
-        ? "Resume"
+        ? match.yourMove
+          ? "Your move"
+          : "Resume"
         : "Watch"
       : "Replay";
 
@@ -110,7 +114,11 @@ export function MatchCard({ match, className, compact = false }: MatchCardProps)
         ? `Your match, ${relativeCreatedAt}`
         : relativeCreatedAt
     : isInProgress
-      ? `Move ${match.moveCount ?? 1}`
+      ? match.isOwn
+        ? match.yourMove
+          ? `Your move · move ${match.moveCount ?? 1}`
+          : `Waiting for your opponent · move ${match.moveCount ?? 1}`
+        : `Move ${match.moveCount ?? 1}`
       : match.result ?? "Finished";
 
   return (
@@ -132,7 +140,9 @@ export function MatchCard({ match, className, compact = false }: MatchCardProps)
             <span className="text-muted-foreground"> vs {playerLabel(match.blackPlayer)}</span>
           ) : null}
         </p>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">{detail}</p>
+        <p className={cn("mt-0.5 truncate text-xs", match.yourMove ? "font-semibold text-primary" : "text-muted-foreground")}>
+          {detail}
+        </p>
       </div>
 
       <div className={cn("hidden w-20 text-right", !compact && "sm:block")}>
@@ -151,11 +161,13 @@ export function MatchCard({ match, className, compact = false }: MatchCardProps)
 
       <span
         className={cn(
-          "btn btn-sm w-[4.5rem] shrink-0",
-          compact && "hidden",
-          (isOpen && !match.isOwn && (!start || start.phase === "open")) ||
-            (isInProgress && match.isOwn)
-            ? "bg-primary/15 text-primary group-hover:bg-primary group-hover:text-primary-foreground"
+          "btn btn-sm min-w-[4.5rem] shrink-0 px-2",
+          compact && !match.yourMove && "hidden",
+          match.yourMove
+            ? "bg-primary text-primary-foreground"
+            : (isOpen && !match.isOwn && (!start || start.phase === "open")) ||
+                (isInProgress && match.isOwn)
+              ? "bg-primary/15 text-primary group-hover:bg-primary group-hover:text-primary-foreground"
             : "border border-border text-soft group-hover:border-border-hover group-hover:text-foreground"
         )}
       >

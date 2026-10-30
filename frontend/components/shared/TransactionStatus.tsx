@@ -50,10 +50,10 @@ export function TransactionStatus({
 
         <div className="flex-1">
           <p className="text-sm font-semibold text-foreground">
-            {status === "submitting" && "Submitting transaction..."}
-            {status === "confirming" && "Confirming transaction..."}
-            {status === "success" && "Transaction Confirmed"}
-            {status === "error" && "Transaction Failed"}
+            {status === "submitting" && "Sending to Solana…"}
+            {status === "confirming" && "Waiting for Solana to confirm…"}
+            {status === "success" && "Confirmed on Solana"}
+            {status === "error" && "That didn't go through"}
           </p>
           {error && (
             <p className="text-xs text-destructive/90 mt-1">{error}</p>

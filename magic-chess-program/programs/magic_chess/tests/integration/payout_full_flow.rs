@@ -450,7 +450,7 @@ fn test_minimum_bet_accepted() {
     svm.mint_tokens(&mint, &p1_ata, 10, &mint_auth);
 
     svm.send_ix(
-        ix_init(mid, 1, 0, 0, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
+        ix_init(mid, 1, 600, 0, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
         &[&p1_kp],
     );
 
@@ -479,7 +479,7 @@ fn test_large_bet_with_small_fee() {
     svm.mint_tokens(&mint, &p1_ata, BET * 2, &mint_auth);
 
     svm.send_ix(
-        ix_init(mid, BET, 0, 1, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
+        ix_init(mid, BET, 600, 1, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
         &[&p1_kp],
     );
 
@@ -537,7 +537,7 @@ fn test_unequal_bets_rejected_on_join() {
     svm.mint_tokens(&mint, &p2_ata, 500, &mint_auth);
 
     svm.send_ix(
-        ix_init(mid, 100, 0, 200, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
+        ix_init(mid, 100, 600, 200, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
         &[&p1_kp],
     );
 
@@ -611,7 +611,7 @@ fn test_fee_over_cap_or_foreign_wallet_rejected() {
 
     // Allowed fee, but the creator names itself as the fee wallet.
     svm.send_ix_expect_err(
-        ix_init(mid, 500, 0, 200, &p1, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
+        ix_init(mid, 500, 600, 200, &p1, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
         &[&p1_kp],
     );
     assert_eq!(svm.get_token_balance(&p1_ata), 1000, "no stake must have moved");

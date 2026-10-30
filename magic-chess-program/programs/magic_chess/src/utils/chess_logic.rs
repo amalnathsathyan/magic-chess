@@ -83,28 +83,9 @@ pub fn validate_and_apply_move(
     let piece_type_moved = source_piece_data.piece_type;
 
     // 3. Simulate the move and check if it leaves own king in check
-    let mut temp_board = game_state.board; // Copy board for simulation
-    let piece_to_move_temp = temp_board[from_row as usize][from_col as usize].take().unwrap();
-    
-    if piece_to_move_temp.piece_type == PieceType::Pawn {
-        if let Some(ep_square) = game_state.en_passant_target {
-            if ep_square.row == to_row && ep_square.col == to_col &&
-               (to_col as i8 - from_col as i8).abs() == 1 &&
-               (to_row as i8 - from_row as i8).abs() == 1
-            {
-                let captured_pawn_row = if player_color == PlayerColor::White { to_row - 1 } else { to_row + 1 };
-                temp_board[captured_pawn_row as usize][to_col as usize].take();
-            }
-        }
-    }
-    if piece_to_move_temp.piece_type == PieceType::King && (to_col as i8 - from_col as i8).abs() == 2 {
-        let (rook_from_col, rook_to_col) = if (to_col as i8 - from_col as i8) > 0 { (7, 5) } else { (0, 3) };
-        if let Some(rook) = temp_board[from_row as usize][rook_from_col as usize].take() {
-            temp_board[from_row as usize][rook_to_col as usize] = Some(rook);
-        }
-    }
-    let _captured_piece_temp = temp_board[to_row as usize][to_col as usize].replace(piece_to_move_temp);
-
+    let temp_board = simulate_move(
+        &game_state.board, from_row, from_col, to_row, to_col, player_color, game_state.en_passant_target,
+    );
     if is_king_in_check(&temp_board, player_color) {
         return err!(ChessError::InvalidMoveLeavesKingInCheck);
     }
@@ -225,56 +206,168 @@ pub fn validate_and_apply_move(
     Ok(MoveResult::Normal)
 }
 
-// --- Function to check if a player has ANY legal moves ---
-fn are_no_legal_moves(
-    board: &[[Option<Piece>; 8]; 8], // Takes immutable board ref
+// --- Move generation helpers ---
+
+const KNIGHT_DELTAS: [(i8, i8); 8] = [(2, 1), (1, 2), (-1, 2), (-2, 1), (-2, -1), (-1, -2), (1, -2), (2, -1)];
+const KING_DELTAS: [(i8, i8); 8] = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)];
+const ROOK_DIRS: [(i8, i8); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+const BISHOP_DIRS: [(i8, i8); 4] = [(1, 1), (1, -1), (-1, 1), (-1, -1)];
+
+/// The most squares one piece can reach: a queen in the centre (27).
+const MAX_TARGETS: usize = 28;
+
+#[inline(always)]
+fn on_board(r: i8, c: i8) -> bool {
+    (0..8).contains(&r) && (0..8).contains(&c)
+}
+
+/// Squares a piece could possibly move to from (from_r, from_c): a superset
+/// of its legal destinations, cheap to enumerate. Every candidate still goes
+/// through `is_legal_move_for_piece` and the check simulation, so this only
+/// trims the search, never the rules. Sliders walk each ray up to and
+/// including the first occupied square.
+fn candidate_targets(
+    board: &[[Option<Piece>; 8]; 8],
+    piece: &Piece,
+    from_r: u8,
+    from_c: u8,
+    out: &mut [(u8, u8); MAX_TARGETS],
+) -> usize {
+    let (fr, fc) = (from_r as i8, from_c as i8);
+    let mut n = 0;
+    fn push(out: &mut [(u8, u8); MAX_TARGETS], n: &mut usize, r: i8, c: i8) {
+        if on_board(r, c) {
+            out[*n] = (r as u8, c as u8);
+            *n += 1;
+        }
+    }
+    fn rays(
+        board: &[[Option<Piece>; 8]; 8],
+        out: &mut [(u8, u8); MAX_TARGETS],
+        n: &mut usize,
+        fr: i8,
+        fc: i8,
+        dirs: &[(i8, i8)],
+    ) {
+        for &(dr, dc) in dirs {
+            let (mut r, mut c) = (fr + dr, fc + dc);
+            while on_board(r, c) {
+                out[*n] = (r as u8, c as u8);
+                *n += 1;
+                if board[r as usize][c as usize].is_some() {
+                    break;
+                }
+                r += dr;
+                c += dc;
+            }
+        }
+    }
+    match piece.piece_type {
+        PieceType::Pawn => {
+            let dir: i8 = if piece.color == PlayerColor::White { 1 } else { -1 };
+            push(out, &mut n, fr + dir, fc);
+            push(out, &mut n, fr + 2 * dir, fc);
+            push(out, &mut n, fr + dir, fc - 1);
+            push(out, &mut n, fr + dir, fc + 1);
+        }
+        PieceType::Knight => {
+            for (dr, dc) in KNIGHT_DELTAS {
+                push(out, &mut n, fr + dr, fc + dc);
+            }
+        }
+        PieceType::King => {
+            for (dr, dc) in KING_DELTAS {
+                push(out, &mut n, fr + dr, fc + dc);
+            }
+            if fc == 4 {
+                // Castling destinations; the validator checks rights, path and attacks.
+                push(out, &mut n, fr, 6);
+                push(out, &mut n, fr, 2);
+            }
+        }
+        PieceType::Rook => rays(board, out, &mut n, fr, fc, &ROOK_DIRS),
+        PieceType::Bishop => rays(board, out, &mut n, fr, fc, &BISHOP_DIRS),
+        PieceType::Queen => {
+            rays(board, out, &mut n, fr, fc, &ROOK_DIRS);
+            rays(board, out, &mut n, fr, fc, &BISHOP_DIRS);
+        }
+    }
+    n
+}
+
+/// Apply a pseudo-legal move to a copy of the board, including the en
+/// passant capture and the castling rook hop, for check simulation.
+#[inline(always)]
+fn simulate_move(
+    board: &[[Option<Piece>; 8]; 8],
+    from_r: u8,
+    from_c: u8,
+    to_r: u8,
+    to_c: u8,
     player_color: PlayerColor,
-    castling_rights: &CastlingRights, // Takes immutable castling_rights ref
-    en_passant_target: Option<EnPassantSquare>, // Takes EP by value (it's Copy)
+    en_passant_target: Option<EnPassantSquare>,
+) -> [[Option<Piece>; 8]; 8] {
+    let mut temp_board = *board;
+    let piece = temp_board[from_r as usize][from_c as usize].take().unwrap();
+    if piece.piece_type == PieceType::Pawn {
+        if let Some(ep_square) = en_passant_target {
+            if ep_square.row == to_r
+                && ep_square.col == to_c
+                && (to_c as i8 - from_c as i8).abs() == 1
+                && (to_r as i8 - from_r as i8).abs() == 1
+            {
+                let captured_pawn_row = if player_color == PlayerColor::White { to_r - 1 } else { to_r + 1 };
+                temp_board[captured_pawn_row as usize][to_c as usize].take();
+            }
+        }
+    }
+    if piece.piece_type == PieceType::King && (to_c as i8 - from_c as i8).abs() == 2 {
+        let (rook_from_col, rook_to_col) = if to_c > from_c { (7, 5) } else { (0, 3) };
+        if let Some(rook) = temp_board[from_r as usize][rook_from_col].take() {
+            temp_board[from_r as usize][rook_to_col] = Some(rook);
+        }
+    }
+    temp_board[to_r as usize][to_c as usize] = Some(piece);
+    temp_board
+}
+
+// --- Function to check if a player has ANY legal moves ---
+/// True when `player_color` has no legal move (checkmate or stalemate,
+/// depending on whether the king is attacked). Public for the unit tests.
+pub fn are_no_legal_moves(
+    board: &[[Option<Piece>; 8]; 8],
+    player_color: PlayerColor,
+    castling_rights: &CastlingRights,
+    en_passant_target: Option<EnPassantSquare>,
 ) -> bool {
-    for r_from_idx in 0..8 {
-        for c_from_idx in 0..8 {
-            if let Some(piece) = &board[r_from_idx][c_from_idx] {
-                if piece.color == player_color {
-                    for r_to_idx in 0..8 {
-                        for c_to_idx in 0..8 {
-                            let (from_r, from_c, to_r, to_c) = (r_from_idx as u8, c_from_idx as u8, r_to_idx as u8, c_to_idx as u8);
-                            if from_r == to_r && from_c == to_c { continue; }
+    // Without a king every simulated position "leaves the king in check".
+    let Ok(king_square) = find_king(board, player_color) else {
+        return true;
+    };
+    let attacker = player_color.opponent();
+    let mut targets = [(0u8, 0u8); MAX_TARGETS];
 
-                            if is_legal_move_for_piece(board, piece, from_r, from_c, to_r, to_c, en_passant_target, castling_rights, player_color) {
-                                let mut temp_board = *board; 
-                                let temp_piece_to_move = temp_board[r_from_idx][c_from_idx].take().unwrap();
-                                
-                                if temp_piece_to_move.piece_type == PieceType::Pawn {
-                                    if let Some(ep_square) = en_passant_target {
-                                        if ep_square.row == to_r && ep_square.col == to_c &&
-                                           (c_to_idx as i8 - c_from_idx as i8).abs() == 1 &&
-                                           (r_to_idx as i8 - r_from_idx as i8).abs() == 1
-                                        {
-                                            let captured_pawn_row = if player_color == PlayerColor::White { to_r - 1 } else { to_r + 1 };
-                                            temp_board[captured_pawn_row as usize][c_to_idx].take();
-                                        }
-                                    }
-                                }
-                                if temp_piece_to_move.piece_type == PieceType::King && (c_to_idx as i8 - c_from_idx as i8).abs() == 2 {
-                                    let (rook_from_col, rook_to_col) = if (c_to_idx as i8 - c_from_idx as i8) > 0 { (7, 5) } else { (0, 3) };
-                                    if let Some(rook) = temp_board[r_from_idx][rook_from_col as usize].take() {
-                                        temp_board[r_from_idx][rook_to_col as usize] = Some(rook);
-                                    }
-                                }
-                                temp_board[r_to_idx][c_to_idx] = Some(temp_piece_to_move);
-
-                                if !is_king_in_check(&temp_board, player_color) {
-                                    return false; 
-                                }
-                            }
-                        }
-                    }
+    for r_from in 0..8u8 {
+        for c_from in 0..8u8 {
+            let Some(piece) = &board[r_from as usize][c_from as usize] else { continue };
+            if piece.color != player_color {
+                continue;
+            }
+            let count = candidate_targets(board, piece, r_from, c_from, &mut targets);
+            for &(to_r, to_c) in &targets[..count] {
+                if !is_legal_move_for_piece(board, piece, r_from, c_from, to_r, to_c, en_passant_target, castling_rights, player_color) {
+                    continue;
+                }
+                let temp_board = simulate_move(board, r_from, c_from, to_r, to_c, player_color, en_passant_target);
+                // The king only moves when it is the piece being moved.
+                let (kr, kc) = if piece.piece_type == PieceType::King { (to_r, to_c) } else { king_square };
+                if !is_square_attacked(&temp_board, kr, kc, attacker) {
+                    return false;
                 }
             }
         }
     }
-    true 
+    true
 }
 
 // --- Insufficient Material Detection ---
@@ -557,86 +650,58 @@ fn find_king(board: &[[Option<Piece>; 8]; 8], king_color: PlayerColor) -> Result
     err!(ChessError::KingNotFound)
 }
 
-fn can_pawn_attack(p_r: u8, p_c: u8, t_r: u8, t_c: u8, attacker_color: PlayerColor) -> bool {
-    let dir: i8 = if attacker_color == PlayerColor::White { 1 } else { -1 };
-    (t_c as i8 == p_c as i8 + 1 || t_c as i8 == p_c as i8 - 1) && t_r as i8 == p_r as i8 + dir
-}
-
-fn can_knight_attack(k_r: u8, k_c: u8, t_r: u8, t_c: u8) -> bool {
-    let dr = (t_r as i8 - k_r as i8).abs(); let dc = (t_c as i8 - k_c as i8).abs();
-    (dr == 2 && dc == 1) || (dr == 1 && dc == 2)
-}
-
-fn can_king_attack(k_r: u8, k_c: u8, t_r: u8, t_c: u8) -> bool {
-    let dr = (t_r as i8 - k_r as i8).abs(); let dc = (t_c as i8 - k_c as i8).abs();
-    dr <= 1 && dc <= 1 && (dr != 0 || dc != 0)
-}
-
-fn can_slider_attack(
+/// Whether any piece of `attacker_color` attacks (target_r, target_c).
+/// Looks outward from the target: pawn and knight offsets, the king ring,
+/// and the first piece along each rook and bishop ray. Public for the unit
+/// tests, which compare it against a brute-force scan.
+pub fn is_square_attacked(
     board: &[[Option<Piece>; 8]; 8],
-    s_r: u8, s_c: u8, t_r: u8, t_c: u8,
-    piece_type: PieceType
-) -> bool {
-    match piece_type {
-        PieceType::Rook => {
-            if s_r == t_r || s_c == t_c { 
-                return is_path_clear_linear(board, s_r, s_c, t_r, t_c);
-            }
-        },
-        PieceType::Bishop => {
-            if (t_r as i8 - s_r as i8).abs() == (t_c as i8 - s_c as i8).abs() { 
-                return is_path_clear_diagonal(board, s_r, s_c, t_r, t_c);
-            }
-        },
-        PieceType::Queen => {
-            if s_r == t_r || s_c == t_c {
-                if is_path_clear_linear(board, s_r, s_c, t_r, t_c) { return true; }
-            }
-            if (t_r as i8 - s_r as i8).abs() == (t_c as i8 - s_c as i8).abs() {
-                if is_path_clear_diagonal(board, s_r, s_c, t_r, t_c) { return true; }
-            }
-        },
-        _ => return false, 
-    }
-    false
-}
-
-fn is_square_attacked(
-    board: &[[Option<Piece>; 8]; 8],
-    target_r: u8, target_c: u8,
+    target_r: u8,
+    target_c: u8,
     attacker_color: PlayerColor,
 ) -> bool {
-    for r_from in 0..8 {
-        for c_from in 0..8 {
-            if let Some(attacker_piece) = &board[r_from as usize][c_from as usize] {
-                if attacker_piece.color == attacker_color {
-                    match attacker_piece.piece_type {
-                        PieceType::Pawn => {
-                            if can_pawn_attack(r_from as u8, c_from as u8, target_r, target_c, attacker_color) {
-                                return true;
-                            }
-                        }
-                        PieceType::Knight => {
-                            if can_knight_attack(r_from as u8, c_from as u8, target_r, target_c) {
-                                return true;
-                            }
-                        }
-                        PieceType::King => {
-                            if can_king_attack(r_from as u8, c_from as u8, target_r, target_c) {
-                                return true;
-                            }
-                        }
-                        PieceType::Rook | PieceType::Bishop | PieceType::Queen => {
-                            if can_slider_attack(board, r_from as u8, c_from as u8, target_r, target_c, attacker_piece.piece_type) {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
+    let (tr, tc) = (target_r as i8, target_c as i8);
+    let attacker_at = |r: i8, c: i8, kinds: &[PieceType]| -> bool {
+        on_board(r, c)
+            && matches!(
+                board[r as usize][c as usize],
+                Some(p) if p.color == attacker_color && kinds.contains(&p.piece_type)
+            )
+    };
+
+    // A white pawn on (r, c) attacks (r + 1, c ± 1); a black pawn (r - 1, c ± 1).
+    let pawn_row = if attacker_color == PlayerColor::White { tr - 1 } else { tr + 1 };
+    if attacker_at(pawn_row, tc - 1, &[PieceType::Pawn]) || attacker_at(pawn_row, tc + 1, &[PieceType::Pawn]) {
+        return true;
+    }
+    for (dr, dc) in KNIGHT_DELTAS {
+        if attacker_at(tr + dr, tc + dc, &[PieceType::Knight]) {
+            return true;
         }
     }
-    false
+    for (dr, dc) in KING_DELTAS {
+        if attacker_at(tr + dr, tc + dc, &[PieceType::King]) {
+            return true;
+        }
+    }
+    let ray_hits = |dirs: &[(i8, i8)], kinds: &[PieceType]| -> bool {
+        for &(dr, dc) in dirs {
+            let (mut r, mut c) = (tr + dr, tc + dc);
+            while on_board(r, c) {
+                if let Some(p) = &board[r as usize][c as usize] {
+                    if p.color == attacker_color && kinds.contains(&p.piece_type) {
+                        return true;
+                    }
+                    break;
+                }
+                r += dr;
+                c += dc;
+            }
+        }
+        false
+    };
+    ray_hits(&ROOK_DIRS, &[PieceType::Rook, PieceType::Queen])
+        || ray_hits(&BISHOP_DIRS, &[PieceType::Bishop, PieceType::Queen])
 }
 
 pub fn is_king_in_check(board: &[[Option<Piece>; 8]; 8], king_color: PlayerColor) -> bool {

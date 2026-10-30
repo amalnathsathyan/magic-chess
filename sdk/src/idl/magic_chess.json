@@ -111,7 +111,7 @@
         {
           "name": "chess_match",
           "docs": [
-            "The ChessMatch — must be WaitingForOpponent or Aborted, or be settled with no winners."
+            "The ChessMatch \u2014 must be WaitingForOpponent or Aborted, or be settled with no winners."
           ],
           "pda": {
             "seeds": [
@@ -274,56 +274,6 @@
       "args": []
     },
     {
-      "name": "cancel_timeout_task",
-      "discriminator": [
-        119,
-        179,
-        9,
-        27,
-        16,
-        151,
-        219,
-        142
-      ],
-      "accounts": [
-        {
-          "name": "chess_match",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  104,
-                  101,
-                  115,
-                  115,
-                  95,
-                  109,
-                  97,
-                  116,
-                  99,
-                  104
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "chess_match.match_id",
-                "account": "ChessMatch"
-              }
-            ]
-          }
-        },
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "claim_prediction_winnings",
       "discriminator": [
         173,
@@ -339,7 +289,7 @@
         {
           "name": "chess_match",
           "docs": [
-            "The ChessMatch — read-only, used for constraints."
+            "The ChessMatch \u2014 read-only, used for constraints."
           ],
           "pda": {
             "seeds": [
@@ -370,7 +320,7 @@
         {
           "name": "prediction_pool",
           "docs": [
-            "The PredictionPool — must be settled. Mutable so Anchor allows PDA signing."
+            "The PredictionPool \u2014 must be settled. Mutable so Anchor allows PDA signing."
           ],
           "writable": true,
           "pda": {
@@ -878,7 +828,7 @@
         {
           "name": "betting_token_mint_account",
           "docs": [
-            "The SPL token mint used for betting — any SPL token is accepted"
+            "The SPL token mint used for betting \u2014 any SPL token is accepted"
           ]
         },
         {
@@ -997,7 +947,7 @@
         {
           "name": "prediction_pool",
           "docs": [
-            "PredictionPool PDA — one per match."
+            "PredictionPool PDA \u2014 one per match."
           ],
           "writable": true,
           "pda": {
@@ -1274,7 +1224,7 @@
         {
           "name": "chess_match",
           "docs": [
-            "The ChessMatch — read-only, used for constraints."
+            "The ChessMatch \u2014 read-only, used for constraints."
           ],
           "pda": {
             "seeds": [
@@ -1341,7 +1291,7 @@
         {
           "name": "prediction_bet",
           "docs": [
-            "PDA per bettor — created once per bettor per pool."
+            "PDA per bettor \u2014 created once per bettor per pool."
           ],
           "writable": true,
           "pda": {
@@ -1536,7 +1486,7 @@
         {
           "name": "payer",
           "docs": [
-            "Rent destination for escrow account closure — receives lamports back."
+            "Rent destination for escrow account closure \u2014 receives lamports back."
           ],
           "writable": true
         },
@@ -1752,61 +1702,6 @@
       "args": []
     },
     {
-      "name": "schedule_timeout",
-      "discriminator": [
-        243,
-        168,
-        188,
-        247,
-        119,
-        74,
-        111,
-        169
-      ],
-      "accounts": [
-        {
-          "name": "chess_match",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  104,
-                  101,
-                  115,
-                  115,
-                  95,
-                  109,
-                  97,
-                  116,
-                  99,
-                  104
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "chess_match.match_id",
-                "account": "ChessMatch"
-              }
-            ]
-          }
-        },
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": [
-        {
-          "name": "task_id",
-          "type": "i64"
-        }
-      ]
-    },
-    {
       "name": "set_session_key",
       "discriminator": [
         13,
@@ -1851,7 +1746,7 @@
         {
           "name": "player",
           "docs": [
-            "Must be one of the two players — determines which color's session is set."
+            "Must be one of the two players \u2014 determines which color's session is set."
           ],
           "signer": true
         }
@@ -2006,7 +1901,7 @@
         {
           "name": "caller",
           "docs": [
-            "Permissionless — fee payer triggers settlement."
+            "Permissionless \u2014 fee payer triggers settlement."
           ],
           "writable": true
         },
@@ -2398,7 +2293,7 @@
     {
       "code": 6039,
       "name": "DuplicateAccounts",
-      "msg": "Duplicate mutable accounts detected — state corruption risk."
+      "msg": "Duplicate mutable accounts detected \u2014 state corruption risk."
     },
     {
       "code": 6040,
@@ -2408,7 +2303,7 @@
     {
       "code": 6041,
       "name": "UnauthorizedSigner",
-      "msg": "Signer is not authorized — must be the player whose turn it is or a valid session key."
+      "msg": "Signer is not authorized \u2014 must be the player whose turn it is or a valid session key."
     },
     {
       "code": 6042,
@@ -2453,12 +2348,12 @@
     {
       "code": 6050,
       "name": "BettingClosed",
-      "msg": "Betting is closed — the match is no longer Active."
+      "msg": "Betting is closed \u2014 the match is no longer Active."
     },
     {
       "code": 6051,
       "name": "InvalidOutcome",
-      "msg": "Invalid outcome — must be 0 (White), 1 (Black), or 2 (Draw)."
+      "msg": "Invalid outcome \u2014 must be 0 (White), 1 (Black), or 2 (Draw)."
     },
     {
       "code": 6052,
@@ -2473,7 +2368,7 @@
     {
       "code": 6054,
       "name": "NothingToClaim",
-      "msg": "Nothing to claim — no balance available for this bet."
+      "msg": "Nothing to claim \u2014 no balance available for this bet."
     },
     {
       "code": 6055,
@@ -2488,7 +2383,12 @@
     {
       "code": 6057,
       "name": "InvalidTimeoutDuration",
-      "msg": "Move timeout duration must be non-negative."
+      "msg": "Move clock must be between 30 seconds and 7 days."
+    },
+    {
+      "code": 6058,
+      "name": "InvalidRentRecipient",
+      "msg": "The escrow rent can only go to a player or the platform wallet."
     }
   ],
   "types": [
@@ -3155,7 +3055,7 @@
       "name": "PredictionPool",
       "docs": [
         "Pools all prediction bets for a single chess match.",
-        "Parimutuel model — winners split the losing pool proportionally."
+        "Parimutuel model \u2014 winners split the losing pool proportionally."
       ],
       "type": {
         "kind": "struct",

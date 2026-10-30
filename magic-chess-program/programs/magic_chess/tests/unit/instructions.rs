@@ -16,7 +16,7 @@
 //   - set_session_key: player validation, expiry check
 //   - revoke_session_key: field clearing, player validation
 //   - delegate_match / undelegate_match / commit_state: delegation state
-//   - schedule_timeout / cancel_timeout_task: task ID lifecycle
+//   - active_task_id: kept in the layout for compatibility, always -1
 
 use anchor_lang::prelude::Pubkey;
 use magic_chess::constants::*;
@@ -893,12 +893,12 @@ fn commit_does_not_change_delegation() {
 }
 
 // ===========================================================================
-// 10. Crank Task Tests (2)
+// 10. active_task_id layout field (2)
 // ===========================================================================
 
 #[test]
 fn schedule_sets_active_task_id() {
-    // handle_schedule_timeout: active_task_id is set to the scheduled task_id.
+    // The field is still in the account layout; the scheduler instructions are gone.
     let mut game = standard_match(PlayerColor::White);
     assert_eq!(game.active_task_id, -1);
 
@@ -910,7 +910,7 @@ fn schedule_sets_active_task_id() {
 
 #[test]
 fn cancel_resets_task_id() {
-    // handle_cancel_timeout_task: active_task_id = -1.
+    // -1 means no task, which is now the only value the program writes.
     let mut game = standard_match(PlayerColor::White);
     game.active_task_id = 77; // Has an active task.
 

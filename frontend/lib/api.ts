@@ -47,6 +47,8 @@ export interface ApiMatch {
   createdAt: string;
   lastMoveAt: string;
   boardFen: string | null;
+  /** Side to move while the game is Active; null otherwise. */
+  currentTurn?: "white" | "black" | null;
   moveCount: number;
   betAmountPerPlayer?: string;
   /** Open move predictions spectators have placed on this match. */
@@ -85,7 +87,7 @@ export interface ApiPlayerMatch extends ApiMatch {
 export interface ApiMatchDetail extends ApiMatch {
   betAmountPerPlayer: string;
   platformFeeBps: number;
-  currentTurn: string | null;
+  currentTurn: "white" | "black" | null;
   startedAt: string | null;
   endedAt: string | null;
   payoutProcessed: boolean;
