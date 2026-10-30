@@ -473,8 +473,7 @@ fn test_large_bet_with_small_fee() {
     let mint = svm.create_mint(9, &mint_auth);
     let p1_kp = svm.create_funded_account(FUNDED_LAMPORTS);
     let p1 = p1_kp.pubkey();
-    let plat_kp = svm.create_funded_account(FUNDED_LAMPORTS);
-    let plat = plat_kp.pubkey();
+    let plat: Pubkey = PLATFORM_FEE_WALLET_STR.parse().unwrap();
     let p1_ata = svm.create_ata(&mint, &p1);
     const BET: u64 = 1_000_000;
     svm.mint_tokens(&mint, &p1_ata, BET * 2, &mint_auth);
@@ -531,8 +530,7 @@ fn test_unequal_bets_rejected_on_join() {
     let p1 = p1_kp.pubkey();
     let p2_kp = svm.create_funded_account(FUNDED_LAMPORTS);
     let p2 = p2_kp.pubkey();
-    let plat_kp = svm.create_funded_account(FUNDED_LAMPORTS);
-    let plat = plat_kp.pubkey();
+    let plat: Pubkey = PLATFORM_FEE_WALLET_STR.parse().unwrap();
     let p1_ata = svm.create_ata(&mint, &p1);
     let p2_ata = svm.create_ata(&mint, &p2);
     svm.mint_tokens(&mint, &p1_ata, 500, &mint_auth);
