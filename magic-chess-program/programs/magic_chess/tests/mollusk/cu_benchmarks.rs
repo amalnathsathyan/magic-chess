@@ -40,6 +40,9 @@ use solana_sdk::hash::hash;
 use solana_system_program::id as system_program_id;
 use std::str::FromStr;
 
+/// The fee recipient the program pins (`constants::PLATFORM_FEE_WALLET`).
+const PLATFORM_FEE_WALLET_STR: &str = "ByBqw1sTTPjWQx6DEAvwT4srVyr4wUdf1R4V4wGoh8j6";
+
 // ── Program identity ───────────────────────────────────────────────────────
 const PROGRAM_ID_STR: &str = "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h";
 /// Path to the compiled program .so file, relative to the cargo manifest dir.
@@ -587,7 +590,7 @@ fn bench_06_initialize_match() {
     let bet_amount: u64 = 1_000_000;
     let move_timeout_duration: i64 = 900;
     let platform_fee_bps: u16 = 200;
-    let platform_fee_wallet = random_pubkey();
+    let platform_fee_wallet = Pubkey::from_str(PLATFORM_FEE_WALLET_STR).unwrap();
 
     let (match_pda, _match_bump) = find_chess_match_pda(match_id, &prog_id);
     let (escrow_pda, _escrow_bump) = find_match_escrow_pda(match_id, &prog_id);
@@ -729,7 +732,7 @@ fn bench_07_initialize_match_with_token() {
     let bet_amount: u64 = 1_000_000;
     let move_timeout_duration: i64 = 900;
     let platform_fee_bps: u16 = 200;
-    let platform_fee_wallet = random_pubkey();
+    let platform_fee_wallet = Pubkey::from_str(PLATFORM_FEE_WALLET_STR).unwrap();
 
     let (match_pda, _match_bump) = find_chess_match_pda(match_id, &prog_id);
     let (escrow_pda, _escrow_bump) = find_match_escrow_pda(match_id, &prog_id);

@@ -23,6 +23,8 @@ const CHESS_MATCH_SEED: &[u8] = b"chess_match";
 const MATCH_ESCROW_SEED: &[u8] = b"match_escrow";
 const TOKEN_PROGRAM_ID_STR: &str = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const ATA_PROGRAM_ID_STR: &str = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL";
+/// The fee recipient the program pins (`constants::PLATFORM_FEE_WALLET`).
+const PLATFORM_FEE_WALLET_STR: &str = "ByBqw1sTTPjWQx6DEAvwT4srVyr4wUdf1R4V4wGoh8j6";
 
 const FUNDED_LAMPORTS: u64 = 1_000_000_000_000;
 
@@ -314,10 +316,9 @@ fn setup_active_match(svm: &mut TestSvm, mid: &str, bet: u64, fee: u16) -> Match
     let mint = svm.create_mint(9, &mint_auth);
     let p1_kp = svm.create_funded_account(FUNDED_LAMPORTS);
     let p2_kp = svm.create_funded_account(FUNDED_LAMPORTS);
-    let plat_kp = svm.create_funded_account(FUNDED_LAMPORTS);
     let p1 = p1_kp.pubkey();
     let p2 = p2_kp.pubkey();
-    let plat = plat_kp.pubkey();
+    let plat: Pubkey = PLATFORM_FEE_WALLET_STR.parse().unwrap();
     let p1_ata = svm.create_ata(&mint, &p1);
     let p2_ata = svm.create_ata(&mint, &p2);
     let plat_ata = svm.create_ata(&mint, &plat);
@@ -444,8 +445,7 @@ fn test_minimum_bet_accepted() {
     let mint = svm.create_mint(9, &mint_auth);
     let p1_kp = svm.create_funded_account(FUNDED_LAMPORTS);
     let p1 = p1_kp.pubkey();
-    let plat_kp = svm.create_funded_account(FUNDED_LAMPORTS);
-    let plat = plat_kp.pubkey();
+    let plat: Pubkey = PLATFORM_FEE_WALLET_STR.parse().unwrap();
     let p1_ata = svm.create_ata(&mint, &p1);
     svm.mint_tokens(&mint, &p1_ata, 10, &mint_auth);
 
@@ -473,8 +473,7 @@ fn test_large_bet_with_small_fee() {
     let mint = svm.create_mint(9, &mint_auth);
     let p1_kp = svm.create_funded_account(FUNDED_LAMPORTS);
     let p1 = p1_kp.pubkey();
-    let plat_kp = svm.create_funded_account(FUNDED_LAMPORTS);
-    let plat = plat_kp.pubkey();
+    let plat: Pubkey = PLATFORM_FEE_WALLET_STR.parse().unwrap();
     let p1_ata = svm.create_ata(&mint, &p1);
     const BET: u64 = 1_000_000;
     svm.mint_tokens(&mint, &p1_ata, BET * 2, &mint_auth);
@@ -490,13 +489,13 @@ fn test_large_bet_with_small_fee() {
 }
 
 // ============================================================================
-//  Scenario 6: platform_fee_at_max_allowed (10000 bps)
+//  Scenario 6: platform_fee_at_max_allowed (1000 bps = 10%)
 // ============================================================================
 
 #[test]
 fn test_platform_fee_at_max_allowed() {
     let mut svm = TestSvm::new();
-    let ms = setup_active_match(&mut svm, "t6_max", 100, 10_000);
+    let ms = setup_active_match(&mut svm, "t6_max", 100, 1_000);
 
     // White resigns
     svm.send_ix(ix_move(&ms.p1_kp.pubkey(), &ms.cm_pda, 1, 4, 3, 4, None), &[&ms.p1_kp]);
@@ -507,12 +506,12 @@ fn test_platform_fee_at_max_allowed() {
         &[],
     );
 
-    // pot=200, fee=10000bps=100% = 200. Winner (p2) gets 0. Platform gets 200.
+    // pot=200, fee=1000bps=10% = 20. Winner (p2) gets 180. Platform gets 20.
     let p2_bal = svm.get_token_balance(&ms.p2_ata);
     let plat_bal = svm.get_token_balance(&ms.plat_ata);
-    assert_eq!(p2_bal, 900, "P2 balance should be 900 (1000-100+0)");
-    assert_eq!(plat_bal, 200, "Platform should get all 200");
-    println!("Test 6 PASSED: platform_fee_at_max_allowed (100% fee)");
+    assert_eq!(p2_bal, 1080, "P2 balance should be 1080 (1000-100+180)");
+    assert_eq!(plat_bal, 20, "Platform should get 20");
+    println!("Test 6 PASSED: platform_fee_at_max_allowed (10% fee)");
 }
 
 // ============================================================================
@@ -531,8 +530,7 @@ fn test_unequal_bets_rejected_on_join() {
     let p1 = p1_kp.pubkey();
     let p2_kp = svm.create_funded_account(FUNDED_LAMPORTS);
     let p2 = p2_kp.pubkey();
-    let plat_kp = svm.create_funded_account(FUNDED_LAMPORTS);
-    let plat = plat_kp.pubkey();
+    let plat: Pubkey = PLATFORM_FEE_WALLET_STR.parse().unwrap();
     let p1_ata = svm.create_ata(&mint, &p1);
     let p2_ata = svm.create_ata(&mint, &p2);
     svm.mint_tokens(&mint, &p1_ata, 500, &mint_auth);
@@ -588,29 +586,36 @@ fn test_odd_pot_draw_split() {
 }
 
 // ============================================================================
-//  Scenario 10: very_high_fee (50%)
+//  Scenario 10: fee above the 10% cap, or paid to a foreign wallet, is rejected
 // ============================================================================
 
 #[test]
-fn test_very_high_fee() {
+fn test_fee_over_cap_or_foreign_wallet_rejected() {
     let mut svm = TestSvm::new();
-    let ms = setup_active_match(&mut svm, "t10_high", 500, 5000);
+    let mid = "t10_fee";
+    let (cm_pda, _) = chess_match_pda(mid);
+    let (epda, _) = escrow_pda(mid);
+    let mint_auth = svm.create_funded_account(FUNDED_LAMPORTS);
+    let mint = svm.create_mint(9, &mint_auth);
+    let p1_kp = svm.create_funded_account(FUNDED_LAMPORTS);
+    let p1 = p1_kp.pubkey();
+    let plat: Pubkey = PLATFORM_FEE_WALLET_STR.parse().unwrap();
+    let p1_ata = svm.create_ata(&mint, &p1);
+    svm.mint_tokens(&mint, &p1_ata, 1000, &mint_auth);
 
-    // White resigns
-    svm.send_ix(ix_move(&ms.p1_kp.pubkey(), &ms.cm_pda, 1, 4, 3, 4, None), &[&ms.p1_kp]);
-    svm.send_ix(ix_resign(&ms.p1_kp.pubkey(), &ms.cm_pda), &[&ms.p1_kp]);
-
-    svm.send_ix(
-        ix_settle(&ms.cm_pda, &ms.epda, &ms.p1_ata, &ms.p2_ata, &ms.plat_ata, &ms.p1_kp.pubkey()),
-        &[],
+    // 50% fee: over the cap (send_ix_expect_err panics if it succeeds).
+    svm.send_ix_expect_err(
+        ix_init(mid, 500, 0, 5_000, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
+        &[&p1_kp],
     );
 
-    // pot=1000, fee=50% = 500. Winner (p2) gets 500.
-    let p2_bal = svm.get_token_balance(&ms.p2_ata);
-    let plat_bal = svm.get_token_balance(&ms.plat_ata);
-    assert_eq!(p2_bal, 1000, "P2 balance: 1000-500+500=1000");
-    assert_eq!(plat_bal, 500, "Platform fee should be 500");
-    println!("Test 10 PASSED: very_high_fee (50%)");
+    // Allowed fee, but the creator names itself as the fee wallet.
+    svm.send_ix_expect_err(
+        ix_init(mid, 500, 0, 200, &p1, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
+        &[&p1_kp],
+    );
+    assert_eq!(svm.get_token_balance(&p1_ata), 1000, "no stake must have moved");
+    println!("Test 10 PASSED: fee_over_cap_or_foreign_wallet_rejected");
 }
 
 // ============================================================================

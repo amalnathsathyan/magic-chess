@@ -508,3 +508,26 @@ Next steps:
 - Check on a real phone (iOS Safari, Android Chrome): bottom bar with the safe area, board size, drag moves.
 - Screenshots in the PR used mocked data (the cloud session couldn't reach the API or RPC). Do a pass against live devnet data.
 - The prediction panel still says "Play points"; revisit when winner prediction gets real stakes.
+
+## Program audit: status and next steps (2026-10-30)
+
+Full review of the on-chain program, the prediction market and the proposed upgrade changes. Report:
+`research/agent-findings/19-program-audit-2026-10-30.md`.
+
+Fixed in the program (branch `fix/program-audit-findings`, no account-layout change, needs a devnet redeploy by jason):
+- `initialize_match` pins the fee wallet to `PLATFORM_FEE_WALLET` (`constants.rs`, same key as
+  `NEXT_PUBLIC_PLATFORM_FEE_WALLET`) and caps the fee at `MATCH_PLATFORM_FEE_MAX_BPS` (10%). Before, a hand-built
+  match could send 100% of the pot to the creator as "fee" and the joiner saw only the stake.
+- `settle_prediction_pool` checks that the winner/loser token accounts belong to the players (it is permissionless;
+  anyone could name their own accounts). `cancel_prediction_bet` is refused once the pool is settled.
+  `initialize_prediction_pool` requires the match's mint.
+- `delegate_match` only while `Active` (a loser could re-delegate a finished match and block settlement).
+- `close_match` only by a player or the platform fee wallet (the rent went to any caller).
+- Frontend (works against the deployed program too): the play page shows the fee under the pot and blocks joining a
+  match whose fee wallet or rate isn't this deployment's.
+
+Still open, for the next upgrade (details and the recommended `start_at` / `join_deadline` / `rent_payer` design are in
+the report): escrow rent to an unchecked `payer` in `process_match_settlement`; a minimum move clock (0 = no exit);
+remove the dead task-scheduler instructions; decide the prediction rules for "nobody predicted right" and for betting
+while the result is already known on the rollup (base-layer status lags; matters once predictions carry real stakes).
+Adding fields to `ChessMatch` changes its size, so settle or abort all devnet matches before that upgrade.

@@ -21,7 +21,7 @@ fn test_initialize_match() {
     let bet_amount: u64 = 100_000;
     let (chess_match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let ix = initialize_match_ix(
         &chess_match_pda,
@@ -73,7 +73,7 @@ fn test_initialize_match_with_separate_rent_payer() {
     let match_id = "sponsored-init-001";
     let (chess_match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let ix = initialize_match_ix_with_rent_payer(
         &chess_match_pda,
@@ -115,7 +115,7 @@ fn test_join_match() {
     let bet_amount: u64 = 100_000;
     let (chess_match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     // Player 1 initializes
     let ix = initialize_match_ix(
@@ -174,7 +174,7 @@ fn test_free_match_lifecycle() {
     let match_id = "test-free-match";
     let (chess_match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let init_ix = initialize_match_ix(
         &chess_match_pda,
@@ -220,7 +220,7 @@ fn test_abort_match() {
     let bet_amount: u64 = 100_000;
     let (chess_match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let ix = initialize_match_ix(
         &chess_match_pda,
@@ -271,7 +271,7 @@ fn test_cannot_abort_active_match() {
     let bet_amount: u64 = 100_000;
     let (chess_match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let init_ix = initialize_match_ix(
         &chess_match_pda,
@@ -328,7 +328,7 @@ fn test_close_match_after_settlement() {
     let bet_amount: u64 = 100_000;
     let (chess_match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let init_ix = initialize_match_ix(
         &chess_match_pda,
@@ -377,7 +377,7 @@ fn test_cannot_close_unsettled_match() {
     let bet_amount: u64 = 100_000;
     let (chess_match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     // Initialize but do NOT settle
     let init_ix = initialize_match_ix(

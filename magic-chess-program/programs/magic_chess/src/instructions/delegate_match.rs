@@ -67,6 +67,14 @@ pub fn handle_delegate_match(ctx: Context<DelegateMatch>) -> Result<()> {
             player == chess_match.players[0] || player == chess_match.players[1],
             crate::errors::ChessError::UnauthorizedSigner
         );
+        // Only a game in progress goes to the rollup. A match delegated while
+        // waiting can't be joined or aborted on base, and a finished match
+        // delegated by the loser can't be settled until the winner wins a
+        // race of undelegate against re-delegate.
+        require!(
+            chess_match.game_status == GameStatus::Active,
+            crate::errors::ChessError::GameNotActive
+        );
 
         // Mark the account as delegated before the CPI transfers ownership.
         // delegation_uid uses a deterministic prefix so it can be looked up.

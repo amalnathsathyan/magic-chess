@@ -38,7 +38,12 @@ pub struct InitializePredictionPool<'info> {
     )]
     pub prediction_pool_vault: Account<'info, TokenAccount>,
 
-    /// The SPL token mint used for betting (same as the chess match).
+    /// The SPL token mint used for betting. It must be the match's mint, or
+    /// the one pool this match can ever have would hold a vault no bet can
+    /// pay into.
+    #[account(
+        constraint = betting_token_mint.key() == chess_match.betting_token_mint @ ChessError::InvalidMint,
+    )]
     pub betting_token_mint: Account<'info, Mint>,
 
     #[account(mut)]

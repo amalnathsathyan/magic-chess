@@ -14,9 +14,16 @@ pub struct CloseMatch<'info> {
         seeds = [CHESS_MATCH_SEED, chess_match.match_id.as_bytes()],
         bump = chess_match.bump,
         constraint = chess_match.payout_processed @ ChessError::MatchNotSettled,
+        // The rent goes to `payer`, so not just anyone may close a match.
+        constraint = (
+            payer.key() == chess_match.players[0] ||
+            payer.key() == chess_match.players[1] ||
+            payer.key() == PLATFORM_FEE_WALLET
+        ) @ ChessError::UnauthorizedSigner,
     )]
     pub chess_match: Account<'info, ChessMatch>,
 
+    /// A player of the match or the platform fee wallet; receives the rent.
     #[account(mut)]
     pub payer: Signer<'info>,
 }

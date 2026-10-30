@@ -15,11 +15,14 @@ pub struct CancelPredictionBet<'info> {
     )]
     pub chess_match: Account<'info, ChessMatch>,
 
-    /// The PredictionPool.
+    /// The PredictionPool. Once settled, the players' and platform's shares
+    /// have left the vault, so a refund would be paid from other bettors'
+    /// money.
     #[account(
         mut,
         seeds = [PREDICTION_POOL_SEED, chess_match.match_id.as_bytes()],
         bump = prediction_pool.bump,
+        constraint = !prediction_pool.settlement_processed @ ChessError::SettlementAlreadyProcessed,
     )]
     pub prediction_pool: Account<'info, PredictionPool>,
 

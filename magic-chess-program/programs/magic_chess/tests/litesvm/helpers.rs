@@ -23,6 +23,15 @@ pub fn program_id() -> Pubkey {
     PROGRAM_ID_STR.parse().expect("Invalid program ID")
 }
 
+/// The fee wallet the program pins (`constants::PLATFORM_FEE_WALLET`),
+/// re-parsed here because the test crate's `Pubkey` type differs.
+pub fn platform_fee_wallet() -> Pubkey {
+    magic_chess::constants::PLATFORM_FEE_WALLET
+        .to_string()
+        .parse()
+        .expect("Invalid platform fee wallet")
+}
+
 pub fn token_program_id() -> Pubkey {
     "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA".parse().expect("Invalid token program ID")
 }

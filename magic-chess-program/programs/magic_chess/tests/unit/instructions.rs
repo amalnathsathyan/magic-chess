@@ -233,19 +233,34 @@ fn initialize_validates_bet_amount() {
 
 #[test]
 fn initialize_validates_platform_fee() {
-    // platform_fee_basis_points must be <= PLATFORM_FEE_MAX_BPS (10_000).
+    // A match fee must be <= MATCH_PLATFORM_FEE_MAX_BPS (10%). The creator
+    // supplies the fee and the joiner never sees it, so 100% is not allowed.
+    assert!(MATCH_PLATFORM_FEE_MAX_BPS < PLATFORM_FEE_MAX_BPS);
 
     let fee_0: u16 = 0;
-    assert!(fee_0 <= PLATFORM_FEE_MAX_BPS);
+    assert!(fee_0 <= MATCH_PLATFORM_FEE_MAX_BPS);
 
     let fee_200: u16 = 200;
-    assert!(fee_200 <= PLATFORM_FEE_MAX_BPS);
+    assert!(fee_200 <= MATCH_PLATFORM_FEE_MAX_BPS);
+
+    let fee_1000: u16 = 1_000;
+    assert!(fee_1000 <= MATCH_PLATFORM_FEE_MAX_BPS);
+
+    let fee_1001: u16 = 1_001;
+    assert!(!(fee_1001 <= MATCH_PLATFORM_FEE_MAX_BPS));
 
     let fee_10000: u16 = 10_000;
-    assert!(fee_10000 <= PLATFORM_FEE_MAX_BPS);
+    assert!(!(fee_10000 <= MATCH_PLATFORM_FEE_MAX_BPS));
+}
 
-    let fee_10001: u16 = 10_001;
-    assert!(!(fee_10001 <= PLATFORM_FEE_MAX_BPS));
+#[test]
+fn initialize_pins_platform_fee_wallet() {
+    // The fee recipient is a program constant, not a creator choice.
+    assert_ne!(PLATFORM_FEE_WALLET, Pubkey::default());
+    assert_eq!(
+        PLATFORM_FEE_WALLET.to_string(),
+        "ByBqw1sTTPjWQx6DEAvwT4srVyr4wUdf1R4V4wGoh8j6"
+    );
 }
 
 #[test]

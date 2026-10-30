@@ -83,15 +83,17 @@ pub fn handle_initialize_match(
     // excludes negative wagers, while paid matches remain escrowed below.
     debug_assert!(bet_amount_arg >= MIN_BET_AMOUNT);
 
-    // 3. Validate platform fee basis points
+    // 3. Validate platform fee basis points. The creator supplies the fee, and
+    // the joiner only sees the stake, so the fee is capped on-chain.
     require!(
-        platform_fee_basis_points_arg <= PLATFORM_FEE_MAX_BPS,
+        platform_fee_basis_points_arg <= MATCH_PLATFORM_FEE_MAX_BPS,
         ChessError::InvalidPlatformFee
     );
 
-    // 4. Validate platform_fee_wallet is not zero pubkey
+    // 4. The fee recipient is fixed. Letting the creator pick it would let a
+    // hand-built match pay the fee to the creator.
     require!(
-        platform_fee_wallet_arg != Pubkey::default(),
+        platform_fee_wallet_arg == PLATFORM_FEE_WALLET,
         ChessError::InvalidPlatformFeeWallet
     );
 
