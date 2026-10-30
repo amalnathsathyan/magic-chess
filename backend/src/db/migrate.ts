@@ -559,6 +559,34 @@ const migrations: Array<{ name: string; run: (s: Sql) => Promise<void> }> = [
       `);
     },
   },
+  {
+    // ZUGCON reward claims: one row per (match, role). A row is inserted
+    // before the mainnet transfer is sent, so a retry can never pay twice.
+    name: "011_reward_claims",
+    run: async (s) => {
+      await s.unsafe(`
+        CREATE TABLE IF NOT EXISTS reward_claims (
+          match_id      VARCHAR(32)   NOT NULL REFERENCES matches(match_id),
+          role          VARCHAR(8)    NOT NULL CHECK (role IN ('creator', 'joiner')),
+          wallet        VARCHAR(44)   NOT NULL,
+          mint          VARCHAR(44)   NOT NULL,
+          amount        NUMERIC(20,0) NOT NULL,
+          status        VARCHAR(8)    NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending', 'sent', 'failed')),
+          tx_signature  VARCHAR(88),
+          error         TEXT,
+          created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+          updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (match_id, role)
+        )
+      `);
+      await s.unsafe(`
+        CREATE INDEX IF NOT EXISTS idx_reward_claims_wallet
+          ON reward_claims (wallet, created_at DESC)
+      `);
+      await s.unsafe("ALTER TABLE reward_claims ENABLE ROW LEVEL SECURITY");
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {
