@@ -41,6 +41,15 @@ claims by Privy user *and* wallet, so a second wallet on the same account gets n
   else the wallet holds. Stake presets follow the token (0 / 100 / 500 / 1000 ZUG), and the lobby
   lists matches staked in either ZUG or SOL.
 
+## The devnet token
+
+| | |
+| --- | --- |
+| Mint | `AoeVGNnjuTAt92KZRhD59GbJTAwJSxpaTPmai8xmFSpK` ([explorer](https://explorer.solana.com/address/AoeVGNnjuTAt92KZRhD59GbJTAwJSxpaTPmai8xmFSpK?cluster=devnet)) |
+| Symbol / decimals | ZUG / 6 |
+| Supply | 1,000,000,000, fixed (mint authority revoked) |
+| Created | 2026-10-30 |
+
 ## Setup
 
 See `DEPLOY.md` → "Devnet ZUG faucet" for the commands. In short: run the script once from a

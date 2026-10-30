@@ -161,9 +161,12 @@ this when the app moves to mainnet** (removal list in `docs/docs/features/devnet
   lists ZUG first with the balance, presets 0/100/500/1000; the SPL balance check in
   `lib/wager.ts` says "Claim free ZUG first" when the default token is short.
 
+Devnet ZUG mint (created by jason 2026-10-30): `AoeVGNnjuTAt92KZRhD59GbJTAwJSxpaTPmai8xmFSpK`, 6 decimals, 1B fixed supply.
+`wrangler.toml` and the env examples point at it.
+
 Next steps (jason):
-1. Run the script from a funded devnet keypair, set `FAUCET_MINT` + `FAUCET_TREASURY_PRIVATE_KEY`
-   on Render and `NEXT_PUBLIC_WAGER_MINT/SYMBOL/DECIMALS` in Cloudflare + `wrangler.toml`.
+1. Set `FAUCET_MINT` + `FAUCET_TREASURY_PRIVATE_KEY` on Render and `NEXT_PUBLIC_WAGER_MINT/SYMBOL/DECIMALS`
+   in the Cloudflare build variables (same values as `wrangler.toml`), then merge so both redeploy.
 2. Check the claim end to end with an embedded wallet (banner → toast → ZUG in the dropdown).
 3. Not done: ratings/P&L cards still assume one stake token; a per-token P&L is a later change.
 
