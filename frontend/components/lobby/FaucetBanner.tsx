@@ -9,6 +9,7 @@ import { useAppLogin } from "@/hooks/useAppLogin";
 import { useFaucet } from "@/hooks/useFaucet";
 import { solanaDevnetTxUrl } from "@/lib/explorer";
 import { cn } from "@/lib/utils";
+import { DEFAULT_STAKE_TOKEN } from "@/lib/stake-tokens";
 
 /**
  * Devnet only: the free ZUG claim. Players get 10,000 ZUG on their first
@@ -51,7 +52,8 @@ export function FaucetBanner({
     signup: status.signupAmount.toLocaleString("en-US"),
     daily: status.dailyAmount.toLocaleString("en-US"),
   };
-  const symbol = status.symbol;
+  // The dropdown shows the app's display symbol (NEXT_PUBLIC_WAGER_SYMBOL); say the same here.
+  const symbol = status.mint === DEFAULT_STAKE_TOKEN.mint ? DEFAULT_STAKE_TOKEN.symbol : status.symbol;
   const available = status.wallet?.available ?? null;
   const signedIn = authenticated && Boolean(walletAddress);
   const empty = status.treasuryRemaining !== null && Number(status.treasuryRemaining) < status.dailyAmount;
