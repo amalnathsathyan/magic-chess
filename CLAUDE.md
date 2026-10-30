@@ -140,6 +140,37 @@ Program tests: 182 unit (`--test unit_tests`) + 59 LiteSVM + 15 payout flow + 11
 Prediction market instructions live on-chain (`prediction_enabled` flag, 5 instructions); no outcome-pool UI yet.
 Frontend (ZUG Arena) and backend are live on devnet; see `docs/docs/deployment.md`.
 
+## Scheduled starts and abandoned open matches (2026-10-30)
+
+Branch `feat/scheduled-match-start`. From devnet testing: many matches were created, nobody joined, and
+they sat open for days. Creating a match now asks when it starts: **Now**, **In 10 min**, or **Pick a time**
+(`datetime-local`, 2 minutes to 30 days ahead).
+
+- **No program change.** The start time is written into the match id (`mc-<16 hex>-t<base36 minutes>`;
+  `mc-<16 hex>` and the older `mc-<20 hex>` mean "now"), so the lobby (chain), play page, backend and
+  bots all read it from the chain. Helpers: `sdk/src/utils/matchId.ts` (`buildMatchId`,
+  `scheduledStartAt`, `matchStartState`, `isAppMatchId`) and the backend mirror
+  `backend/src/services/matchSchedule.ts` (`/api/matches` returns `startsAt`, `openUntil`, `scheduled`,
+  `startPhase`). Tests: `sdk/test/matchId.test.mjs`, `backend/test/matchSchedule.test.ts`.
+- **Join window.** An open match is joinable for 60 minutes after its start (`OPEN_MATCH_WINDOW_SECONDS`).
+  Upcoming: lobby row says "Starts 7:00 PM (in 9:41)", play page counts down with the join button disabled,
+  the invite message and challenge card carry the start time. Expired: hidden from the lobby except for the
+  creator, the play page says nobody joined and the creator's "Cancel and get refund" (`abort_match`) becomes
+  the primary button. `frontend/lib/match-start.ts` formats all of this.
+- **Limits.** The chain doesn't enforce the window: `join_match` has no start or deadline check, so a raw SDK
+  call can join early or late (the clock then starts at that join). `abort_match` is creator-only, so an
+  abandoned match's stake and the sponsor's rent (~0.0161 SOL per match) stay locked until the creator
+  cancels. The backend cannot clean these up today.
+
+Next steps (program, fold into the planned rework: free-match path, `payer` pin, permissionless undelegate):
+- Add `starts_at: i64` and `join_deadline: i64` to `ChessMatch` (layout change; existing devnet accounts
+  must be closed or ignored). `initialize_match` takes `starts_at` (0 = now) and sets `last_move_timestamp`
+  to `max(now, starts_at)` on join; `join_match` requires `starts_at <= now <= join_deadline`.
+- Let anyone call `abort_match` once `now > join_deadline` while `WaitingForOpponent`, refunding the creator
+  and sending rent to the rent payer. A backend keeper (same fee payer as the sponsor) then sweeps expired
+  open matches found by the reconciler, which also stops "settle" calls landing on games that never started.
+- Until then, consider a lobby notice to creators of expired matches (the arena's `TimeoutClaims` pattern).
+
 ## Gameplay: status and next steps (handoff, 2026-10-07)
 
 Owner so far: the "Gameplay fixes from live testing" thread. This section is the handoff for the next agent.

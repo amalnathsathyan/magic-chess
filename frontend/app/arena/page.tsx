@@ -5,7 +5,8 @@ import { AlertCircle, History, Plus, RefreshCw, Search, Swords, Activity } from 
 import { PublicKey } from "@solana/web3.js";
 import { useWallets } from "@privy-io/react-auth/solana";
 import { useMatches, usePlayerMatches } from "@magic-chess/sdk/react";
-import { GameStatus, type MatchInfo } from "@magic-chess/sdk";
+import { GameStatus, isAppMatchId, type MatchInfo } from "@magic-chess/sdk";
+import { getMatchStart } from "@/lib/match-start";
 import { LiveGames } from "@/components/lobby/LiveGames";
 import { RecentGames } from "@/components/lobby/RecentGames";
 import { TimeoutClaims } from "@/components/lobby/TimeoutClaims";
@@ -18,7 +19,6 @@ import {
   solanaConfig,
 } from "@/lib/solana-config";
 
-const APP_MATCH_ID = /^mc-[0-9a-f]{20}$/;
 const SUPPORTED_MOVE_TIMEOUTS = new Set([60, 180, 600]);
 const AUTO_REFRESH_MS = 15_000;
 
@@ -150,11 +150,12 @@ export default function ArenaPage() {
 
   const matchCards = useMemo<MatchCardData[]>(() => {
     const query = search.trim().toLowerCase();
+    const now = Date.now();
     return matches
       .filter((match) => {
         const moveTimeout = Number(match.moveTimeoutDuration);
         return (
-          APP_MATCH_ID.test(match.matchId) &&
+          isAppMatchId(match.matchId) &&
           !match.players[0].equals(PublicKey.default) &&
           match.players[1].equals(PublicKey.default) &&
           match.bettingTokenMint.toBase58() === solanaConfig.wagerMint &&
@@ -176,9 +177,21 @@ export default function ArenaPage() {
           status: "open" as const,
           isOwn: white === walletAddress,
           createdAt: Number(match.lastMoveTimestamp) * 1_000,
+          start: getMatchStart(match.matchId, match.lastMoveTimestamp, now),
         };
       })
-      .sort((left, right) => right.createdAt - left.createdAt)
+      // A match nobody joined within its window leaves the list. Its creator
+      // still sees it, with the refund button on the play page.
+      .filter((match) => match.start.phase !== "expired" || match.isOwn)
+      // Joinable now first, newest at the top; then upcoming, soonest first.
+      .sort((left, right) => {
+        const leftOpen = left.start.phase !== "upcoming";
+        const rightOpen = right.start.phase !== "upcoming";
+        if (leftOpen !== rightOpen) return leftOpen ? -1 : 1;
+        return leftOpen
+          ? right.createdAt - left.createdAt
+          : left.start.startsAt - right.start.startsAt;
+      })
       .filter((match) => {
         if (!query) return true;
         return [match.matchId, match.whitePlayer, match.blackPlayer]

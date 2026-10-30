@@ -477,6 +477,8 @@ export interface InviteCard {
   matchId: string;
   stake: string;
   clock: string;
+  /** Set when the match opens later than now, e.g. "Sat 7:00 PM IST". */
+  startsAt?: string;
 }
 
 export function drawInviteCard(ctx: Ctx, card: InviteCard) {
@@ -515,6 +517,7 @@ export function drawInviteCard(ctx: Ctx, card: InviteCard) {
   cells(ctx, 444, PAD, headWidth, [
     { label: "Stake", value: card.stake, color: card.stake === "FREE" ? INK.bone : INK.vermilion },
     { label: "Clock", value: card.clock },
+    ...(card.startsAt ? [{ label: "Starts", value: card.startsAt }] : []),
     { label: "You play", value: "Black" },
   ]);
 }

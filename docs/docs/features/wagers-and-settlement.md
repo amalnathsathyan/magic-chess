@@ -17,9 +17,40 @@ token account owned by a PDA, and only the program can move it.
 | Per-move time limit | Creator | Seconds. ZUG Arena offers 60, 180 and 600 |
 | Platform fee | Creator | Basis points, max 10 000. ZUG Arena uses 100 (1%) |
 | Fee wallet | Creator | Receives the fee. Settlement checks the fee token account is owned by it |
+| Start time | Creator | Now, in 10 minutes, or a chosen date and time. Carried in the match id, see below |
 
 The joiner must deposit exactly the same amount of the same mint
 (`BetAmountMismatch` / `InvalidMintForJoin` otherwise).
+
+## Start time and the join window
+
+The program lets anyone join an open match as soon as it exists; it has no
+start time. ZUG Arena schedules a match without a program change by writing
+the planned start into the match id, which every reader gets from the chain:
+
+| Match id | Meaning |
+| --- | --- |
+| `mc-<16 hex>` | Starts now |
+| `mc-<16 hex>-t<base36>` | Starts at `<base36>` minutes since the Unix epoch |
+| `mc-<20 hex>` | Older ids, start now |
+
+The SDK's `buildMatchId({ startsAt })`, `scheduledStartAt(matchId)` and
+`matchStartState(matchId, createdAt)` build and read these ids. The backend
+returns the same facts as `startsAt`, `openUntil`, `scheduled` and
+`startPhase` on `/api/matches`.
+
+An open match takes a joiner for **60 minutes** after its start time
+(`OPEN_MATCH_WINDOW_SECONDS`). Before the start the lobby shows "Starts …" and
+the play page counts down with the join button disabled. After the window the
+lobby hides the match from everyone but its creator, and the play page tells
+the creator nobody joined and offers **Cancel and get refund** (`abort_match`,
+which returns the stake and the escrow rent).
+
+The app enforces this window; the chain does not yet. A raw SDK call can still
+join early or late. Enforcing it on-chain (a `starts_at` and a join deadline
+on `ChessMatch`, with a permissionless `abort_match` after the deadline so a
+keeper can refund abandoned matches) is planned for the next account-layout
+change.
 
 ## Escrow flow
 
