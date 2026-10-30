@@ -828,7 +828,7 @@ fn test_settle_rejects_foreign_player_accounts() {
     // A stranger names their own accounts as "winner" and "loser".
     let thief = svm.create_funded_account(1_000_000_000);
     let thief_ata = svm.create_ata(&mint, &thief.pubkey());
-    let thief_2 = svm.create_funded_account(1);
+    let thief_2 = svm.create_funded_account(1_000_000_000);
     let thief_ata_2 = svm.create_ata(&mint, &thief_2.pubkey());
     let err = svm.send_ix_expect_err(settle_prediction_pool_ix(
         &match_pda, &pool_pda, &vault_pda, &thief_ata, &thief_ata_2, &platform_ata, &thief.pubkey(),
