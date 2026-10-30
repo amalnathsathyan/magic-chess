@@ -813,7 +813,7 @@ fn test_settle_rejects_foreign_player_accounts() {
         &match_pda, &pool_pda, &vault_pda, &mint, &p1_pk, 200,
     ), &[]);
 
-    // One bettor on Black, so White's win leaves a losing pool to split.
+    // One bettor on Black; White wins, so the whole pool is a losing pool.
     let bettor = svm.create_funded_account(1_000_000_000);
     let bettor_ata = svm.create_ata(&mint, &bettor.pubkey());
     svm.mint_tokens(&mint, &bettor_ata, 200_000);
@@ -842,14 +842,15 @@ fn test_settle_rejects_foreign_player_accounts() {
     ), &[]);
     assert!(!err.is_empty(), "swapped winner/loser must be rejected");
 
-    // The real players settle fine: White (winner) 10%, Black (loser) 5%.
+    // The real players settle fine. Nobody predicted White, so the whole
+    // 100_000 pool splits 50% winner / 25% loser / 25% platform.
     let p1_before = svm.get_token_balance(&p1_ata);
     let p2_before = svm.get_token_balance(&p2_ata);
     svm.send_ix(settle_prediction_pool_ix(
         &match_pda, &pool_pda, &vault_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk,
     ), &[]);
-    assert_eq!(svm.get_token_balance(&p1_ata) - p1_before, 10_000);
-    assert_eq!(svm.get_token_balance(&p2_ata) - p2_before, 5_000);
+    assert_eq!(svm.get_token_balance(&p1_ata) - p1_before, 50_000);
+    assert_eq!(svm.get_token_balance(&p2_ata) - p2_before, 25_000);
 }
 
 /// On a draw the "winner" share goes to White and the "loser" share to Black.
