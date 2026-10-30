@@ -22,11 +22,25 @@ function isSessionAuthorizationError(error: unknown): boolean {
     "notoken",
     "accountnotinitialized",
     '"custom":3012',
-    "accountnotfound",
     "session_token",
     "session token",
     "session signer",
   ].some((needle) => message.includes(needle));
+}
+
+/**
+ * An "account not found" can be the session signer not yet funded on the
+ * rollup, or the match mid-undelegation. Neither proves the key is bad, so the
+ * wallet signs this one move and the key gets another chance on the next.
+ */
+function isTransientSessionError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("accountnotfound") ||
+    message.includes("account not found") ||
+    message.includes("no record of a prior credit")
+  );
 }
 
 type SessionMode = "token" | "registered";
@@ -116,6 +130,10 @@ export function useMagicBlock(): UseMagicBlockReturn {
             );
             return result;
           } catch (error) {
+            if (isTransientSessionError(error)) {
+              console.warn(`[fast-play] session key move failed transiently (${mode}); the wallet signs this move`, error);
+              return await submitMoveTx(client, matchId, from, to, promotion);
+            }
             if (!isSessionAuthorizationError(error)) throw error;
             console.warn(`[fast-play] rollup rejected the session key (${mode})`, error);
             lastError = error;

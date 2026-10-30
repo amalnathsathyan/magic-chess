@@ -1,6 +1,5 @@
 import { PlayerAvatar } from "@/components/shared/PlayerAvatar";
 import { playerLabel } from "@/lib/players";
-import { cn } from "@/lib/utils";
 
 /** A player above or below the board: who, which side, and whose move it is. */
 export function PlayerRow({
@@ -14,7 +13,11 @@ export function PlayerRow({
   color: "White" | "Black";
   active: boolean;
   connectedAddress?: string;
-  /** Realtime presence, when known. */
+  /**
+   * Realtime presence. Only a confirmed "online" is shown: a player who
+   * hasn't announced themselves to the stream looks the same as one who is
+   * away, so a grey dot would mostly be wrong.
+   */
   online?: boolean;
 }) {
   const isYou = Boolean(address && connectedAddress === address);
@@ -27,13 +30,10 @@ export function PlayerRow({
           ) : (
             <span className="block h-9 w-9 border border-dashed border-border-hover" aria-hidden="true" />
           )}
-          {online !== undefined ? (
+          {online ? (
             <span
-              className={cn(
-                "absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background",
-                online ? "bg-success" : "bg-muted"
-              )}
-              aria-label={online ? "Online" : "Offline"}
+              className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-success"
+              aria-label="Online"
             />
           ) : null}
         </div>

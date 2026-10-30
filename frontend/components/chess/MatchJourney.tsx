@@ -114,7 +114,9 @@ export function MatchJourney(props: MatchJourneyProps) {
           ? "Saving the final board to Solana…"
           : needsCommit
             ? isPlayer
-              ? "Press Finalize to pay out. Either player can."
+              ? isFree
+                ? "Press Finalize to close the match. Either player can."
+                : "Press Finalize to pay out. Either player can."
               : "Waiting for a player to finalize the game."
             : "The final board is saved on Solana.",
     },

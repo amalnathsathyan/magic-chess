@@ -223,14 +223,15 @@ Research only; no code changed. Pick up from here.
 - If the action fails (e.g. a missing ATA; actions can't create ATAs), the validator retries commit+undelegate without it, so the "Finalize" button stays as the fallback. Free matches have no ATAs, so nothing can fail there; do the free-match change first.
 - Same loosened-authorization concern as above: needs jason's approval and a devnet upgrade.
 
-**Smaller gameplay fixes (no program change, effort S unless noted):**
+**Smaller gameplay fixes (no program change, effort S unless noted).** Items marked *done* shipped in the
+"Improve game flow UX end to end" branch (`fix/game-flow-ux`, 2026-10-30); the rest are still open.
 - `subscribeToMatch` (`sdk/src/client.ts:218`) and `useMoveTransactionNotifications.ts:120` never resubscribe after a rollup restart or dropped socket; moves arrive late through the 8s fallback poll (`play/page.tsx:250`). Add a `getSlot` heartbeat and rebuild, plus a "rollup reconnecting" banner instead of a frozen board or a "Match unavailable" card (`play/page.tsx:853-862`).
 - Per move, `sendInstructionWithSession` (`client.ts:162-179`) fetches a fresh blockhash and simulates; `makeMove` then reads the account again (`client.ts:415`) and the frontend discards it. Cache the blockhash ~30s, drop the simulation and the read (~100–300 ms per move).
 - Runtime lookup (base → router → rollup, `sdk/src/magicblock.ts:243-281`) repeats on every `getMatch`/`subscribeToMatch`/`resign`/`claimTimeout`, 2–3× on reload. Share the per-match cache `makeMove` has (`client.ts:184-194`).
-- No rebroadcast for dropped moves (`play/page.tsx:632-640`). `useMagicBlock.ts:25` matches the generic `"accountnotfound"`, so a transient error can turn session keys off and bring wallet popups back mid-game (effort S–M).
-- Timer compares the device clock to the chain's `lastMoveTimestamp` (`play/page.tsx:336-343`). A skewed device fires `claim_timeout_win` early, then `autoClaimedRef` blocks the retry (`play/page.tsx:749-758`). Estimate the offset.
+- *Partly done:* `useMagicBlock.ts` no longer forgets the session key on a generic `AccountNotFound` (the wallet signs that one move and the key is tried again next move). Still open: no rebroadcast for dropped moves (`play/page.tsx`, `submitLegalMove`).
+- *Done:* the timer adds `serverOffsetMs` from `useMatchRealtime` (the server's `serverTime` on presence, clock and snapshot events) to the device clock, on the play and spectate pages. The embedded-wallet auto-claim retries up to 5 times (3s, then 8s apart) instead of giving up after one rejected `claim_timeout_win`.
 - White's clock starts at join on L1 (`join_match.rs:81`) before delegation is seen; `waitForDelegation` polls at 1s (`sdk/src/magicblock.ts:113`). Poll at ~250 ms (effort M to start the clock on the first rollup tx).
-- Finalize polls `getMatch` up to 20×1s (`play/page.tsx:701-707`) after `client.undelegateMatch` already waited for the undelegation (`client.ts:651-661`). Remove it.
+- *Done:* Finalize reads the base account once after `client.undelegateMatch` (which already waits for the undelegation).
 - Duplicate polling: `useMatch` 3–8s, log poller 2.5s, backend `refreshConnectedMatches` 3s (`matchRealtime.ts:173`), indexer 3s (`chainIndexer.ts:71`, runtime cache 30s TTL), spectate 3–10s. Let SSE `match.snapshot` drive refreshes.
 
 **Later / optional:**
@@ -239,6 +240,26 @@ Research only; no code changed. Pick up from here.
 - Private payments: no gain while wagers stay in the L1 escrow.
 
 Suggested order: free-match path + `payer` fix (one upgrade) → small fixes above → auto-payout via Magic Actions.
+
+## Game flow UX pass (2026-10-30, branch `fix/game-flow-ux`)
+
+Frontend only; no program, SDK or backend change. Found by reading the whole create → join → play → finalize flow.
+- **Lobby shows every stake token.** "Open matches" used to drop any match whose mint wasn't `NEXT_PUBLIC_WAGER_MINT`
+  (a custom token, or the devnet ZUG token another thread is adding), so those matches were only reachable by link.
+  Amounts and symbols now come from the mint (`useMintDetails`) in both lists on `/arena`.
+- **"Open" tab under Your games** lists matches you created that nobody joined. Before, leaving the play page lost
+  the match unless it showed in Open matches.
+- **Opponent presence was always "Offline".** The stream only marks a side online after a signed proof, and the play
+  page never sent one. Embedded (Privy) wallets now sign it silently on load (`useMatchRealtime.verifyPlayerPresence`);
+  external wallets aren't prompted. `PlayerRow` shows the dot only when a side is confirmed online, never a grey one.
+- **Clock skew, auto-claim retry, Finalize poll, session-key fallback:** see the *done* items above.
+- **Stake balance check for SPL tokens.** `buildWagerInstruction` checks the player's token balance for a non-SOL
+  mint before building create/join, with a "this stake needs X ZUG" message instead of a failed transaction.
+- **Free matches say "close", not "pay out"** (Finalize button, journey panel, spectator note). After payout the panel
+  offers Review and New match; a cancelled match says "Cancelled and refunded".
+
+Next (still open): resubscribe the account stream after a dropped socket or rollup restart; rebroadcast dropped
+moves; let the backend keeper claim and settle (program change, needs jason).
 ## Gameplay: status and next steps
 
 Fixed after jason's live test (2026-10-06):
