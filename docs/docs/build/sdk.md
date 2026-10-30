@@ -10,7 +10,7 @@
 - the program IDL and types
 
 :::note
-The package ships compiled ESM and CommonJS builds with type declarations. Only `@magic-chess/sdk` and `@magic-chess/sdk/react` are importable; everything else is exported from the root. If the package isn't on npm yet when you read this, use it from the monorepo (`"@magic-chess/sdk": "file:../sdk"`); run `npm install && npm run build` inside `sdk/` to produce `dist/`.
+The package ships compiled ESM and CommonJS builds with type declarations. Only `@magic-chess/sdk` and `@magic-chess/sdk/react` are importable; everything else is exported from the root. To work on the SDK itself, use it from the monorepo (`"@magic-chess/sdk": "file:../sdk"`) and run `npm install && npm run build` inside `sdk/` to produce `dist/`.
 :::
 
 ## Install

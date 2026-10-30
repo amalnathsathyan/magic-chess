@@ -325,7 +325,7 @@ moves; let the backend keeper claim and settle (program change, needs jason).
 ## SDK on npm: status and next steps (handoff, 2026-10-10)
 
 `@magic-chess/sdk` (`sdk/`) had full source but couldn't be published: it shipped raw TypeScript
-(`main: src/index.ts`). Branch `feat/sdk-npm-package` makes it a real package. Not published yet.
+(`main: src/index.ts`). Branch `feat/sdk-npm-package` made it a real package. **0.1.0 is on npm** (published 2026-10-30 by amalnathsathyan).
 
 ### Done
 - `tsup` (`sdk/tsup.config.ts`) builds ESM + CJS + `.d.ts` for `.` and `./react` into `sdk/dist/` (gitignored).
@@ -363,9 +363,11 @@ moves; let the backend keeper claim and settle (program change, needs jason).
   matches that should be the sponsor, which the unchecked settlement `payer` can't tell apart (see below).
 
 ### Next steps (owner action needed)
-- The owner creates the npm org `magic-chess`, runs `npm login`, does the first `npm publish` from `sdk/`,
-  then adds the trusted publisher on npmjs.com (steps in `DEPLOY.md`).
-- After publishing: drop the "if the package isn't on npm yet" note in `docs/docs/build/sdk.md` and the "pending" wording in `docs/docs/intro.md` and `docs/docs/roadmap.md`. Docs import only from `@magic-chess/sdk` and `@magic-chess/sdk/react` (the `exports` map blocks deep paths like `/utils/fen`).
+- Done: `@magic-chess/sdk@0.1.0` published from `sdk/` with a granular npm token; the docs no longer say "pending".
+  Docs import only from `@magic-chess/sdk` and `@magic-chess/sdk/react` (the `exports` map blocks deep paths like `/utils/fen`).
+- Still to do: add the trusted publisher on npmjs.com (steps in `DEPLOY.md`) so later releases go out from a
+  `sdk-v<version>` tag, then revoke the granular token. Bump `version` before each release (npm refuses republishing 0.1.0).
+- `npm pkg fix` normalised `bin.zug` and `repository.url` in `sdk/package.json` after npm warned about them on publish.
 - Worth doing before 1.0: a mainnet/devnet cluster option (program ID and router are devnet-only today),
   an example app (`examples/node-bot` playing via session keys), and API docs from TSDoc (typedoc).
 - CJS `react` entry bundles its own copy of the client (no code splitting in CJS); fine for now, revisit if
