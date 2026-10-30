@@ -46,6 +46,10 @@ export function Hero() {
             Put a stake on a game of chess. The winner takes the pot, and every move is
             recorded on Solana.
           </p>
+          <p className="mt-3 max-w-md text-base leading-relaxed text-muted-foreground">
+            No crypto wallet needed. Sign in with email or Google, claim free play tokens,
+            and send a friend the link.
+          </p>
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <Link href="/arena" className="btn btn-primary min-h-12 px-7 text-[15px]">
               Play now
@@ -54,7 +58,7 @@ export function Hero() {
               Watch live games
             </Link>
           </div>
-          <p className="mt-6 text-sm text-muted-foreground">Solana devnet. Test tokens only.</p>
+          <p className="mt-6 text-sm text-muted-foreground">Solana devnet. Test tokens only, nothing here is real money.</p>
         </div>
         <LeapBoard />
       </div>

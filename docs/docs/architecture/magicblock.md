@@ -89,17 +89,18 @@ wallets sign silently.
 Both run **on the rollup** and must be signed by a player. The SDK waits for
 the matching commitment on L1 (`confirmCommitmentOnBase`) before returning.
 
-## Timeouts and the crank
+## Timeouts and automatic endings
 
-The program can schedule a MagicBlock task-scheduler crank
-(`schedule_timeout` / `cancel_timeout_task`) to claim a timeout and settle with
-no player action. **This is currently disabled.** Instead:
+Nothing on-chain ends a game by itself. The task-scheduler instructions the
+program once carried (`schedule_timeout`, `cancel_timeout_task`) were removed in
+the 2026-10-30 hardening pass: the scheduler isn't available on the rollup,
+where games end, and the dead instructions were callable by anyone. Instead:
 
 - the app shows the countdown and, when it hits zero, an embedded wallet claims
   the win automatically and an external wallet gets a **Claim timeout win** button;
-- a player presses **Finalize and settle payout** to undelegate and settle.
+- a player presses **Collect the pot** / **Save result and pay out** to undelegate and settle.
 
-Re-enabling the crank (or settling from the backend) is on the [Roadmap](../roadmap.md).
+A backend keeper that claims timeouts and settles finished games is on the [Roadmap](../roadmap.md).
 
 ## Endpoints (devnet)
 

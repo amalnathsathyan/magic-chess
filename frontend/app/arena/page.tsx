@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, History, Link2, Plus, RefreshCw, Search, Swords, Activity } from "lucide-react";
 import { PublicKey } from "@solana/web3.js";
 import { useWallets } from "@privy-io/react-auth/solana";
@@ -11,9 +12,10 @@ import { LiveGames } from "@/components/lobby/LiveGames";
 import { RecentGames } from "@/components/lobby/RecentGames";
 import { TimeoutClaims } from "@/components/lobby/TimeoutClaims";
 import { FaucetBanner } from "@/components/lobby/FaucetBanner";
+import { GettingStarted } from "@/components/lobby/GettingStarted";
 import { api, type ApiMatch } from "@/lib/api";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
-import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
+import { CreateMatchForm, type CreateMatchInitial } from "@/components/lobby/CreateMatchForm";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { useMintDetails, type MintDetails } from "@/hooks/useMintDetails";
 
@@ -61,9 +63,13 @@ function apiToMatchInfo(match: ApiMatch): MatchInfo | null {
  */
 function useMyMatches(walletAddress: string | null, chainMatches: MatchInfo[]) {
   const [indexed, setIndexed] = useState<MatchInfo[]>([]);
+  // Side to move per live match, from the indexer, so the list can say
+  // "Your move" without opening each game.
+  const [turns, setTurns] = useState<Map<string, "white" | "black">>(new Map());
   useEffect(() => {
     if (!walletAddress) {
       setIndexed([]);
+      setTurns(new Map());
       return;
     }
     let cancelled = false;
@@ -73,6 +79,11 @@ function useMyMatches(walletAddress: string | null, chainMatches: MatchInfo[]) {
         .then(({ matches }) => {
           if (!cancelled) {
             setIndexed(matches.map(apiToMatchInfo).filter((m): m is MatchInfo => m !== null));
+            setTurns(
+              new Map(
+                matches.flatMap((m) => (m.currentTurn ? [[m.matchId, m.currentTurn] as const] : []))
+              )
+            );
           }
         })
         .catch(() => undefined);
@@ -84,7 +95,7 @@ function useMyMatches(walletAddress: string | null, chainMatches: MatchInfo[]) {
     };
   }, [walletAddress]);
 
-  return useMemo(() => {
+  const matches = useMemo(() => {
     const byId = new Map<string, MatchInfo>();
     for (const match of indexed) byId.set(match.matchId, match);
     for (const match of chainMatches) byId.set(match.matchId, match); // chain wins
@@ -92,6 +103,7 @@ function useMyMatches(walletAddress: string | null, chainMatches: MatchInfo[]) {
       (a, b) => Number(b.lastMoveTimestamp) - Number(a.lastMoveTimestamp)
     );
   }, [chainMatches, indexed]);
+  return { matches, turns };
 }
 
 /**
@@ -135,8 +147,40 @@ function gameStatusToResult(status: GameStatus): string | undefined {
 }
 
 export default function ArenaPage() {
+  return (
+    <Suspense fallback={null}>
+      <ArenaView />
+    </Suspense>
+  );
+}
+
+/** `/arena?new=1&stake=100&mint=…&clock=180` opens the form prefilled (rematch). */
+function useCreateFromQuery(): { open: boolean; initial: CreateMatchInitial | undefined; clear: () => void } {
+  const params = useSearchParams();
+  const router = useRouter();
+  const open = params.get("new") === "1";
+  const initial = useMemo<CreateMatchInitial | undefined>(() => {
+    if (!open) return undefined;
+    const clock = Number(params.get("clock"));
+    return {
+      stake: params.get("stake") ?? undefined,
+      mint: params.get("mint") ?? undefined,
+      clockSeconds: Number.isFinite(clock) && clock > 0 ? clock : undefined,
+    };
+  }, [open, params]);
+  const clear = useCallback(() => router.replace("/arena"), [router]);
+  return { open, initial, clear };
+}
+
+function ArenaView() {
   const [search, setSearch] = useState("");
-  const [showCreate, setShowCreate] = useState(false);
+  const fromQuery = useCreateFromQuery();
+  const [showCreateState, setShowCreate] = useState(false);
+  const showCreate = showCreateState || fromQuery.open;
+  const closeCreate = () => {
+    setShowCreate(false);
+    if (fromQuery.open) fromQuery.clear();
+  };
   const { matches, loading, error, refetch } = useMatches();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { wallets } = useWallets();
@@ -147,7 +191,7 @@ export default function ArenaPage() {
     loading: playerMatchesLoading,
     error: playerMatchesError,
   } = usePlayerMatches(player);
-  const playerMatches = useMyMatches(walletAddress, chainPlayerMatches);
+  const { matches: playerMatches, turns: playerTurns } = useMyMatches(walletAddress, chainPlayerMatches);
   const [activeTab, setActiveTab] = useState<"past" | "live" | "open" | null>(null);
   const mintDetails = useMintDetails(
     useMemo(
@@ -232,7 +276,13 @@ export default function ArenaPage() {
       });
   }, [matches, mintDetails, search, walletAddress]);
 
-  const yourLive = playerMatches.filter((m) => m.gameStatus === GameStatus.Active);
+  const yourLive = playerMatches
+    .filter((m) => m.gameStatus === GameStatus.Active)
+    .sort((a, b) => {
+      const mine = (m: MatchInfo) =>
+        playerTurns.get(m.matchId) === (m.players[0].toBase58() === walletAddress ? "white" : "black") ? 0 : 1;
+      return mine(a) - mine(b);
+    });
   // Matches you created that nobody has joined yet. They aren't "in play",
   // and without this tab the only way back to one was the invite link.
   const yourOpen = playerMatches.filter(
@@ -270,13 +320,20 @@ export default function ArenaPage() {
         </div>
       </div>
 
+      <GettingStarted
+        walletAddress={walletAddress}
+        hasPlayed={playerMatches.length > 0}
+        onCreate={() => setShowCreate(true)}
+      />
       {/* Devnet only: free ZUG to stake with. */}
       <FaucetBanner walletAddress={walletAddress} />
       <TimeoutClaims walletAddress={walletAddress} />
 
       <CreateMatchForm
+        key={fromQuery.open ? "rematch" : "new"}
         isOpen={showCreate}
-        onClose={() => setShowCreate(false)}
+        onClose={closeCreate}
+        initial={fromQuery.initial}
       />
 
       {/* One column on phones (open, yours, live, recent); two on desktop with
@@ -424,6 +481,10 @@ export default function ArenaPage() {
                           createdAt: Number(m.lastMoveTimestamp) * 1_000,
                           result: yourTab === "past" ? gameStatusToResult(m.gameStatus) : undefined,
                           moveCount: m.fullmoveNumber,
+                          yourMove:
+                            yourTab === "live" &&
+                            playerTurns.get(m.matchId) ===
+                              (m.players[0].toBase58() === walletAddress ? "white" : "black"),
                         }}
                       />
                     );

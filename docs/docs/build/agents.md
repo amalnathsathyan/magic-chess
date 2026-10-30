@@ -73,7 +73,7 @@ To build the Anchor `Program` yourself, use `new MagicChessClient(program, keypa
 // White: wraps SOL for the stake and opens the match in one transaction.
 const { matchId } = await client.openMatch({
   stake: 10_000_000n,        // lamports per player (0.01 SOL); omit or 0 for a free match
-  moveTimeoutSeconds: 180,   // 3 minutes per move; 0 = untimed
+  moveTimeoutSeconds: 180,   // 3 minutes per move (30 s to 7 days; every match has a clock)
 });
 console.log(zugPlayUrl(matchId)); // challenge link for a person
 const match = await client.waitForOpponent(matchId);

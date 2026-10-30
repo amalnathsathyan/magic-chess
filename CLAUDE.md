@@ -21,11 +21,11 @@ https://playzug.xyz (the old arena.chessmagic.workers.dev redirects there). `dev
 ```
 magic-chess/
 ├── magic-chess-program/        # Anchor workspace (Rust program + tests)
-│   ├── programs/magic_chess/   # On-chain chess engine (21 instructions)
+│   ├── programs/magic_chess/   # On-chain chess engine (19 instructions)
 │   │   └── src/
 │   │       ├── lib.rs          # Instruction dispatch
 │   │       ├── constants.rs    # PDA seeds, validation limits
-│   │       ├── errors/         # 58 error variants (6000–6057)
+│   │       ├── errors/         # 59 error variants (6000–6058)
 │   │       ├── events/         # 8 event types
 │   │       ├── instructions/   # instruction handlers
 │   │       ├── state/          # ChessMatch, CastlingRights, Piece, Enums, PredictionPool
@@ -54,7 +54,6 @@ Local only (gitignored): .agents/skills/, .claude/skills/ (except .claude/skills
 - **Program ID**: `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h`
 - **Build**: `cargo build-sbf --tools-version v1.52` (macOS 12 compat)
 - **MagicBlock**: Ephemeral Rollups via delegation program `DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh`
-- **Crank**: Task Scheduler `Magic11111111111111111111111111111111111111`
 - **Session Keys**: `KeyspM2ssCJbqUhQ4k7sveSiY4WjnYsrXkC8oDbwde5`
 
 ## Architecture
@@ -136,7 +135,8 @@ Installed locally (not tracked in git; reinstall from `skills-lock.json`):
 
 ## Current State
 
-Program tests: 182 unit (`--test unit_tests`) + 59 LiteSVM + 15 payout flow + 11 Mollusk CU, all run in CI.
+Program tests: 187 unit (`--test unit_tests`, incl. 4 differential engine tests) + 60 LiteSVM + 15 payout flow + 11 Mollusk CU, all run in CI.
+The deployed devnet program lags the source: PR #69 (audit fixes) and the 2026-10-30 hardening pass below both need a redeploy by jason.
 Prediction market instructions live on-chain (`prediction_enabled` flag, 5 instructions); no outcome-pool UI yet.
 Frontend (ZUG Arena) and backend are live on devnet; see `docs/docs/deployment.md`.
 
@@ -322,20 +322,6 @@ Frontend only; no program, SDK or backend change. Found by reading the whole cre
 
 Next (still open): resubscribe the account stream after a dropped socket or rollup restart; rebroadcast dropped
 moves; let the backend keeper claim and settle (program change, needs jason).
-## Gameplay: status and next steps
-
-Fixed after jason's live test (2026-10-06):
-- The page no longer jumps on phones: `MoveList` scrolled the whole page with `scrollIntoView` on every re-render (once a second), which also cancelled touch drags.
-- "Confirming transaction…" no longer hangs: `runTransaction` in `frontend/app/play/page.tsx` stopped awaiting the backend history call (the DB can be asleep). That pending state also locked the board, which is why moves failed.
-- Create and join confirm faster: the gas sponsor (`backend/src/services/solanaSponsor.ts`, `confirmFast`) polls the signature status instead of waiting only on the RPC websocket. An open match also polls every 1.5s so the creator sees the join.
-- Finished games say who won and why (timeout, resignation, checkmate, draws) above the board.
-- When the side to move runs out of time, both players see it. An embedded (Privy) wallet claims the timeout win itself, without a popup (`claim_timeout_win` is in the quiet-signing list). External wallets get the "Claim timeout win" button.
-- Sounds play for the opponent's moves and for game start and end, and all sounds are unlocked on the first tap so phones play them.
-
-Next steps:
-- Timeouts still need a claim and "Finalize and settle payout" still needs a press, because the task-scheduler crank is disabled. Re-enabling the crank (or settling from the backend) would end games with no action from players.
-- Not verified on a real phone yet; retest drag and tap moves, sound and the bottom nav on iOS Safari and Android Chrome.
-
 ## SDK on npm: status and next steps (handoff, 2026-10-10)
 
 `@magic-chess/sdk` (`sdk/`) had full source but couldn't be published: it shipped raw TypeScript
@@ -526,8 +512,60 @@ Fixed in the program (branch `fix/program-audit-findings`, no account-layout cha
 - Frontend (works against the deployed program too): the play page shows the fee under the pot and blocks joining a
   match whose fee wallet or rate isn't this deployment's.
 
-Still open, for the next upgrade (details and the recommended `start_at` / `join_deadline` / `rent_payer` design are in
-the report): escrow rent to an unchecked `payer` in `process_match_settlement`; a minimum move clock (0 = no exit);
-remove the dead task-scheduler instructions; decide the prediction rules for "nobody predicted right" and for betting
-while the result is already known on the rollup (base-layer status lags; matters once predictions carry real stakes).
-Adding fields to `ChessMatch` changes its size, so settle or abort all devnet matches before that upgrade.
+Closed in the 2026-10-30 hardening pass (branch `feat/devnet-readiness-pass`, see the next section): settlement rent
+pinned, mandatory move clock, scheduler instructions removed. Still open for a later upgrade (details and the
+recommended `start_at` / `join_deadline` / `rent_payer` design are in the report): decide the prediction rules for
+"nobody predicted right" and for betting while the result is already known on the rollup (base-layer status lags;
+matters once predictions carry real stakes). Adding fields to `ChessMatch` changes its size, so settle or abort all
+devnet matches before that upgrade.
+
+## Devnet readiness pass: program hardening, cheaper engine, beginner UI (2026-10-30)
+
+Branch `feat/devnet-readiness-pass`. One PR across program, SDK, backend, frontend and docs.
+
+### Program (needs a devnet redeploy by jason, no account-layout change)
+- `initialize_match` requires `MIN_MOVE_TIMEOUT_SECONDS` (30) ≤ clock ≤ `MAX_MOVE_TIMEOUT_SECONDS` (7 days). `0` is no
+  longer "no clock" (audit finding 9). The app offers 1/3/10 min; the SDK default is 300 s. Error 6057's message changed.
+- `process_match_settlement.payer` (escrow rent) must be a player or `PLATFORM_FEE_WALLET` (finding 8, new error 6058
+  `InvalidRentRecipient`). The sponsored app flow names the platform wallet (`buildSettlementInstructions` in
+  `frontend/lib/wager.ts`) and the sponsor allowlist accepts the fee payer or the platform wallet for the two
+  rent-refund positions (`solanaSponsor.ts`). Agents' `finishMatch` keeps `players[0]` as the default.
+- `schedule_timeout` and `cancel_timeout_task` are removed, with the no-op scheduler CPI, `bincode`/`serde`,
+  `TASK_SCHEDULER_ID` and `tests/magicblock_crank_test.ts` (finding 10). `active_task_id` stays in the layout, always -1.
+- Compute (no rule change, checked by `tests/unit/engine_equivalence.rs` against brute-force references on thousands
+  of random positions): `is_square_attacked` looks outward from the target square instead of scanning 64 attackers;
+  `are_no_legal_moves` enumerates per-piece candidate squares with a cached king square instead of 64×64 pairs;
+  settlement and abort use the stored escrow bump (`create_program_address`) instead of a bump search; the per-move
+  debug `msg!`s and every pubkey-formatting log are gone. CU before: ~33k per quiet move, ~36k when the legal-move scan
+  runs (Mollusk, `tests/mollusk/README.md`). Not measured after: this sandbox can't run `cargo build-sbf`; CI's
+  Mollusk job prints the new numbers. Update the README table from that run.
+- The SDK IDL (`sdk/src/idl/magic_chess.{ts,json}`) was edited by hand to match. Run `anchor build && npm run sync-idl`
+  in `sdk/` from a local checkout to regenerate it properly before publishing.
+- Pinocchio was considered and parked (jason's call: stay on Anchor). Estimate for the record: a Pinocchio port
+  changes CU and binary size, not account rent. Rent per match (~0.0162 SOL `ChessMatch` + 0.002 escrow + ATAs) is set
+  by account sizes and would be identical. Base-layer fees are 5,000 lamports per signature regardless of CU, so
+  players and the sponsor would save nothing unless priority fees are used. The one real saving is the program
+  account's deposit (one-time, refundable): an Anchor + SPL + ER-SDK binary of this kind is typically 500–700 KB
+  (~3.5–5 SOL); a Pinocchio one 150–250 KB (~1–1.7 SOL). Per-move CU on the rollup would drop from the current
+  ~20–35k to perhaps 5–10k (zero-copy state parsing), which costs players nothing today. If rent matters, shrink
+  `position_history` (1,604 of 2,186 bytes) instead; that is a layout change in either framework.
+
+### Frontend (ships now, works against the deployed program)
+- `GettingStarted` card on `/arena` for anyone who hasn't played: sign in → claim free ZUG → start a match, each step
+  ticking off, dismissable. Landing hero and the "How a game works" steps say plainly that no wallet or SOL is needed.
+  `AuthGate` and `TransactionStatus` copy rewritten for non-crypto users.
+- Lobby "In play" rows say **Your move** (primary) or "Waiting for your opponent", using the new `currentTurn` field on
+  `GET /api/matches`; your-move games sort first. `FinishedGameCard` shows the stake in the match's own token.
+- Play page: finished games get **Share result** (the review page's result card, drawn from the chain plus the history
+  API) and **Rematch** (`/arena?new=1&stake=…&mint=…&clock=…` opens `CreateMatchForm` prefilled via its new `initial`
+  prop). The finalize button reads "Collect the pot" for the winner, "Save result and pay out" otherwise, "Save result
+  to Solana" for free games. "Playing on the MagicBlock rollup" became "Moves are instant and free. Every one is
+  checked on-chain." The instant-moves card explains what the session key can and can't do.
+- Settings: docs link points at docs.playzug.xyz; the "Board theme: coming soon" placeholder is gone.
+
+### Next steps
+1. jason: redeploy the program on devnet (`cargo build-sbf --tools-version v1.52 && anchor deploy`), regenerate the IDL,
+   settle or abort open devnet matches first if any field changes are bundled in.
+2. Backend keeper (program change): permissionless `claim_timeout_win` / `undelegate_match` once a game is terminal,
+   permissionless `abort_match` after the join deadline, then the keeper in `backend/` with `AUTO_SETTLE_ENABLED`.
+3. Real-phone pass on the new lobby card, result card dialog and rematch flow (iOS Safari, Android Chrome).

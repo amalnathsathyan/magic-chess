@@ -12,8 +12,8 @@ const SKILL_PATH = "/skill.md";
 /** A game, start to payout. These are real steps, so they're numbered. */
 export function HowItWorks() {
   const steps = [
-    { title: "Put a stake", body: "Pick a stake and a move clock, or play for free." },
-    { title: "Play", body: "Moves land in milliseconds on a MagicBlock rollup. No gas to pay." },
+    { title: "Put a stake", body: "Claim free ZUG play tokens, pick a stake and a move clock, or play for free." },
+    { title: "Play", body: "Moves land in milliseconds and cost nothing. Drag a piece, that's it." },
     { title: "Winner takes the pot", body: "The result releases the escrow on Solana. No one else can touch it." },
   ];
   return (

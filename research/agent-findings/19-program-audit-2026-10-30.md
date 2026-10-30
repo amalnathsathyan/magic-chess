@@ -26,9 +26,9 @@ condition, or funds locked; **Medium** = griefing, denial of service or sponsor 
 | 5 | Medium | `delegate_match` has no status check; the loser can re-delegate a finished match and block settlement | **Fixed** |
 | 6 | Medium | `initialize_prediction_pool` accepts a vault on the wrong mint, bricking predictions for that match | **Fixed** |
 | 7 | Medium | `close_match` pays the match rent (~0.016 SOL, sponsor money) to whoever calls it | **Fixed** |
-| 8 | Medium | `process_match_settlement` pays the escrow rent to an unchecked `payer` | Open, needs `rent_payer` field (next upgrade) |
-| 9 | Medium | A match with `move_timeout_duration = 0` has no way to end if the opponent vanishes | Open, recommend a minimum (next upgrade) |
-| 10 | Low | Dead task-scheduler instructions (`schedule_timeout`, `cancel_timeout_task`) are callable by anyone | Open, remove in next upgrade |
+| 8 | Medium | `process_match_settlement` pays the escrow rent to an unchecked `payer` | **Fixed** (pinned to a player or the platform wallet; a `rent_payer` field can refine it later) |
+| 9 | Medium | A match with `move_timeout_duration = 0` has no way to end if the opponent vanishes | **Fixed** (30 s floor, 7 day ceiling) |
+| 10 | Low | Dead task-scheduler instructions (`schedule_timeout`, `cancel_timeout_task`) are callable by anyone | **Fixed** (removed, with the bincode/serde code) |
 | 11 | Low | Fifty-move and threefold repetition end the game automatically; FIDE treats them as claims | Design note |
 | 12 | Low | Prediction pool `platform_fee_bps` is stored but never used | Open, hygiene |
 | 13 | Low | Draw payout gives the odd unit to Black; escrow rent on abort goes to the creator although the sponsor paid it | Note |
@@ -127,7 +127,7 @@ allowlist already expected the sponsor to be the payer here; if the backend is t
 should sign with the platform fee wallet or the next upgrade should store the rent payer (see 8).
 Test: `test_close_match_rejects_stranger`.
 
-### 8. Escrow rent to an unchecked payer (Medium) — open
+### 8. Escrow rent to an unchecked payer (Medium) — fixed (2026-10-30 pass)
 
 `process_match_settlement.payer` is an `UncheckedAccount` and receives the escrow token account's
 rent. Whoever settles first picks the destination. The frontend passes the sponsor and the sponsor
@@ -136,14 +136,14 @@ Pinning it to the platform wallet would break the live flow (the sponsor fee pay
 key). The clean fix is a `rent_payer: Pubkey` on `ChessMatch` written at `initialize_match`, used
 as the rent destination in settlement, abort and close. That is a layout change (see "Upgrade plan").
 
-### 9. No timeout means no exit (Medium) — open
+### 9. No timeout means no exit (Medium) — fixed (2026-10-30 pass)
 
 `initialize_match` accepts `move_timeout_duration = 0` ("no clock"). With no clock the only ways to
 end a game are checkmate, a draw rule or resignation, so an opponent who leaves locks the stake
 forever. The frontend always sends a positive clock, but the program should enforce a floor
 (e.g. 30 seconds) and perhaps a ceiling. Needs an upgrade; no layout change.
 
-### 10. Dead task-scheduler surface (Low) — open
+### 10. Dead task-scheduler surface (Low) — fixed (2026-10-30 pass)
 
 `schedule_timeout` and `cancel_timeout_task` are callable by anyone and write `active_task_id`.
 Nothing reads it while `TASK_SCHEDULER_ENABLED` is false. Harmless, but remove them (and the

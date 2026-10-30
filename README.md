@@ -37,7 +37,7 @@ During a game, the match account is delegated to a MagicBlock Ephemeral Rollup. 
 - The program, ZUG Arena frontend (Cloudflare Worker) and backend (Render + Supabase Postgres) are live on **devnet**, all deployed from `dev`.
 - Game creation, joining and gasless moves work end to end. Finished games show who won and why.
 - Every game is stored: a chain indexer records moves as they happen, and an account reconciler sweeps the chain every 60 seconds to recover games played while the backend was down (those show the final position without individual moves).
-- Not automatic yet: the task-scheduler crank is disabled, so a player claims a timeout win (embedded wallets do it automatically) and presses "Finalize and settle payout" to pay out.
+- Not automatic yet: a player claims a timeout win (embedded wallets do it automatically) and presses "Collect the pot" / "Save result and pay out" to pay out. A backend keeper is the planned next step.
 - Prediction market instructions are on-chain, but there is no outcome-pool UI yet.
 
 > **Devnet only.** Magic Chess has not been externally audited. See [SECURITY.md](SECURITY.md).
