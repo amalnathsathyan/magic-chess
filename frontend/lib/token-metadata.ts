@@ -34,6 +34,14 @@ const TOKEN_2022_PROGRAM_ID = new PublicKey(
 const KNOWN_TOKENS: Record<string, TokenMeta> = {
   [WRAPPED_SOL_MINT.toBase58()]: { symbol: "SOL", name: "Wrapped SOL" },
 };
+// The app's own stake token (on devnet, the ZUG play token) shows its symbol
+// even when its on-chain metadata can't be read.
+if (solanaConfig.wagerMint && solanaConfig.wagerMint !== WRAPPED_SOL_MINT.toBase58()) {
+  KNOWN_TOKENS[solanaConfig.wagerMint] = {
+    symbol: solanaConfig.wagerSymbol,
+    name: `${solanaConfig.wagerSymbol} play token`,
+  };
+}
 
 /* ── Cache ─────────────────────────────────────────────────────────── */
 

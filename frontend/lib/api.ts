@@ -239,6 +239,47 @@ export interface ApiLeaderboardEntry {
   avatar?: string | null;
 }
 
+// ── ZUGCON rewards (mainnet memecoin dripped after finished devnet games) ──
+export type ApiRewardRole = "creator" | "joiner";
+
+export interface ApiRewardOffer {
+  enabled: boolean;
+  mint: string | null;
+  symbol: string;
+  decimals: number;
+  creatorAmount: number;
+  joinerAmount: number;
+  minPlies: number;
+  dailyGamesPerWallet: number;
+  dailyGamesPerPair: number;
+}
+
+export interface ApiRewardEligibility {
+  eligible: boolean;
+  role: ApiRewardRole | null;
+  amount: number;
+  reason: string | null;
+  code: string | null;
+}
+
+export interface ApiRewardClaim {
+  matchId: string;
+  role: ApiRewardRole;
+  wallet: string;
+  amount: string;
+  status: "pending" | "sent" | "failed";
+  txSignature: string | null;
+  error: string | null;
+}
+
+export interface ApiRewardStatus {
+  enabled: boolean;
+  mint: string | null;
+  symbol: string;
+  eligibility: ApiRewardEligibility | null;
+  claim: ApiRewardClaim | null;
+}
+
 export interface ApiPaginated<T> {
   data: T[];
   pagination: { page: number; limit: number; total: number };
@@ -374,6 +415,32 @@ export const api = {
       pagination: { page: number; limit: number; total: number };
     }>(`/api/players/${pubkey}/matches${query ? `?${query}` : ""}`);
   },
+
+  // ZUGCON rewards
+  getRewardOffer: () => fetchApi<ApiRewardOffer>("/api/rewards"),
+
+  getRewardStatus: (matchId: string, wallet: string) => {
+    const query = new URLSearchParams({ wallet });
+    return fetchApi<ApiRewardStatus>(
+      `/api/rewards/matches/${encodeURIComponent(matchId)}?${query}`
+    );
+  },
+
+  getRewardChallenge: (matchId: string, wallet: string) => {
+    const query = new URLSearchParams({ wallet });
+    return fetchApi<{ issuedAt: number; message: string }>(
+      `/api/rewards/matches/${encodeURIComponent(matchId)}/challenge?${query}`
+    );
+  },
+
+  claimReward: (
+    matchId: string,
+    body: { wallet: string; issuedAt: number; signature: string }
+  ) =>
+    fetchApi<{ claim: ApiRewardClaim }>(
+      `/api/rewards/matches/${encodeURIComponent(matchId)}/claim`,
+      { method: "POST", body: JSON.stringify(body) }
+    ),
 
   // Leaderboard
   getLeaderboard: (params?: { sortBy?: string; limit?: number }) => {

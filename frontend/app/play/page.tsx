@@ -47,6 +47,8 @@ import { MoveList } from "@/components/chess/MoveList";
 import { PromotionDialog } from "@/components/chess/PromotionDialog";
 import { BoardControls } from "@/components/chess/BoardControls";
 import { MatchJourney, type SettlePhase } from "@/components/chess/MatchJourney";
+import { FaucetBanner } from "@/components/lobby/FaucetBanner";
+import { DEFAULT_STAKE_TOKEN, formatStake } from "@/lib/stake-tokens";
 import { api, type ApiMatchHistory } from "@/lib/api";
 import { sounds } from "@/lib/sounds";
 import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
@@ -56,6 +58,8 @@ import {
   getTransactionPayer,
 } from "@/lib/wager";
 import { useMagicBlock } from "@/hooks/useMagicBlock";
+import { useZugconReward } from "@/hooks/useZugconReward";
+import { ZugconRewardBanner } from "@/components/rewards/ZugconRewardModal";
 import { useMagicSession } from "@/components/shared/MagicSessionProvider";
 import { cn } from "@/lib/utils";
 import { fitBoardWidth } from "@/lib/board-size";
@@ -357,6 +361,13 @@ function PlayView() {
   // and takes a joiner for an hour after that. See the SDK's matchStartState.
   const start = match && isWaiting ? getMatchStart(matchId, match.lastMoveTimestamp, now) : null;
   const canJoinNow = start?.phase === "open";
+  // ZUGCON: a mainnet thank-you for both players of a finished game. Only a
+  // participant's finished game asks the backend (it reads the chain).
+  const reward = useZugconReward({
+    matchId,
+    wallet,
+    finished: isFinished && isParticipant,
+  });
   const isMyTurn = Boolean(
     match && playerColor && match.currentTurn === playerColor
   );
@@ -1196,11 +1207,17 @@ function PlayView() {
                     {match.isDelegated ? "Playing on the MagicBlock rollup" : "On Solana"}
                   </p>
 
-                  {isWaiting && walletAddress !== whiteAddress && feeTerms && !feeTerms.ok ? (
-                    <p className="text-sm text-primary">
-                      This match pays a {feeTerms.percent}% fee to a wallet that is not ZUG
-                      Arena&apos;s. It was not created here, so joining is blocked.
-                    </p>
+                  {isWaiting &&
+                  walletAddress !== whiteAddress &&
+                  match.betAmountPlayerOne > 0n &&
+                  match.bettingTokenMint.toBase58() === DEFAULT_STAKE_TOKEN.mint ? (
+                    // Devnet only: an invited player with no ZUG yet claims it here.
+                    <FaucetBanner
+                      walletAddress={walletAddress}
+                      variant="card"
+                      onlyWhenClaimable
+                      reason={`Joining stakes ${formatStake(match.betAmountPlayerOne, match.bettingTokenMint)}. Claim free ${DEFAULT_STAKE_TOKEN.symbol} first.`}
+                    />
                   ) : null}
 
                   {isWaiting && walletAddress !== whiteAddress && start ? (
@@ -1342,6 +1359,17 @@ function PlayView() {
                     >
                       {isBusy ? "Claiming the win…" : "Claim timeout win"}
                     </button>
+                  ) : null}
+
+                  {isFinished && isParticipant ? (
+                    <ZugconRewardBanner
+                      status={reward.status}
+                      claim={reward.claim}
+                      phase={reward.phase}
+                      error={reward.error}
+                      onClaim={() => void reward.claimReward()}
+                      role={playerColor === "white" ? "creator" : playerColor === "black" ? "joiner" : null}
+                    />
                   ) : null}
 
                   {isFinished && isParticipant && !match.payoutProcessed ? (

@@ -14,6 +14,8 @@ import { MatchRealtimeHub } from "./services/matchRealtime.js";
 import { loadMatchRealtimeSnapshot } from "./services/matchSnapshot.js";
 import { transactionRoutes } from "./routes/transactions.js";
 import { predictionRoutes } from "./routes/predictions.js";
+import { faucetRoutes } from "./routes/faucet.js";
+import { rewardRoutes } from "./routes/rewards.js";
 import { ingestEvent, type IngestHooks } from "./services/eventIngest.js";
 import { ChainIndexer } from "./services/chainIndexer.js";
 import { MatchReconciler } from "./services/matchReconciler.js";
@@ -81,6 +83,8 @@ async function main(): Promise<void> {
   leaderboardRoutes(app);
   syncRoutes(app, realtime, hooks);
   transactionRoutes(app);
+  faucetRoutes(app);
+  rewardRoutes(app);
   predictionRoutes(app, predictions, new PredictionSessions(config.predictions.sessionSecret));
 
   const indexer = new ChainIndexer({
