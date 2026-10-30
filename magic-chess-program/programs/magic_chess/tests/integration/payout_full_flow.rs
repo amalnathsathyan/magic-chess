@@ -329,7 +329,7 @@ fn setup_active_match(svm: &mut TestSvm, mid: &str, bet: u64, fee: u16) -> Match
 
     // Init match
     svm.send_ix(
-        ix_init(mid, bet, 0, fee, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
+        ix_init(mid, bet, 600, fee, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
         &[&p1_kp],
     );
 
@@ -605,7 +605,7 @@ fn test_fee_over_cap_or_foreign_wallet_rejected() {
 
     // 50% fee: over the cap (send_ix_expect_err panics if it succeeds).
     svm.send_ix_expect_err(
-        ix_init(mid, 500, 0, 5_000, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
+        ix_init(mid, 500, 600, 5_000, &plat, &p1, &p1_ata, &mint, &cm_pda, &epda, false),
         &[&p1_kp],
     );
 
