@@ -16,6 +16,8 @@ export interface MatchJourneyProps {
   /** "white" | "black" for a player, null for a spectator. */
   playerColor: "white" | "black" | null;
   isCreator: boolean;
+  /** For an open match: when it starts and whether it can be joined yet. */
+  start?: { phase: "upcoming" | "open" | "expired"; scheduled: boolean; label: string } | null;
   /** Free games have no wager or payout. */
   isFree: boolean;
   /** e.g. "0.1 WSOL", already formatted. */
@@ -59,6 +61,7 @@ export function MatchJourney(props: MatchJourneyProps) {
     payoutProcessed,
     playerColor,
     isCreator,
+    start,
     isFree,
     wagerLabel,
     moveTimeoutSeconds,
@@ -84,11 +87,19 @@ export function MatchJourney(props: MatchJourneyProps) {
       title: "Opponent joins",
       state: isWaiting ? "current" : "done",
       body: isWaiting
-        ? isCreator
-          ? "Share the invite link. Until someone joins you can cancel for a refund."
-          : isFree
-            ? "Join to start the game."
-            : `Joining locks your ${wagerLabel} stake in the same escrow and starts the game.`
+        ? start?.phase === "expired"
+          ? isCreator
+            ? "Nobody joined within the hour. Cancel to get your stake back, or start a new match."
+            : "Nobody joined within the hour. Ask the creator for a new match."
+          : start?.phase === "upcoming"
+            ? isCreator
+              ? `Starts ${start.label}. Send the link now; your opponent can join from then, and you can cancel for a refund until someone does.`
+              : `Starts ${start.label}. Come back then to take the black pieces${isFree ? "" : `; joining locks your ${wagerLabel} stake`}.`
+            : isCreator
+              ? "Share the invite link. Until someone joins you can cancel for a refund."
+              : isFree
+                ? "Join to start the game."
+                : `Joining locks your ${wagerLabel} stake in the same escrow and starts the game.`
         : isFree
           ? "Both players are in."
           : "Both stakes are in escrow.",

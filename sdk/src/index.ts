@@ -92,6 +92,17 @@ export type {
 // Wager display helpers
 export { formatRawTokenAmount, isFreeWager } from "./wager";
 
+// Match ids and scheduled starts
+export {
+  OPEN_MATCH_WINDOW_SECONDS,
+  MAX_SCHEDULE_AHEAD_SECONDS,
+  isAppMatchId,
+  scheduledStartAt,
+  buildMatchId,
+  matchStartState,
+} from "./utils/matchId";
+export type { MatchStartPhase, MatchStartState } from "./utils/matchId";
+
 // FEN utilities
 export { boardToFen, fenToBoard } from "./utils/fen";
 export type {

@@ -11,6 +11,12 @@ import { Check, ChevronDown, LoaderCircle, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useMagicChessClient } from "@magic-chess/sdk/react";
+import {
+  MAX_SCHEDULE_AHEAD_SECONDS,
+  OPEN_MATCH_WINDOW_SECONDS,
+  buildMatchId,
+} from "@magic-chess/sdk";
+import { formatStartTime } from "@/lib/match-start";
 import { useMagicSession } from "@/components/shared/MagicSessionProvider";
 import { cn } from "@/lib/utils";
 import {
@@ -39,6 +45,41 @@ const TIME_CONTROLS = [
   { label: "Rapid", minutes: 10 },
 ] as const;
 
+type StartOption = "now" | "in10" | "custom";
+
+const START_OPTIONS: { value: StartOption; label: string; hint: string }[] = [
+  { value: "now", label: "Now", hint: "Open right away" },
+  { value: "in10", label: "In 10 min", hint: "Time to send the link" },
+  { value: "custom", label: "Pick a time", hint: "Date and time" },
+];
+
+/** The earliest a scheduled start can be, so the creator has time to share. */
+const MIN_SCHEDULE_AHEAD_MS = 2 * 60_000;
+
+/** `datetime-local` wants "YYYY-MM-DDTHH:MM" in the device's local time. */
+function toLocalInputValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
+ * When the match starts, in Unix seconds, or null for "now". Throws when the
+ * custom time is missing, in the past or more than 30 days ahead.
+ */
+export function resolveStartsAt(option: StartOption, customValue: string, nowMs = Date.now()): number | null {
+  if (option === "now") return null;
+  if (option === "in10") return Math.floor(nowMs / 1000) + 10 * 60;
+  const parsed = customValue ? new Date(customValue).getTime() : Number.NaN;
+  if (!Number.isFinite(parsed)) throw new Error("Pick a start date and time.");
+  if (parsed < nowMs + MIN_SCHEDULE_AHEAD_MS) {
+    throw new Error("Pick a start time at least 2 minutes from now.");
+  }
+  if (parsed > nowMs + MAX_SCHEDULE_AHEAD_SECONDS * 1000) {
+    throw new Error("Pick a start time within the next 30 days.");
+  }
+  return Math.floor(parsed / 1000);
+}
+
 export function CreateMatchForm({
   isOpen,
   onClose,
@@ -48,6 +89,10 @@ export function CreateMatchForm({
   const [timeControl, setTimeControl] = useState<
     (typeof TIME_CONTROLS)[number]
   >(TIME_CONTROLS[1]);
+  const [startOption, setStartOption] = useState<StartOption>("now");
+  const [customStart, setCustomStart] = useState(() =>
+    toLocalInputValue(new Date(Date.now() + 60 * 60_000))
+  );
   const [selectedTokenIndex, setSelectedTokenIndex] = useState(0);
   const [customMint, setCustomMint] = useState("");
   const [tokenDropdownOpen, setTokenDropdownOpen] = useState(false);
@@ -121,7 +166,10 @@ export function CreateMatchForm({
       const rawWager = parseTokenAmount(wagerAmount || "0", decimals);
       const player = new PublicKey(wallet.address);
       const platformFeeWallet = getPlatformFeeWallet();
-      const matchId = `mc-${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`;
+      // The start time rides in the match id, so every reader of the chain
+      // (lobby, play page, backend) sees it without a program change.
+      const startsAt = resolveStartsAt(startOption, customStart);
+      const matchId = buildMatchId({ startsAt });
 
       // Wager ATA + SOL wrapping ride in the same transaction: one approval.
       const wagerPrep = await buildWagerInstruction(client, player, mint, rawWager, {
@@ -150,7 +198,11 @@ export function CreateMatchForm({
       fastPlay.save();
       void syncMatchCreated({ matchId, signature });
 
-      toast.success("Match created on Solana", {
+      toast.success(
+        startsAt === null
+          ? "Match created on Solana"
+          : `Match created. It opens ${formatStartTime(startsAt, Date.now())}.`,
+        {
         description: (
           <a
             href={solanaDevnetTxUrl(signature)}
@@ -161,7 +213,8 @@ export function CreateMatchForm({
             {signature.slice(0, 8)}…{signature.slice(-8)} ↗
           </a>
         ),
-      });
+        }
+      );
       onClose();
       router.push(playHref(matchId));
     } catch (error) {
@@ -348,6 +401,51 @@ export function CreateMatchForm({
                   </button>
                 ))}
               </div>
+            </fieldset>
+
+            <fieldset>
+              <legend className="label mb-2">Starts</legend>
+              <div className="grid grid-cols-3 gap-2">
+                {START_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setStartOption(option.value)}
+                    aria-pressed={startOption === option.value}
+                    className={cn(
+                      "flex min-h-14 flex-col items-center justify-center border px-2 py-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                      startOption === option.value
+                        ? "border-foreground text-foreground"
+                        : "border-border text-muted-foreground hover:border-border-hover hover:text-foreground"
+                    )}
+                  >
+                    <span className="text-sm font-semibold">{option.label}</span>
+                    <span className="text-xs text-muted-foreground">{option.hint}</span>
+                  </button>
+                ))}
+              </div>
+              {startOption === "custom" ? (
+                <div className="mt-2">
+                  <label htmlFor="start-time" className="sr-only">
+                    Start date and time
+                  </label>
+                  <input
+                    id="start-time"
+                    type="datetime-local"
+                    value={customStart}
+                    min={toLocalInputValue(new Date(Date.now() + MIN_SCHEDULE_AHEAD_MS))}
+                    max={toLocalInputValue(new Date(Date.now() + MAX_SCHEDULE_AHEAD_SECONDS * 1000))}
+                    onChange={(event) => setCustomStart(event.target.value)}
+                    required
+                    className="h-11 w-full border border-border bg-background px-3 text-sm tnum text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  />
+                </div>
+              ) : null}
+              <p className="mt-2 text-xs text-muted-foreground">
+                {startOption === "now"
+                  ? `Anyone can join for the next ${OPEN_MATCH_WINDOW_SECONDS / 60} minutes. Nobody joins? Cancel for a full refund.`
+                  : `Your opponent can join from the start time, for ${OPEN_MATCH_WINDOW_SECONDS / 60} minutes. Your stake waits in escrow until then; cancel any time before someone joins.`}
+              </p>
             </fieldset>
 
             <button
