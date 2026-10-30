@@ -159,7 +159,11 @@ function SpectateView() {
   const timeoutMs = match ? Number(match.moveTimeoutDuration) * 1_000 : 0;
   const remainingMs =
     isActive && match && timeoutMs > 0
-      ? Math.max(0, timeoutMs - (now - Number(match.lastMoveTimestamp) * 1_000))
+      ? Math.max(
+          0,
+          // Server-corrected clock, so a skewed device doesn't flag the game early.
+          timeoutMs - (now + realtime.serverOffsetMs - Number(match.lastMoveTimestamp) * 1_000)
+        )
       : null;
   const remaining = remainingMs !== null ? formatRemaining(remainingMs) : null;
   // On-chain the game stays Active until the waiting side claims the win.

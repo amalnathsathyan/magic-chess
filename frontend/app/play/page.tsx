@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Check,
+  Clapperboard,
   Copy,
   ExternalLink,
   LoaderCircle,
@@ -26,7 +27,7 @@ import {
 } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { BN } from "@anchor-lang/core";
-import { useWallets } from "@privy-io/react-auth/solana";
+import { useSignMessage, useWallets } from "@privy-io/react-auth/solana";
 import {
   DELEGATION_PROGRAM_ID,
   findChessMatchPda,
@@ -69,7 +70,7 @@ import { PlayerRow } from "@/components/chess/PlayerRow";
 import { PredictionPanel } from "@/components/predictions/PredictionPanel";
 import { useMatchRealtime } from "@/hooks/useMatchRealtime";
 import { copyToClipboard } from "@/lib/clipboard";
-import { absoluteUrl, playHref, spectateHref } from "@/lib/match-links";
+import { absoluteUrl, playHref, reviewHref, spectateHref } from "@/lib/match-links";
 import { playerLabel } from "@/lib/players";
 import { drawInviteCard, renderCard } from "@/lib/share-card";
 import {
@@ -182,11 +183,31 @@ function PlayView() {
   const router = useRouter();
   const client = useMagicChessClient();
   const { match, loading, error, refetch } = useMatch(matchId || null);
-  const realtime = useMatchRealtime({ matchId });
   const [copied, setCopied] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const { wallets } = useWallets();
   const wallet = selectSolanaWallet(wallets);
+  const embeddedWallet = wallet ? isPrivyEmbeddedWallet(wallet) : false;
+  const { signMessage } = useSignMessage();
+  // Presence proof for the match stream: a free message signature. Embedded
+  // wallets sign it without a modal; external wallets are never prompted.
+  const signPresenceMessage = useCallback(
+    async (message: Uint8Array) => {
+      if (!wallet) throw new Error("Connect a wallet first.");
+      const { signature } = await signMessage({
+        message,
+        wallet,
+        options: { uiOptions: { showWalletUIs: false } },
+      });
+      return signature;
+    },
+    [signMessage, wallet]
+  );
+  const realtime = useMatchRealtime({
+    matchId,
+    walletAddress: wallet?.address,
+    signMessage: signPresenceMessage,
+  });
   const {
     submitMove,
     sessionStatus,
@@ -262,6 +283,10 @@ function PlayView() {
     const intervalId = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(intervalId);
   }, []);
+  // The clock compares the device's time to the chain's last-move timestamp.
+  // A phone whose clock is off would flag a game early (or late), so the
+  // server's clock, carried by the match stream, corrects it.
+  const chainNow = now + realtime.serverOffsetMs;
 
   // Unlock audio on first user gesture (browser autoplay policy)
   useEffect(() => {
@@ -350,7 +375,7 @@ function PlayView() {
       ? Math.max(
           0,
           timeoutMilliseconds -
-            (now - Number(match.lastMoveTimestamp) * 1_000)
+            (chainNow - Number(match.lastMoveTimestamp) * 1_000)
         )
       : null;
   const canClaimTimeout = Boolean(
@@ -385,7 +410,20 @@ function PlayView() {
     if (winner === playerColor) return `You receive ${formatWager(net)}${feeNote}.`;
     return `${winner === "white" ? "White" : "Black"} receives ${formatWager(net)}${feeNote}.`;
   })();
-  const embeddedWallet = wallet ? isPrivyEmbeddedWallet(wallet) : false;
+  // Announce this player to the match stream so the opponent's page shows
+  // them as online. Embedded wallets sign the proof silently; external
+  // wallets would get a popup, so they stay unannounced.
+  const announcedPresenceRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!embeddedWallet || !isParticipant || !walletAddress) return;
+    if (realtime.status !== "live" || realtime.role !== "spectator" || realtime.verifying) return;
+    const key = `${matchId}:${walletAddress}`;
+    if (announcedPresenceRef.current === key) return;
+    announcedPresenceRef.current = key;
+    realtime.verifyPlayerPresence().catch(() => {
+      // Presence is a nicety; the game doesn't depend on it.
+    });
+  }, [embeddedWallet, isParticipant, matchId, realtime, walletAddress]);
 
   // The indexer database and the rollup's own transaction log both list the
   // confirmed moves; use whichever is further along, so the list survives the
@@ -480,7 +518,8 @@ function PlayView() {
         client,
         owner,
         match.bettingTokenMint,
-        amount
+        amount,
+        { symbol: wagerTokenDetail?.symbol, decimals: wagerTokenDetail?.decimals }
       );
 
       // 2. Build join_match instruction
@@ -749,12 +788,9 @@ function PlayView() {
           "Final state committed to Solana"
         );
 
-        baseMatch = null;
-        for (let attempt = 0; attempt < 20; attempt += 1) {
-          baseMatch = await client.getMatch(matchId);
-          if (baseMatch && !baseMatch.isDelegated) break;
-          await new Promise((resolve) => window.setTimeout(resolve, 1_000));
-        }
+        // undelegateMatch resolves once the base layer owns the account
+        // again, so one read is enough.
+        baseMatch = await client.getMatch(matchId);
       }
       if (!baseMatch || baseMatch.isDelegated) {
         throw new Error(
@@ -798,18 +834,27 @@ function PlayView() {
   useEffect(() => {
     claimTimeoutRef.current = handleClaimTimeout;
   });
+  // A claim the rollup rejects (its clock hadn't quite run out, or a transient
+  // RPC error) is retried a little later instead of leaving the win unclaimed.
   const autoClaimedRef = useRef<string | null>(null);
+  const autoClaimAttemptsRef = useRef(0);
   const lastMoveTimestamp = match?.lastMoveTimestamp.toString();
   useEffect(() => {
     if (!canClaimTimeout || !embeddedWallet || !match?.isDelegated) return;
     const key = `${matchId}:${lastMoveTimestamp}`;
-    if (autoClaimedRef.current === key) return;
-    const timer = window.setTimeout(() => {
+    if (autoClaimedRef.current !== key) {
       autoClaimedRef.current = key;
+      autoClaimAttemptsRef.current = 0;
+    }
+    if (autoClaimAttemptsRef.current >= 5) return;
+    const delay = autoClaimAttemptsRef.current === 0 ? 3_000 : 8_000;
+    const timer = window.setTimeout(() => {
+      autoClaimAttemptsRef.current += 1;
       void claimTimeoutRef.current();
-    }, 3_000);
+    }, delay);
     return () => window.clearTimeout(timer);
-  }, [canClaimTimeout, embeddedWallet, lastMoveTimestamp, match?.isDelegated, matchId]);
+    // `txStatus` re-arms the timer after a failed attempt.
+  }, [canClaimTimeout, embeddedWallet, lastMoveTimestamp, match?.isDelegated, matchId, txStatus]);
 
   // Sounds for what arrives from the chain: the opponent's moves (ours play
   // on submit), the game starting and the game ending.
@@ -1224,16 +1269,24 @@ function PlayView() {
                       {settlePhase === "committing"
                         ? "Step 1 of 2: saving the result…"
                         : settlePhase === "paying"
-                          ? "Step 2 of 2: paying out…"
-                          : match.isDelegated
-                            ? "Finalize and pay out"
-                            : "Pay out"}
+                          ? match.totalPot === 0n
+                            ? "Step 2 of 2: closing the match…"
+                            : "Step 2 of 2: paying out…"
+                          : match.totalPot === 0n
+                            ? match.isDelegated
+                              ? "Finalize and close"
+                              : "Close match"
+                            : match.isDelegated
+                              ? "Finalize and pay out"
+                              : "Pay out"}
                     </button>
                   ) : null}
 
                   {isFinished && !isParticipant && !match.payoutProcessed ? (
                     <p className="text-xs text-muted-foreground">
-                      Waiting for a player to pay out.
+                      {match.totalPot === 0n
+                        ? "Waiting for a player to close the match."
+                        : "Waiting for a player to pay out."}
                     </p>
                   ) : null}
 
@@ -1241,12 +1294,30 @@ function PlayView() {
                     <>
                       <p className="inline-flex items-center gap-1.5 text-sm text-success">
                         <Check className="h-4 w-4" aria-hidden="true" />
-                        Paid out on Solana
+                        {match.gameStatus === GameStatus.Aborted
+                          ? "Cancelled and refunded"
+                          : match.totalPot === 0n
+                            ? "Match closed on Solana"
+                            : "Paid out on Solana"}
                       </p>
-                      <Link href="/arena" className="btn btn-secondary w-full">
-                        <Sword className="h-4 w-4" aria-hidden="true" />
-                        New match
-                      </Link>
+                      <div className="grid grid-cols-2 gap-2">
+                        {match.gameStatus !== GameStatus.Aborted ? (
+                          <Link href={reviewHref(matchId)} className="btn btn-secondary">
+                            <Clapperboard className="h-4 w-4" aria-hidden="true" />
+                            Review
+                          </Link>
+                        ) : null}
+                        <Link
+                          href="/arena"
+                          className={cn(
+                            "btn btn-secondary",
+                            match.gameStatus === GameStatus.Aborted && "col-span-2"
+                          )}
+                        >
+                          <Sword className="h-4 w-4" aria-hidden="true" />
+                          New match
+                        </Link>
+                      </div>
                     </>
                   ) : null}
 

@@ -13,9 +13,17 @@ import type { MagicChessClient } from "@magic-chess/sdk";
 import { WRAPPED_SOL_MINT } from "@/lib/solana-config";
 
 type TransactionProvider = {
-  connection?: Pick<Connection, "getBalance">;
+  connection?: Pick<Connection, "getBalance" | "getTokenAccountBalance">;
   sponsorPayer?: PublicKey;
 };
+
+/** "1.5 ZUG" from raw units, for error messages. */
+function formatUnits(raw: bigint, decimals: number, symbol: string | null): string {
+  const base = 10n ** BigInt(decimals);
+  const fraction = (raw % base).toString().padStart(decimals, "0").replace(/0+$/, "");
+  const amount = fraction ? `${raw / base}.${fraction}` : (raw / base).toString();
+  return symbol ? `${amount} ${symbol}` : `${amount} tokens`;
+}
 
 export function getTransactionPayer(
   client: MagicChessClient,
@@ -39,7 +47,8 @@ export async function buildWagerInstruction(
   client: MagicChessClient,
   owner: PublicKey,
   mint: PublicKey,
-  amount: bigint
+  amount: bigint,
+  options?: { symbol?: string | null; decimals?: number | null }
 ): Promise<{
   instructions: TransactionInstruction[];
   tokenAccount: PublicKey;
@@ -67,6 +76,30 @@ export async function buildWagerInstruction(
   }
 
   const tokenAccount = getAssociatedTokenAddressSync(mint, owner);
+
+  // Any other token: check the balance up front, so the player reads "you
+  // need X" instead of a failed transaction's error code.
+  if (!mint.equals(WRAPPED_SOL_MINT) && amount > 0n && provider.connection) {
+    // A missing token account means nothing held. Any other failure (RPC
+    // down) skips the check rather than wrongly refusing the stake.
+    const held = await provider.connection
+      .getTokenAccountBalance(tokenAccount, "confirmed")
+      .then((result): { amount: string; decimals: number } | null => result.value)
+      .catch((cause: unknown) =>
+        /could not find|invalid param|account not found/i.test(String(cause)) ? null : undefined
+      );
+    const balance = held === undefined ? null : held ? BigInt(held.amount) : 0n;
+    if (balance !== null && balance < amount) {
+      const decimals = held?.decimals ?? options?.decimals ?? 0;
+      const need = formatUnits(amount, decimals, options?.symbol ?? null);
+      throw new Error(
+        balance === 0n
+          ? `This stake needs ${need}, and this wallet holds none. Get some first or create a free match.`
+          : `This stake needs ${need}; this wallet holds ${formatUnits(balance, decimals, options?.symbol ?? null)}.`
+      );
+    }
+  }
+
   const payer = provider.sponsorPayer ?? owner;
   const instructions: TransactionInstruction[] = [
     createAssociatedTokenAccountIdempotentInstruction(

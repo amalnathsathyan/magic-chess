@@ -124,7 +124,10 @@ export function CreateMatchForm({
       const matchId = `mc-${crypto.randomUUID().replaceAll("-", "").slice(0, 20)}`;
 
       // Wager ATA + SOL wrapping ride in the same transaction: one approval.
-      const wagerPrep = await buildWagerInstruction(client, player, mint, rawWager);
+      const wagerPrep = await buildWagerInstruction(client, player, mint, rawWager, {
+        symbol: isCustom ? null : selectedToken.symbol,
+        decimals,
+      });
       // White's instant-move key is registered by the same transaction, so
       // there's no separate approval once the game starts.
       const fastPlay = await prepareMatchSession(matchId);
