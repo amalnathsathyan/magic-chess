@@ -18,7 +18,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/amalnathsathyan/magic-chess.git",
+    "url": "git+https://github.com/amalnathsathyan/magic-chess.git",
     "directory": "sdk"
   },
   "license": "MIT",
@@ -27,7 +27,7 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "zug": "./dist/cli.js"
+    "zug": "dist/cli.js"
   },
   "exports": {
     ".": {

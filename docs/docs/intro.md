@@ -53,7 +53,7 @@ Wagers use devnet tokens. Do not use it with real funds.
 | `magic_chess` program | Deployed on devnet at `FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h` |
 | ZUG Arena frontend | Live on Cloudflare Workers |
 | Backend (indexer, realtime, sponsor) | Live on Render with Supabase Postgres |
-| SDK | `@magic-chess/sdk`, built as an npm package (ESM, CJS, types). Publishing to npm is pending ([guide](https://github.com/amalnathsathyan/magic-chess/blob/dev/DEPLOY.md#publish-the-sdk-magic-chesssdk)) |
+| SDK | `@magic-chess/sdk`, [on npm](https://www.npmjs.com/package/@magic-chess/sdk) (ESM, CJS, types, and the `zug` CLI) |
 | Automatic settlement (crank) | Disabled. Players claim timeouts and finalize from the app. See [Roadmap](./roadmap.md) |
 
 ## Where to go next
