@@ -348,6 +348,32 @@ Next steps:
 - Fixed: the live indexer failed with `column "event_index" of relation "sync_events" does not exist`, because
   that column was added to migration 004 after production had run it. Migration 009 adds it.
 
+## PWA (installable app): status and next steps (2026-10-30)
+
+Branch `feat/pwa-install`, from issue #28 (phases 1–2 only; offline chess, push and background sync were not built).
+- `frontend/app/manifest.ts` serves `/manifest.webmanifest` (standalone, `start_url` `/arena`, icons from `public/brand/`).
+  `app/layout.tsx` links it and sets the Apple home-screen tags plus `viewport-fit=cover`.
+- `frontend/public/sw.js` is a hand-written service worker (no `@serwist/next`): cache-first for `/_next/static`, `/audio`,
+  `/brand`; network-first for page navigations with `public/offline.html` as the fallback. It never touches `/api`, other
+  origins (RPC, Privy, api.playzug.xyz) or non-GET requests. `scripts/stamp-sw.mjs` (in `postbuild`) writes the Next
+  build id into the cache name so each deploy drops the previous build's cache. `public/_headers` makes Cloudflare serve
+  `sw.js` and the manifest with `no-cache`. `components/shared/ServiceWorkerRegistration.tsx` registers it in production
+  builds only and unregisters any worker in `next dev`.
+- Settings has an "App" card (`components/settings/InstallAppCard.tsx`, `hooks/useInstallPrompt.ts`): the native install
+  prompt where `beforeinstallprompt` exists (Android/desktop Chromium), Share → Add to Home Screen instructions on iOS, and
+  an "Installed" state in standalone mode.
+- Verified in headless Chromium against the static export: worker registers, offline page precached, an unvisited page
+  offline shows the offline page, a visited page loads from cache.
+
+Next steps:
+- Test on a real phone: install on Android Chrome and iOS Safari, then sign in from the installed app. Google/Discord OAuth
+  and Phantom deep links leave the standalone window; iOS 17+ returns correctly, older iOS may land in Safari. Email login
+  with the embedded wallet is the safe path.
+- If a deploy ever needs to bypass the worker, change `CACHE` in `sw.js` or ship a worker that calls
+  `registration.unregister()`; the `no-cache` header means the next launch picks it up.
+- Push notifications for "your move" (needs a backend push service and VAPID keys; iOS 16.4+ only when installed) and a
+  "your turn" badge are the follow-ups from #28 worth doing once auto-settlement lands.
+
 ## UI redesign: status and next steps (2026-10-27)
 
 Branch `feat/app-redesign`. The whole frontend was restructured to show only the text that matters, in the main areas.

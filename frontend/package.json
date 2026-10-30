@@ -8,7 +8,7 @@
     "dev": "next dev --turbopack",
     "prebuild": "cd ../sdk && npm install --include=dev && npm run build",
     "build": "next build",
-    "postbuild": "cp _worker.js out/_worker.js",
+    "postbuild": "cp _worker.js out/_worker.js && node scripts/stamp-sw.mjs",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit --incremental false"
