@@ -140,6 +140,36 @@ Program tests: 182 unit (`--test unit_tests`) + 59 LiteSVM + 15 payout flow + 11
 Prediction market instructions live on-chain (`prediction_enabled` flag, 5 instructions); no outcome-pool UI yet.
 Frontend (ZUG Arena) and backend are live on devnet; see `docs/docs/deployment.md`.
 
+## Devnet ZUG faucet: status and next steps (2026-10-30, devnet only)
+
+Branch `feat/devnet-zug-faucet`. Testers on devnet hold no SOL, so the app hands out a devnet SPL
+token ("ZUG", 6 decimals, fixed 1B supply) and makes it the default stake token. **Remove all of
+this when the app moves to mainnet** (removal list in `docs/docs/features/devnet-faucet.md`).
+
+- One-time token creation: `cd backend && npm run faucet:create-token`
+  (`backend/scripts/create-devnet-zug.ts`): classic SPL mint + hand-rolled Metaplex metadata
+  (logo via raw GitHub URL, JSON at `frontend/public/token/zug-devnet.json`), whole supply to a
+  treasury keypair, mint authority revoked. Prints the env values.
+- Backend: `services/faucet.ts` + `routes/faucet.ts`, migration 010 `faucet_claims`. Signup
+  10000 ZUG on the first claim, 1000 ZUG once per UTC day after that (the signup day has no
+  daily claim). Claims are keyed by Privy user *and* wallet (unique indexes; row inserted before
+  the transfer, deleted on failure). Treasury key `FAUCET_TREASURY_PRIVATE_KEY` signs; the
+  sponsor fee payer pays fee + ATA rent. Env in `backend/.env.example`.
+- Frontend: `lib/stake-tokens.ts` (default token from `NEXT_PUBLIC_WAGER_*`, then SOL),
+  `lib/faucet.ts`, `hooks/useFaucet.ts`, `components/lobby/FaucetBanner.tsx` (banner on
+  `/arena`, card in `CreateMatchForm` and on the play page's join panel). The token dropdown
+  lists ZUG first with the balance, presets 0/100/500/1000; the SPL balance check in
+  `lib/wager.ts` says "Claim free ZUG first" when the default token is short.
+
+Devnet ZUG mint (created by jason 2026-10-30): `AoeVGNnjuTAt92KZRhD59GbJTAwJSxpaTPmai8xmFSpK`, 6 decimals, 1B fixed supply.
+`wrangler.toml` and the env examples point at it.
+
+Next steps (jason):
+1. Set `FAUCET_MINT` + `FAUCET_TREASURY_PRIVATE_KEY` on Render and `NEXT_PUBLIC_WAGER_MINT/SYMBOL/DECIMALS`
+   in the Cloudflare build variables (same values as `wrangler.toml`), then merge so both redeploy.
+2. Check the claim end to end with an embedded wallet (banner → toast → ZUG in the dropdown).
+3. Not done: ratings/P&L cards still assume one stake token; a per-token P&L is a later change.
+
 ## Scheduled starts and abandoned open matches (2026-10-30)
 
 Branch `feat/scheduled-match-start`. From devnet testing: many matches were created, nobody joined, and
@@ -404,28 +434,31 @@ Next steps:
 - Fixed: the live indexer failed with `column "event_index" of relation "sync_events" does not exist`, because
   that column was added to migration 004 after production had run it. Migration 009 adds it.
 
-## ZUGCON rewards: status and next steps (2026-10-30)
+## PWA (installable app): status and next steps (2026-10-30)
 
-Branch `feat/zugcon-rewards`. ZUGCON is a pump.fun memecoin on **mainnet** that pays both players of a finished devnet
-game: 20,000 to the creator, 10,000 to the joiner. No program change.
+Branch `feat/pwa-install`, from issue #28 (phases 1–2 only; offline chess, push and background sync were not built).
+- `frontend/app/manifest.ts` serves `/manifest.webmanifest` (standalone, `start_url` `/arena`, icons from `public/brand/`).
+  `app/layout.tsx` links it and sets the Apple home-screen tags plus `viewport-fit=cover`.
+- `frontend/public/sw.js` is a hand-written service worker (no `@serwist/next`): cache-first for `/_next/static`, `/audio`,
+  `/brand`; network-first for page navigations with `public/offline.html` as the fallback. It never touches `/api`, other
+  origins (RPC, Privy, api.playzug.xyz) or non-GET requests. `scripts/stamp-sw.mjs` (in `postbuild`) writes the Next
+  build id into the cache name so each deploy drops the previous build's cache. `public/_headers` makes Cloudflare serve
+  `sw.js` and the manifest with `no-cache`. `components/shared/ServiceWorkerRegistration.tsx` registers it in production
+  builds only and unregisters any worker in `next dev`.
+- Settings has an "App" card (`components/settings/InstallAppCard.tsx`, `hooks/useInstallPrompt.ts`): the native install
+  prompt where `beforeinstallprompt` exists (Android/desktop Chromium), Share → Add to Home Screen instructions on iOS, and
+  an "Installed" state in standalone mode.
+- Verified in headless Chromium against the static export: worker registers, offline page precached, an unvisited page
+  offline shows the offline page, a visited page loads from cache.
 
-- Backend: `services/zugconRewards.ts` (eligibility, claim, transfer), `routes/rewards.ts`
-  (`GET /api/rewards`, `GET/POST /api/rewards/matches/:id[...]`), migration `010_reward_claims`, config
-  `rewards.*` (`ZUGCON_*` env vars, listed in `backend/.env.example`), `/api/health` → `rewards` balances.
-  A claim needs a wallet-signed message, a finished game with an opponent, the same result read live from the devnet
-  chain (or a settled row once the account is closed), 10+ plies and room under the daily caps (10 games per wallet,
-  3 per opponent pair). One `reward_claims` row per seat is written before the transfer, and the signature is recorded
-  before confirmation, so a retry never pays twice. The drip wallet signs and pays fees (mainnet RPC
-  `ZUGCON_RPC_ENDPOINT`).
-- Frontend: `hooks/useZugconReward.ts` + `components/rewards/ZugconRewardModal.tsx`, shown on the play page and
-  the review page for participants of finished games. Claiming is one free signature; the modal says the token is
-  on mainnet and links Solscan.
-- Docs: `docs/docs/features/zugcon-rewards.md`; the launch guide (pump.fun fields, the 50/10 split costs ~38 SOL
-  on the bonding curve and a 15/5 split is recommended, three-wallet setup, Jupiter Lock) is in the project files
-  (`zugcon/zugcon-launch-guide.md`).
-
-Next steps (jason): launch on pump.fun, fund the drip wallet, set the `ZUGCON_*` env vars in Render, flip
-`ZUGCON_REWARDS_ENABLED=true`, run one test game and claim both sides. Tune the caps if real play hits them.
+Next steps:
+- Test on a real phone: install on Android Chrome and iOS Safari, then sign in from the installed app. Google/Discord OAuth
+  and Phantom deep links leave the standalone window; iOS 17+ returns correctly, older iOS may land in Safari. Email login
+  with the embedded wallet is the safe path.
+- If a deploy ever needs to bypass the worker, change `CACHE` in `sw.js` or ship a worker that calls
+  `registration.unregister()`; the `no-cache` header means the next launch picks it up.
+- Push notifications for "your move" (needs a backend push service and VAPID keys; iOS 16.4+ only when installed) and a
+  "your turn" badge are the follow-ups from #28 worth doing once auto-settlement lands.
 
 ## UI redesign: status and next steps (2026-10-27)
 

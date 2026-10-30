@@ -100,27 +100,18 @@ export const config = {
     sessionSecret: process.env.PREDICTION_SESSION_SECRET || undefined,
   },
 
-  // ZUGCON: a mainnet memecoin dripped to both players after a finished
-  // devnet game. The reward wallet holds the claim allocation and pays the
-  // transfer fees itself. Off until a mint and a funded wallet are configured.
-  rewards: {
-    enabled: process.env.ZUGCON_REWARDS_ENABLED === "true",
-    mint: cleanEnv("ZUGCON_MINT"),
-    symbol: process.env.ZUGCON_SYMBOL || "ZUGCON",
-    // pump.fun mints use 6 decimals.
-    decimals: Number(process.env.ZUGCON_DECIMALS || "6"),
-    rpcEndpoint:
-      process.env.ZUGCON_RPC_ENDPOINT || "https://api.mainnet-beta.solana.com",
-    walletAddress: cleanEnv("ZUGCON_REWARDS_WALLET_ADDRESS"),
-    walletPrivateKey: process.env.ZUGCON_REWARDS_WALLET_PRIVATE_KEY || "",
-    // Whole tokens, not base units.
-    creatorAmount: Number(process.env.ZUGCON_CREATOR_REWARD || "20000"),
-    joinerAmount: Number(process.env.ZUGCON_JOINER_REWARD || "10000"),
-    // A game shorter than this earns nothing (stops create/join/resign farming).
-    minPlies: Number(process.env.ZUGCON_MIN_PLIES || "10"),
-    // Rewarded games per wallet per UTC day, and against the same opponent.
-    dailyGamesPerWallet: Number(process.env.ZUGCON_DAILY_GAMES_PER_WALLET || "10"),
-    dailyGamesPerPair: Number(process.env.ZUGCON_DAILY_GAMES_PER_PAIR || "3"),
+  // Devnet only: free ZUG play tokens, so testers can stake without holding
+  // SOL. Remove together with the faucet route when the app moves to mainnet.
+  faucet: {
+    enabled: process.env.FAUCET_ENABLED !== "false",
+    mint: cleanEnv("FAUCET_MINT"),
+    // Holds the whole minted supply and signs each transfer. Transfers are
+    // paid for by the sponsor fee payer, so this wallet needs no SOL.
+    treasuryPrivateKey: cleanEnv("FAUCET_TREASURY_PRIVATE_KEY"),
+    // Whole tokens: 10000 on the first claim, then 1000 once per UTC day.
+    signupAmount: Number(process.env.FAUCET_SIGNUP_AMOUNT || "10000"),
+    dailyAmount: Number(process.env.FAUCET_DAILY_AMOUNT || "1000"),
+    requestsPerMinute: Number(process.env.FAUCET_REQUESTS_PER_MINUTE || "6"),
   },
 
   // Shared secret for sync endpoint auth

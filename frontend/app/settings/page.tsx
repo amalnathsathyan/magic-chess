@@ -13,6 +13,7 @@ import {
   KeyRound,
   LoaderCircle,
   Palette,
+  Smartphone,
   User,
   Volume2,
   VolumeX,
@@ -22,6 +23,7 @@ import { toast } from "sonner";
 import { sounds } from "@/lib/sounds";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { useExportPrivyKey } from "@/hooks/useExportPrivyKey";
+import { InstallAppCard } from "@/components/settings/InstallAppCard";
 
 const APP_VERSION = "0.1.0";
 const GITHUB_URL = "https://github.com/amalnathsathyan/magic-chess";
@@ -143,6 +145,15 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+      </section>
+
+      {/* ── App ── */}
+      <section className="mb-8">
+        <h2 className="section-title mb-3 flex items-center gap-2">
+          <Smartphone className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          App
+        </h2>
+        <InstallAppCard />
       </section>
 
       {/* ── Preferences ── */}

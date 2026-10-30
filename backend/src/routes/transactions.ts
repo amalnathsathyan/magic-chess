@@ -50,14 +50,14 @@ function withBudget<T>(action: () => T): T {
 
 let sponsorService: SolanaSponsorService | null = null;
 
-function bearerToken(authorization: string | undefined): string {
+export function bearerToken(authorization: string | undefined): string {
   if (!authorization?.startsWith("Bearer ")) {
     throw new SponsorError("Privy access token is required", 401, "unauthorized");
   }
   return authorization.slice("Bearer ".length);
 }
 
-async function verifyRequestToken(token: string) {
+export async function verifyRequestToken(token: string) {
   if (!config.sponsor.privyAppId) {
     throw new SponsorError(
       "Privy access-token verification is not configured",

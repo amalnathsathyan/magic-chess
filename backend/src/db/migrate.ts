@@ -522,31 +522,41 @@ const migrations: Array<{ name: string; run: (s: Sql) => Promise<void> }> = [
     },
   },
   {
-    // ZUGCON reward claims: one row per (match, role). A row is inserted
-    // before the mainnet transfer is sent, so a retry can never pay twice.
-    name: "010_reward_claims",
+    // Devnet only: who received free ZUG play tokens, so the signup bonus is
+    // paid once and the daily drip once per UTC day. A row is inserted before
+    // the transfer is sent and deleted if the transfer fails, so the unique
+    // indexes also serialize concurrent claims. Drop with the faucet on mainnet.
+    name: "010_faucet_claims",
     run: async (s) => {
       await s.unsafe(`
-        CREATE TABLE IF NOT EXISTS reward_claims (
-          match_id      VARCHAR(32)   NOT NULL REFERENCES matches(match_id),
-          role          VARCHAR(8)    NOT NULL CHECK (role IN ('creator', 'joiner')),
-          wallet        VARCHAR(44)   NOT NULL,
-          mint          VARCHAR(44)   NOT NULL,
-          amount        NUMERIC(20,0) NOT NULL,
-          status        VARCHAR(8)    NOT NULL DEFAULT 'pending'
-                        CHECK (status IN ('pending', 'sent', 'failed')),
-          tx_signature  VARCHAR(88),
-          error         TEXT,
-          created_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-          updated_at    TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-          PRIMARY KEY (match_id, role)
+        CREATE TABLE IF NOT EXISTS faucet_claims (
+          id              BIGSERIAL     PRIMARY KEY,
+          privy_user_id   VARCHAR(128)  NOT NULL,
+          wallet          VARCHAR(44)   NOT NULL,
+          kind            VARCHAR(10)   NOT NULL CHECK (kind IN ('signup', 'daily')),
+          claim_day       DATE          NOT NULL,
+          amount          NUMERIC(20,0) NOT NULL,
+          mint            VARCHAR(44)   NOT NULL,
+          signature       VARCHAR(88),
+          created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
         )
       `);
       await s.unsafe(`
-        CREATE INDEX IF NOT EXISTS idx_reward_claims_wallet
-          ON reward_claims (wallet, created_at DESC)
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_faucet_claims_wallet_day
+          ON faucet_claims (wallet, kind, claim_day)
       `);
-      await s.unsafe("ALTER TABLE reward_claims ENABLE ROW LEVEL SECURITY");
+      await s.unsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_faucet_claims_user_day
+          ON faucet_claims (privy_user_id, kind, claim_day)
+      `);
+      await s.unsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_faucet_claims_wallet_signup
+          ON faucet_claims (wallet) WHERE kind = 'signup'
+      `);
+      await s.unsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_faucet_claims_user_signup
+          ON faucet_claims (privy_user_id) WHERE kind = 'signup'
+      `);
     },
   },
 ];

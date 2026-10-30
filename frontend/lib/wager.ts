@@ -11,6 +11,7 @@ import {
 } from "@solana/web3.js";
 import type { MagicChessClient } from "@magic-chess/sdk";
 import { WRAPPED_SOL_MINT } from "@/lib/solana-config";
+import { DEFAULT_STAKE_TOKEN } from "@/lib/stake-tokens";
 
 type TransactionProvider = {
   connection?: Pick<Connection, "getBalance" | "getTokenAccountBalance">;
@@ -92,10 +93,13 @@ export async function buildWagerInstruction(
     if (balance !== null && balance < amount) {
       const decimals = held?.decimals ?? options?.decimals ?? 0;
       const need = formatUnits(amount, decimals, options?.symbol ?? null);
+      // Devnet only: the default stake token comes from the faucet.
+      const faucet = mint.toBase58() === DEFAULT_STAKE_TOKEN.mint && DEFAULT_STAKE_TOKEN.mint !== WRAPPED_SOL_MINT.toBase58();
+      const hint = faucet ? `Claim free ${DEFAULT_STAKE_TOKEN.symbol} first.` : "Get some first or create a free match.";
       throw new Error(
         balance === 0n
-          ? `This stake needs ${need}, and this wallet holds none. Get some first or create a free match.`
-          : `This stake needs ${need}; this wallet holds ${formatUnits(balance, decimals, options?.symbol ?? null)}.`
+          ? `This stake needs ${need}, and this wallet holds none. ${hint}`
+          : `This stake needs ${need}; this wallet holds ${formatUnits(balance, decimals, options?.symbol ?? null)}. ${hint}`
       );
     }
   }

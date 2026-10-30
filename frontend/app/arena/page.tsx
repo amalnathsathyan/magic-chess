@@ -10,6 +10,7 @@ import { getMatchStart } from "@/lib/match-start";
 import { LiveGames } from "@/components/lobby/LiveGames";
 import { RecentGames } from "@/components/lobby/RecentGames";
 import { TimeoutClaims } from "@/components/lobby/TimeoutClaims";
+import { FaucetBanner } from "@/components/lobby/FaucetBanner";
 import { api, type ApiMatch } from "@/lib/api";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
 import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
@@ -269,6 +270,8 @@ export default function ArenaPage() {
         </div>
       </div>
 
+      {/* Devnet only: free ZUG to stake with. */}
+      <FaucetBanner walletAddress={walletAddress} />
       <TimeoutClaims walletAddress={walletAddress} />
 
       <CreateMatchForm
