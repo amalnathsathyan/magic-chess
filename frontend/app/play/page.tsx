@@ -58,6 +58,8 @@ import {
   getTransactionPayer,
 } from "@/lib/wager";
 import { useMagicBlock } from "@/hooks/useMagicBlock";
+import { useZugconReward } from "@/hooks/useZugconReward";
+import { ZugconRewardBanner } from "@/components/rewards/ZugconRewardModal";
 import { useMagicSession } from "@/components/shared/MagicSessionProvider";
 import { cn } from "@/lib/utils";
 import { fitBoardWidth } from "@/lib/board-size";
@@ -343,6 +345,13 @@ function PlayView() {
   // and takes a joiner for an hour after that. See the SDK's matchStartState.
   const start = match && isWaiting ? getMatchStart(matchId, match.lastMoveTimestamp, now) : null;
   const canJoinNow = start?.phase === "open";
+  // ZUGCON: a mainnet thank-you for both players of a finished game. Only a
+  // participant's finished game asks the backend (it reads the chain).
+  const reward = useZugconReward({
+    matchId,
+    wallet,
+    finished: isFinished && isParticipant,
+  });
   const isMyTurn = Boolean(
     match && playerColor && match.currentTurn === playerColor
   );
@@ -1323,6 +1332,17 @@ function PlayView() {
                     >
                       {isBusy ? "Claiming the win…" : "Claim timeout win"}
                     </button>
+                  ) : null}
+
+                  {isFinished && isParticipant ? (
+                    <ZugconRewardBanner
+                      status={reward.status}
+                      claim={reward.claim}
+                      phase={reward.phase}
+                      error={reward.error}
+                      onClaim={() => void reward.claimReward()}
+                      role={playerColor === "white" ? "creator" : playerColor === "black" ? "joiner" : null}
+                    />
                   ) : null}
 
                   {isFinished && isParticipant && !match.payoutProcessed ? (
