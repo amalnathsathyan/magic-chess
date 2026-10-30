@@ -262,7 +262,9 @@ Next steps:
 - `tsup` (`sdk/tsup.config.ts`) builds ESM + CJS + `.d.ts` for `.` and `./react` into `sdk/dist/` (gitignored).
   `package.json` has an `exports` map, `files: ["dist"]`, `publishConfig.access: public`, react as optional peer.
 - The frontend now consumes `sdk/dist`, not `sdk/src`; its `prebuild`/`predev` run
-  `cd ../sdk && npm install --include=dev && npm run build`. Don't add a `prepare` script to the SDK: the
+  `cd ../sdk && npm ci --include=dev && npm run build` and copy the agent skill to `frontend/public/skill.md`
+  (served at playzug.xyz/skill.md, gitignored). `npm install --include=dev` rewrote the SDK lockfile without its
+  optional peers, which then broke `npm ci` in CI. Don't add a `prepare` script to the SDK: the
   frontend's `npm ci` runs it for the `file:../sdk` dep before the SDK's own deps exist, which broke Workers Builds. Editing the SDK with the frontend running:
   `cd sdk && npm run dev` (tsup watch).
 - Fixed: Node ESM consumers crashed on `import { BN } from "@anchor-lang/core"` (anchor is CJS for Node).
@@ -284,6 +286,8 @@ Next steps:
 - `zug` CLI (`sdk/src/cli.ts`, bin in `package.json`, chess.js for `legalMoves`) and the agent skill
   `sdk/skills/zug-arena/SKILL.md`, both shipped in the npm package. `sdk/CHANGELOG.md` feeds the GitHub release
   that `publish-sdk.yml` now creates.
+- The skill is linked from the landing page ("Build on ZUG" and the footer), `docs/docs/intro.md`,
+  `build/agents.md` and `build/sdk.md`, all pointing at playzug.xyz/skill.md.
 - Not run against devnet yet: the cloud sandbox can't reach Solana RPC. First thing to do from a local checkout:
   `zug wallet --new`, `zug airdrop 1`, `zug open`, join from the app, play a few moves, `zug finish`.
 - The escrow rent `finishMatch` returns defaults to the creator (`players[0]`); for app-created (sponsored)

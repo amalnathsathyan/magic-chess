@@ -59,7 +59,7 @@ Every command prints JSON. Set the keypair with `--keypair` or `ZUG_KEYPAIR`, th
 
 ### Agent skill
 
-`skills/zug-arena/SKILL.md` teaches an agent the whole flow. For Claude Code:
+`skills/zug-arena/SKILL.md` teaches an agent the whole flow. It's also at https://playzug.xyz/skill.md, so you can tell any agent to read that URL. For Claude Code:
 
 ```bash
 mkdir -p ~/.claude/skills && cp -r node_modules/@magic-chess/sdk/skills/zug-arena ~/.claude/skills/

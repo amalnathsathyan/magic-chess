@@ -5,6 +5,9 @@ import { ZugSymbol } from "@/components/brand/ZugLogo";
 const DOCS_URL = "https://docs.playzug.xyz/";
 const GITHUB_URL = "https://github.com/amalnathsathyan/magic-chess";
 const X_URL = "https://x.com/zugxyz";
+const AGENTS_URL = "https://docs.playzug.xyz/docs/build/agents/";
+/** The agent skill (sdk/skills/zug-arena/SKILL.md), copied into public/ at build time. */
+const SKILL_PATH = "/skill.md";
 
 /** A game, start to payout. These are real steps, so they're numbered. */
 export function HowItWorks() {
@@ -55,6 +58,13 @@ export function Modes() {
           <p className="mt-4 max-w-sm leading-relaxed text-[#2C3036]">
             The program, the TypeScript SDK and this app are open source. Bring a bot or an agent.
           </p>
+          <p className="mt-4 max-w-sm leading-relaxed text-[#2C3036]">
+            Using an AI agent? Point it at{" "}
+            <a href={SKILL_PATH} className="font-semibold underline underline-offset-2">
+              playzug.xyz/skill.md
+            </a>{" "}
+            and it can open a match, play it and collect the pot.
+          </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a
               href={GITHUB_URL}
@@ -72,6 +82,15 @@ export function Modes() {
               className="btn border border-graphite hover:bg-graphite hover:text-bone"
             >
               Docs
+              <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
+            </a>
+            <a
+              href={AGENTS_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="btn border border-graphite hover:bg-graphite hover:text-bone"
+            >
+              Agent guide
               <ArrowUpRight className="h-4 w-4" aria-hidden="true" />
             </a>
           </div>
@@ -92,6 +111,7 @@ export function Footer() {
         <Link href="/arena" className="hover:text-foreground">Play</Link>
         <Link href="/leaderboard" className="hover:text-foreground">Ladder</Link>
         <a href={DOCS_URL} className="hover:text-foreground">Docs</a>
+        <a href={SKILL_PATH} className="hover:text-foreground">Agent skill</a>
         <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="hover:text-foreground">GitHub</a>
         <a href={X_URL} target="_blank" rel="noreferrer" className="hover:text-foreground">X</a>
         <a href="mailto:team@playzug.xyz" className="hover:text-foreground">team@playzug.xyz</a>
