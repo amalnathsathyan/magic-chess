@@ -117,7 +117,7 @@ export type MagicChess = {
         {
           "name": "chessMatch",
           "docs": [
-            "The ChessMatch — must be WaitingForOpponent or Aborted, or be settled with no winners."
+            "The ChessMatch \u2014 must be WaitingForOpponent or Aborted, or be settled with no winners."
           ],
           "pda": {
             "seeds": [
@@ -280,56 +280,6 @@ export type MagicChess = {
       "args": []
     },
     {
-      "name": "cancelTimeoutTask",
-      "discriminator": [
-        119,
-        179,
-        9,
-        27,
-        16,
-        151,
-        219,
-        142
-      ],
-      "accounts": [
-        {
-          "name": "chessMatch",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  104,
-                  101,
-                  115,
-                  115,
-                  95,
-                  109,
-                  97,
-                  116,
-                  99,
-                  104
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
-              }
-            ]
-          }
-        },
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": []
-    },
-    {
       "name": "claimPredictionWinnings",
       "discriminator": [
         173,
@@ -345,7 +295,7 @@ export type MagicChess = {
         {
           "name": "chessMatch",
           "docs": [
-            "The ChessMatch — read-only, used for constraints."
+            "The ChessMatch \u2014 read-only, used for constraints."
           ],
           "pda": {
             "seeds": [
@@ -376,7 +326,7 @@ export type MagicChess = {
         {
           "name": "predictionPool",
           "docs": [
-            "The PredictionPool — must be settled. Mutable so Anchor allows PDA signing."
+            "The PredictionPool \u2014 must be settled. Mutable so Anchor allows PDA signing."
           ],
           "writable": true,
           "pda": {
@@ -884,7 +834,7 @@ export type MagicChess = {
         {
           "name": "bettingTokenMintAccount",
           "docs": [
-            "The SPL token mint used for betting — any SPL token is accepted"
+            "The SPL token mint used for betting \u2014 any SPL token is accepted"
           ]
         },
         {
@@ -1003,7 +953,7 @@ export type MagicChess = {
         {
           "name": "predictionPool",
           "docs": [
-            "PredictionPool PDA — one per match."
+            "PredictionPool PDA \u2014 one per match."
           ],
           "writable": true,
           "pda": {
@@ -1280,7 +1230,7 @@ export type MagicChess = {
         {
           "name": "chessMatch",
           "docs": [
-            "The ChessMatch — read-only, used for constraints."
+            "The ChessMatch \u2014 read-only, used for constraints."
           ],
           "pda": {
             "seeds": [
@@ -1347,7 +1297,7 @@ export type MagicChess = {
         {
           "name": "predictionBet",
           "docs": [
-            "PDA per bettor — created once per bettor per pool."
+            "PDA per bettor \u2014 created once per bettor per pool."
           ],
           "writable": true,
           "pda": {
@@ -1542,7 +1492,7 @@ export type MagicChess = {
         {
           "name": "payer",
           "docs": [
-            "Rent destination for escrow account closure — receives lamports back."
+            "Rent destination for escrow account closure \u2014 receives lamports back."
           ],
           "writable": true
         },
@@ -1758,61 +1708,6 @@ export type MagicChess = {
       "args": []
     },
     {
-      "name": "scheduleTimeout",
-      "discriminator": [
-        243,
-        168,
-        188,
-        247,
-        119,
-        74,
-        111,
-        169
-      ],
-      "accounts": [
-        {
-          "name": "chessMatch",
-          "writable": true,
-          "pda": {
-            "seeds": [
-              {
-                "kind": "const",
-                "value": [
-                  99,
-                  104,
-                  101,
-                  115,
-                  115,
-                  95,
-                  109,
-                  97,
-                  116,
-                  99,
-                  104
-                ]
-              },
-              {
-                "kind": "account",
-                "path": "chessMatch.matchId",
-                "account": "chessMatch"
-              }
-            ]
-          }
-        },
-        {
-          "name": "payer",
-          "writable": true,
-          "signer": true
-        }
-      ],
-      "args": [
-        {
-          "name": "taskId",
-          "type": "i64"
-        }
-      ]
-    },
-    {
       "name": "setSessionKey",
       "discriminator": [
         13,
@@ -1857,7 +1752,7 @@ export type MagicChess = {
         {
           "name": "player",
           "docs": [
-            "Must be one of the two players — determines which color's session is set."
+            "Must be one of the two players \u2014 determines which color's session is set."
           ],
           "signer": true
         }
@@ -2012,7 +1907,7 @@ export type MagicChess = {
         {
           "name": "caller",
           "docs": [
-            "Permissionless — fee payer triggers settlement."
+            "Permissionless \u2014 fee payer triggers settlement."
           ],
           "writable": true
         },
@@ -2404,7 +2299,7 @@ export type MagicChess = {
     {
       "code": 6039,
       "name": "duplicateAccounts",
-      "msg": "Duplicate mutable accounts detected — state corruption risk."
+      "msg": "Duplicate mutable accounts detected \u2014 state corruption risk."
     },
     {
       "code": 6040,
@@ -2414,7 +2309,7 @@ export type MagicChess = {
     {
       "code": 6041,
       "name": "unauthorizedSigner",
-      "msg": "Signer is not authorized — must be the player whose turn it is or a valid session key."
+      "msg": "Signer is not authorized \u2014 must be the player whose turn it is or a valid session key."
     },
     {
       "code": 6042,
@@ -2459,12 +2354,12 @@ export type MagicChess = {
     {
       "code": 6050,
       "name": "bettingClosed",
-      "msg": "Betting is closed — the match is no longer Active."
+      "msg": "Betting is closed \u2014 the match is no longer Active."
     },
     {
       "code": 6051,
       "name": "invalidOutcome",
-      "msg": "Invalid outcome — must be 0 (White), 1 (Black), or 2 (Draw)."
+      "msg": "Invalid outcome \u2014 must be 0 (White), 1 (Black), or 2 (Draw)."
     },
     {
       "code": 6052,
@@ -2479,7 +2374,7 @@ export type MagicChess = {
     {
       "code": 6054,
       "name": "nothingToClaim",
-      "msg": "Nothing to claim — no balance available for this bet."
+      "msg": "Nothing to claim \u2014 no balance available for this bet."
     },
     {
       "code": 6055,
@@ -2494,7 +2389,12 @@ export type MagicChess = {
     {
       "code": 6057,
       "name": "invalidTimeoutDuration",
-      "msg": "Move timeout duration must be non-negative."
+      "msg": "Move clock must be between 30 seconds and 7 days."
+    },
+    {
+      "code": 6058,
+      "name": "invalidRentRecipient",
+      "msg": "The escrow rent can only go to a player or the platform wallet."
     }
   ],
   "types": [
@@ -3161,7 +3061,7 @@ export type MagicChess = {
       "name": "predictionPool",
       "docs": [
         "Pools all prediction bets for a single chess match.",
-        "Parimutuel model — winners split the losing pool proportionally."
+        "Parimutuel model \u2014 winners split the losing pool proportionally."
       ],
       "type": {
         "kind": "struct",

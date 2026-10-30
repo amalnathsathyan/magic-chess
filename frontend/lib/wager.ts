@@ -10,7 +10,7 @@ import {
   type Connection,
 } from "@solana/web3.js";
 import type { MagicChessClient } from "@magic-chess/sdk";
-import { WRAPPED_SOL_MINT } from "@/lib/solana-config";
+import { solanaConfig, WRAPPED_SOL_MINT } from "@/lib/solana-config";
 import { DEFAULT_STAKE_TOKEN } from "@/lib/stake-tokens";
 
 type TransactionProvider = {
@@ -141,7 +141,12 @@ export function buildSettlementInstructions(
 ): {
   accounts: [PublicKey, PublicKey, PublicKey];
   instructions: TransactionInstruction[];
-  /** Where the escrow's rent goes back: the sponsor if it paid it. */
+  /**
+   * Where the escrow's rent goes back. The program only lets settlement send
+   * it to a player or the platform fee wallet, so a sponsored transaction
+   * returns it to the platform wallet (the house), a self-paid one to the
+   * player who settles.
+   */
   rentRecipient: PublicKey;
 } {
   const accounts = owners.map((owner) =>
@@ -163,5 +168,9 @@ export function buildSettlementInstructions(
       )
     );
   });
-  return { accounts, instructions, rentRecipient: transactionPayer };
+  const rentRecipient =
+    provider.sponsorPayer && solanaConfig.platformFeeWallet
+      ? new PublicKey(solanaConfig.platformFeeWallet)
+      : payer;
+  return { accounts, instructions, rentRecipient };
 }

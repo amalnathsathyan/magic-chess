@@ -25,7 +25,7 @@ fn setup_joined_match(
     let init_ix = initialize_match_ix(
         &match_pda, p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet, false,
+        bet_amount, 600, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -63,7 +63,7 @@ fn test_double_initialize_rejected() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet, false,
+        bet_amount, 600, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -75,7 +75,7 @@ fn test_double_initialize_rejected() {
     let dup_ix = initialize_match_ix(
         &match_pda, &p2.pubkey(), &mint,
         &p2_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet, false,
+        bet_amount, 600, 200, &platform_fee_wallet, false,
     );
     let err = svm.send_ix_expect_err(dup_ix, &[&p2]);
     assert!(
@@ -105,7 +105,7 @@ fn test_double_join_rejected() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet, false,
+        bet_amount, 600, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -213,7 +213,7 @@ fn test_wrong_owner_token_account_rejected() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &other_ata, &escrow_pda, match_id,  // other_ata not owned by p1_pk
-        bet_amount, 0, 200, &platform_fee_wallet, false,
+        bet_amount, 600, 200, &platform_fee_wallet, false,
     );
     let err = svm.send_ix_expect_err(init_ix, &[]);
     assert!(
@@ -245,7 +245,7 @@ fn test_wrong_mint_token_account_rejected() {
     let _init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet, false,
+        bet_amount, 600, 200, &platform_fee_wallet, false,
     );
 
     // player_token_account has wrong mint (p1_ata is for `mint`, not `wrong_mint`)
@@ -256,7 +256,7 @@ fn test_wrong_mint_token_account_rejected() {
     let init_wrong_ix = initialize_match_ix(
         &match_pda, &p1_pk, &wrong_mint,  // betting_token_mint is wrong_mint
         &p1_ata, &escrow_pda, match_id,   // p1_ata mint is `mint`, not wrong_mint
-        bet_amount, 0, 200, &platform_fee_wallet, false,
+        bet_amount, 600, 200, &platform_fee_wallet, false,
     );
     // This will fail on create_ata for escrow (mint mismatch), or on the constraint.
     // Either way should error.
@@ -288,7 +288,7 @@ fn test_cannot_join_own_match() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet, false,
+        bet_amount, 600, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -336,7 +336,7 @@ fn test_cancel_bet_after_settlement_rejected() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet, true,
+        bet_amount, 600, 200, &platform_fee_wallet, true,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -406,7 +406,7 @@ fn test_zero_platform_fee_wallet_rejected() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &zero_wallet, false,
+        bet_amount, 600, 200, &zero_wallet, false,
     );
     let err = svm.send_ix_expect_err(init_ix, &[]);
     assert!(
@@ -496,7 +496,7 @@ fn test_initialize_rejects_foreign_fee_wallet() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        100_000, 0, 200, &p1_pk, false, // fee wallet = creator
+        100_000, 600, 200, &p1_pk, false, // fee wallet = creator
     );
     let err = svm.send_ix_expect_err(init_ix, &[]);
     assert!(!err.is_empty(), "creator must not be able to name itself as fee wallet");
@@ -555,7 +555,7 @@ fn test_close_match_rejects_stranger() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        100_000, 0, 200, &platform_fee_wallet, false,
+        100_000, 600, 200, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 

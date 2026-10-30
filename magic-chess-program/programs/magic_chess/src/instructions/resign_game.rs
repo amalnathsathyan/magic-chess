@@ -32,18 +32,15 @@ pub fn handle_resign_game(ctx: Context<ResignGame>) -> Result<()> {
     );
 
     // 2. Determine which player (White or Black) is resigning and identify the winner.
-    let resigning_player_color: PlayerColor;
     let winner_color: PlayerColor;
 
     if player_key == chess_match.players[0] { // Player 1 (White by convention) resigns
         require!(chess_match.players[0] != Pubkey::default(), ChessError::NotAPlayer); // Ensure P1 is set
-        resigning_player_color = PlayerColor::White;
         winner_color = PlayerColor::Black;
         // Ensure player 2 has joined, otherwise it's an abort, not a win for P2.
         require!(chess_match.players[1] != Pubkey::default(), ChessError::OpponentNotJoinedYet); // New Error
     } else if player_key == chess_match.players[1] { // Player 2 (Black by convention) resigns
         require!(chess_match.players[1] != Pubkey::default(), ChessError::NotAPlayer); // Ensure P2 is set
-        resigning_player_color = PlayerColor::Black;
         winner_color = PlayerColor::White;
     } else {
         // Signer is not one of the registered players in this match.
@@ -57,12 +54,6 @@ pub fn handle_resign_game(ctx: Context<ResignGame>) -> Result<()> {
     };
     chess_match.game_end_reason = Some(GameEndReason::Resignation);
     chess_match.last_move_timestamp = clock.unix_timestamp; // Record time of game end
-
-    msg!("Player {:?} ({:?}) resigned. Player {:?} wins.", 
-        player_key, 
-        resigning_player_color, 
-        winner_color
-    );
 
     // 4. Emit GameEndedEvent.
     emit!(GameEndedEvent {

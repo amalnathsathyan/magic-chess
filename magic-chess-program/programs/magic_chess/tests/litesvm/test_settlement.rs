@@ -163,7 +163,7 @@ fn test_platform_fee_calculation() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 500, &platform_fee_wallet, false,
+        bet_amount, 600, 500, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -246,4 +246,41 @@ fn test_escrow_fully_drained_after_settlement() {
     svm.send_ix(settle_ix, &[]);
 
     assert!(!svm.account_exists(&escrow_pda), "Escrow must be closed after settlement");
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 6. The escrow rent can only go to a player or the platform wallet.
+//    Settlement is permissionless, so a stranger could otherwise send it
+//    anywhere.
+// ─────────────────────────────────────────────────────────────────────────
+#[test]
+fn test_settlement_rent_recipient_pinned() {
+    let mut svm = TestSvm::new();
+    let p1_pk = svm.payer_pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
+
+    let (p2, _mint, match_pda, escrow_pda, p1_ata, p2_ata, platform_ata) =
+        setup_joined_match(&mut svm, &p1_pk, "test-settle-006", &platform_fee_wallet);
+    svm.send_ix(resign_game_ix(&match_pda, &p2.pubkey()), &[&p2]);
+
+    // A stranger may settle, but may not name themselves as the rent recipient.
+    let stranger = svm.create_funded_account(1_000_000_000);
+    let bad_ix = process_settlement_ix(
+        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata, &stranger.pubkey(),
+    );
+    let err = svm.send_ix_expect_err(bad_ix, &[]);
+    assert!(!err.is_empty(), "stranger as rent recipient must fail");
+    assert!(svm.account_exists(&escrow_pda), "escrow must still be open");
+    assert!(!svm.get_chess_match(&match_pda).payout_processed);
+
+    // The platform wallet is a valid destination (the sponsored flow uses it).
+    let before = svm.ctx.svm.get_account(&platform_fee_wallet).map(|a| a.lamports).unwrap_or(0);
+    let good_ix = process_settlement_ix(
+        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata, &platform_fee_wallet,
+    );
+    svm.send_ix(good_ix, &[]);
+    let after = svm.ctx.svm.get_account(&platform_fee_wallet).map(|a| a.lamports).unwrap_or(0);
+    assert!(after > before, "escrow rent must reach the platform wallet");
+    assert!(!svm.account_exists(&escrow_pda));
+    assert!(svm.get_chess_match(&match_pda).payout_processed);
 }

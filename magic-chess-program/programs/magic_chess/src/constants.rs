@@ -39,7 +39,12 @@ pub const PREDICTION_BET_SEED: &[u8] = b"prediction_bet";
 // ── Session Keys ──
 pub const MAX_SESSION_KEY_TTL: i64 = 7 * 24 * 60 * 60; // 7 days
 
-// ── Game Defaults ──
+// ── Move clock ──
+/// Every match has a per-move clock, so an opponent who walks away can
+/// always be timed out and the stake never stays locked. 30 seconds is the
+/// floor (the app offers 1, 3 and 10 minutes); 7 days is the ceiling.
+pub const MIN_MOVE_TIMEOUT_SECONDS: i64 = 30;
+pub const MAX_MOVE_TIMEOUT_SECONDS: i64 = 7 * 24 * 60 * 60;
 pub const DEFAULT_MOVE_TIMEOUT_RAPID: i64 = 900;
 pub const DEFAULT_MOVE_TIMEOUT_BLITZ: i64 = 180;
 
@@ -48,5 +53,3 @@ pub const ANCHOR_DISCRIMINATOR: usize = 8;
 
 // ── MagicBlock Program Addresses ──
 pub const DELEGATION_PROGRAM_ID: Pubkey = pubkey!("DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh");
-pub const TASK_SCHEDULER_ID: Pubkey = pubkey!("Magic11111111111111111111111111111111111111");
-pub const MAGIC_CONTEXT_ID: Pubkey = pubkey!("MagicContext1111111111111111111111111111111");

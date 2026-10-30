@@ -80,12 +80,6 @@ pub fn handle_join_match(ctx: Context<JoinMatch>, bet_amount_arg: u64) -> Result
     // When player 2 joins, reset the move timestamp so player 1 gets full time
     chess_match.last_move_timestamp = Clock::get()?.unix_timestamp;
 
-    msg!(
-        "Player {} joined match {}. Game is now active.",
-        player_two.key(),
-        chess_match.match_id
-    );
-
     // 5. Emit PlayerJoinedEvent
     emit!(PlayerJoinedEvent {
         match_id: chess_match.match_id.clone(),

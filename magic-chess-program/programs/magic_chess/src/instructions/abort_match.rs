@@ -47,20 +47,21 @@ pub fn handle_abort_match(ctx: Context<AbortMatch>) -> Result<()> {
     let player_token_account_info = ctx.accounts.player_token_account.to_account_info();
     let player_signer_info = ctx.accounts.player_signer.to_account_info();
 
-    // Derive the PDA that is the authority of the escrow token account
-    let (pda_authority, escrow_bump_seed) = Pubkey::find_program_address(
-        &[MATCH_ESCROW_SEED, &ctx.accounts.chess_match.match_id.as_bytes()],
-        ctx.program_id,
-    );
-
-    // Verify escrow ownership (same pattern as payout_logic.rs)
-    if ctx.accounts.match_escrow_token_account.owner != pda_authority {
-        return err!(ChessError::InvalidEscrowAccount);
-    }
-
     // Capture match-level data needed for signing and event before mutable borrow
     let match_id = ctx.accounts.chess_match.match_id.clone();
     let creator_key = ctx.accounts.chess_match.players[0];
+    let escrow_bump_seed = ctx.accounts.chess_match.match_escrow_bump;
+
+    // The escrow's authority is its own PDA. The stored bump (checked by the
+    // account constraint above) avoids a bump search on every abort.
+    let pda_authority = Pubkey::create_program_address(
+        &[MATCH_ESCROW_SEED, match_id.as_bytes(), &[escrow_bump_seed]],
+        ctx.program_id,
+    )
+    .map_err(|_| error!(ChessError::InvalidEscrowAccount))?;
+    if ctx.accounts.match_escrow_token_account.owner != pda_authority {
+        return err!(ChessError::InvalidEscrowAccount);
+    }
 
     // Prepare signer seeds for the escrow PDA (for token transfer)
     let match_id_bytes = match_id.as_bytes();
@@ -74,11 +75,6 @@ pub fn handle_abort_match(ctx: Context<AbortMatch>) -> Result<()> {
     // 3. Transfer the full escrow balance back to the creator (PDA-signed)
     let escrow_balance = ctx.accounts.match_escrow_token_account.amount;
     if escrow_balance > 0 {
-        msg!(
-            "Returning {} tokens from escrow back to creator: {}",
-            escrow_balance,
-            creator_key
-        );
         token::transfer(
             CpiContext::new_with_signer(
                 ctx.accounts.token_program.key(),
@@ -95,8 +91,6 @@ pub fn handle_abort_match(ctx: Context<AbortMatch>) -> Result<()> {
 
     // 4. Close the escrow token account (return lamports to creator)
     // The token account authority is the escrow PDA, so we sign with escrow seeds
-    msg!("Closing escrow token account, returning rent to creator.");
-
     token::close_account(
         CpiContext::new_with_signer(
             ctx.accounts.token_program.key(),
@@ -125,6 +119,5 @@ pub fn handle_abort_match(ctx: Context<AbortMatch>) -> Result<()> {
         creator: creator_key,
     });
 
-    msg!("Match aborted: {}", chess_match.match_id);
     Ok(())
 }

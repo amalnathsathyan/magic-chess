@@ -91,16 +91,6 @@ pub mod magic_chess {
         instructions::undelegate_match::handle_undelegate_match(ctx)
     }
 
-    // Schedule a crank task to auto-claim timeout after a move
-    pub fn schedule_timeout(ctx: Context<ScheduleTimeout>, task_id: i64) -> Result<()> {
-        instructions::schedule_timeout::handle_schedule_timeout(ctx, task_id)
-    }
-
-    // Cancel a previously scheduled timeout crank task
-    pub fn cancel_timeout_task(ctx: Context<CancelTimeoutTask>) -> Result<()> {
-        instructions::cancel_timeout_task::handle_cancel_timeout_task(ctx)
-    }
-
     // Set a session key for gasless move signing on MagicBlock ER
     pub fn set_session_key(ctx: Context<SetSessionKey>, session_signer: Pubkey, expires_at: i64) -> Result<()> {
         instructions::set_session_key::handle_set_session_key(ctx, session_signer, expires_at)
