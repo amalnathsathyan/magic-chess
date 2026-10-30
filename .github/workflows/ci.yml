@@ -53,7 +53,7 @@ jobs:
 
       - name: Build SDK
         working-directory: sdk
-        run: npm install && npm run build
+        run: npm ci && npm run build
 
       - name: Install dependencies
         working-directory: frontend
@@ -79,19 +79,24 @@ jobs:
 
       - name: Install dependencies
         working-directory: sdk
-        run: npm install
+        run: npm ci
 
       - name: Typecheck
         working-directory: sdk
         run: npx tsc --noEmit
 
+      # Tests run against the built package (dist/), CLI included.
+      - name: Build
+        working-directory: sdk
+        run: npm run build
+
       - name: Test
         working-directory: sdk
         run: npm test
 
-      - name: Build + smoke-test the package
+      - name: Smoke-test the package
         working-directory: sdk
-        run: npm run build && npm run smoke && npm pack --dry-run
+        run: npm run smoke && npm pack --dry-run
 
   # ── Backend Typecheck + Tests ───────────────────────────────────
   backend:
