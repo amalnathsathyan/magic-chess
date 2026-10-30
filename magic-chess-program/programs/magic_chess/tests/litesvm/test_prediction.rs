@@ -19,12 +19,12 @@ fn setup_match_for_prediction(
     let bet_amount: u64 = 100_000;
     let (match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let init_ix = initialize_match_ix(
         &match_pda, p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet.pubkey(), true,
+        bet_amount, 0, 200, &platform_fee_wallet, true,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -41,7 +41,7 @@ fn setup_match_for_prediction(
     let move_ix = make_move_ix(&match_pda, p1_pk, 1, 4, 3, 4, None);
     svm.send_ix(move_ix, &[]);
 
-    let platform_ata = svm.create_ata(&mint, &platform_fee_wallet.pubkey());
+    let platform_ata = svm.create_ata(&mint, &platform_fee_wallet);
 
     (p2, mint, match_pda, escrow_pda, p1_ata, p2_ata, platform_ata)
 }
@@ -97,7 +97,7 @@ fn test_cannot_init_pool_without_prediction_enabled() {
 
     let (match_pda, _) = find_chess_match_pda("pred-noenable");
     let (escrow_pda, _) = find_escrow_pda("pred-noenable");
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
@@ -546,7 +546,7 @@ fn test_cancel_bet_when_aborted() {
 
     let (match_pda, _) = find_chess_match_pda("pred-cancel-001");
     let (escrow_pda, _) = find_escrow_pda("pred-cancel-001");
-    let pfw = Keypair::new().pubkey();
+    let pfw = platform_fee_wallet();
 
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
@@ -636,10 +636,10 @@ fn test_cannot_cancel_while_active() {
 fn test_full_prediction_flow_with_platform_fee() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();
-    let platform_fee_wallet = Keypair::new();
+    let platform_fee_wallet = platform_fee_wallet();
     let mint = svm.create_mint(9);
     let p1_ata = svm.create_ata(&mint, &p1_pk);
-    let platform_ata = svm.create_ata(&mint, &platform_fee_wallet.pubkey());
+    let platform_ata = svm.create_ata(&mint, &platform_fee_wallet);
     svm.mint_tokens(&mint, &p1_ata, 1_000_000);
 
     let (match_pda, _) = find_chess_match_pda("pred-fullflow");
@@ -648,7 +648,7 @@ fn test_full_prediction_flow_with_platform_fee() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, "pred-fullflow",
-        100_000, 0, 200, &platform_fee_wallet.pubkey(), true,
+        100_000, 0, 200, &platform_fee_wallet, true,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -791,4 +791,149 @@ fn test_claim_with_wrong_winner_rejected() {
         err.contains("InstructionError") || err.contains("Custom"),
         "Expected NothingToClaim error for wrong winner, got: {}", err
     );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit fixes (2026-10-30)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Settlement is permissionless, so the winner/loser accounts must belong to
+/// the players. Before the fix the caller could pass their own accounts and
+/// take the players' 15% (or 75% when nobody predicted right).
+#[test]
+fn test_settle_rejects_foreign_player_accounts() {
+    let mut svm = TestSvm::new();
+    let p1_pk = svm.payer_pubkey();
+    let (_p2, mint, match_pda, _escrow, p1_ata, p2_ata, platform_ata) =
+        setup_match_for_prediction(&mut svm, &p1_pk, "pred-settle-owner");
+
+    let (pool_pda, _) = find_prediction_pool_pda("pred-settle-owner");
+    let (vault_pda, _) = find_prediction_pool_vault_pda(&pool_pda);
+    svm.send_ix(initialize_prediction_pool_ix(
+        &match_pda, &pool_pda, &vault_pda, &mint, &p1_pk, 200,
+    ), &[]);
+
+    // One bettor on Black, so White's win leaves a losing pool to split.
+    let bettor = svm.create_funded_account(1_000_000_000);
+    let bettor_ata = svm.create_ata(&mint, &bettor.pubkey());
+    svm.mint_tokens(&mint, &bettor_ata, 200_000);
+    let (bet_pda, _) = find_prediction_bet_pda(&pool_pda, &bettor.pubkey());
+    svm.send_ix(place_prediction_bet_ix(
+        &match_pda, &pool_pda, &bet_pda, &vault_pda,
+        &bettor_ata, &bettor.pubkey(), 100_000, 1,
+    ), &[&bettor]);
+
+    set_game_status(&mut svm, &match_pda, GameStatus::WhiteWins, GameEndReason::Checkmate);
+
+    // A stranger names their own accounts as "winner" and "loser".
+    let thief = svm.create_funded_account(1_000_000_000);
+    let thief_ata = svm.create_ata(&mint, &thief.pubkey());
+    let thief_2 = svm.create_funded_account(1);
+    let thief_ata_2 = svm.create_ata(&mint, &thief_2.pubkey());
+    let err = svm.send_ix_expect_err(settle_prediction_pool_ix(
+        &match_pda, &pool_pda, &vault_pda, &thief_ata, &thief_ata_2, &platform_ata, &thief.pubkey(),
+    ), &[]);
+    assert!(!err.is_empty(), "foreign winner/loser accounts must be rejected");
+    assert_eq!(svm.get_token_balance(&thief_ata), 0);
+
+    // Swapping the players (loser named as winner) is rejected too.
+    let err = svm.send_ix_expect_err(settle_prediction_pool_ix(
+        &match_pda, &pool_pda, &vault_pda, &p2_ata, &p1_ata, &platform_ata, &p1_pk,
+    ), &[]);
+    assert!(!err.is_empty(), "swapped winner/loser must be rejected");
+
+    // The real players settle fine: White (winner) 10%, Black (loser) 5%.
+    let p1_before = svm.get_token_balance(&p1_ata);
+    let p2_before = svm.get_token_balance(&p2_ata);
+    svm.send_ix(settle_prediction_pool_ix(
+        &match_pda, &pool_pda, &vault_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk,
+    ), &[]);
+    assert_eq!(svm.get_token_balance(&p1_ata) - p1_before, 10_000);
+    assert_eq!(svm.get_token_balance(&p2_ata) - p2_before, 5_000);
+}
+
+/// On a draw the "winner" share goes to White and the "loser" share to Black.
+#[test]
+fn test_settle_draw_requires_white_then_black() {
+    let mut svm = TestSvm::new();
+    let p1_pk = svm.payer_pubkey();
+    let (_p2, mint, match_pda, _escrow, p1_ata, p2_ata, platform_ata) =
+        setup_match_for_prediction(&mut svm, &p1_pk, "pred-settle-draw");
+
+    let (pool_pda, _) = find_prediction_pool_pda("pred-settle-draw");
+    let (vault_pda, _) = find_prediction_pool_vault_pda(&pool_pda);
+    svm.send_ix(initialize_prediction_pool_ix(
+        &match_pda, &pool_pda, &vault_pda, &mint, &p1_pk, 200,
+    ), &[]);
+
+    set_game_status(&mut svm, &match_pda, GameStatus::Draw, GameEndReason::Stalemate);
+
+    let err = svm.send_ix_expect_err(settle_prediction_pool_ix(
+        &match_pda, &pool_pda, &vault_pda, &p2_ata, &p1_ata, &platform_ata, &p1_pk,
+    ), &[]);
+    assert!(!err.is_empty(), "draw settlement must name White first");
+
+    svm.send_ix(settle_prediction_pool_ix(
+        &match_pda, &pool_pda, &vault_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk,
+    ), &[]);
+    let pool: PredictionPool = svm.ctx.get_account(&pool_pda).unwrap();
+    assert!(pool.settlement_processed);
+}
+
+/// After settlement the players' and platform's shares have left the vault,
+/// so a cancel would refund one bettor out of the others' money.
+#[test]
+fn test_cancel_after_settlement_rejected() {
+    let mut svm = TestSvm::new();
+    let p1_pk = svm.payer_pubkey();
+    let (_p2, mint, match_pda, _escrow, p1_ata, p2_ata, platform_ata) =
+        setup_match_for_prediction(&mut svm, &p1_pk, "pred-cancel-settled");
+
+    let (pool_pda, _) = find_prediction_pool_pda("pred-cancel-settled");
+    let (vault_pda, _) = find_prediction_pool_vault_pda(&pool_pda);
+    svm.send_ix(initialize_prediction_pool_ix(
+        &match_pda, &pool_pda, &vault_pda, &mint, &p1_pk, 200,
+    ), &[]);
+
+    // Everyone bets on Black; White wins, so nobody predicted right.
+    let bettor = svm.create_funded_account(1_000_000_000);
+    let bettor_ata = svm.create_ata(&mint, &bettor.pubkey());
+    svm.mint_tokens(&mint, &bettor_ata, 200_000);
+    let (bet_pda, _) = find_prediction_bet_pda(&pool_pda, &bettor.pubkey());
+    svm.send_ix(place_prediction_bet_ix(
+        &match_pda, &pool_pda, &bet_pda, &vault_pda,
+        &bettor_ata, &bettor.pubkey(), 100_000, 1,
+    ), &[&bettor]);
+
+    set_game_status(&mut svm, &match_pda, GameStatus::WhiteWins, GameEndReason::Checkmate);
+    svm.send_ix(settle_prediction_pool_ix(
+        &match_pda, &pool_pda, &vault_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk,
+    ), &[]);
+    // The no-winner split paid out the whole vault.
+    assert_eq!(svm.get_token_balance(&vault_pda), 0);
+
+    let err = svm.send_ix_expect_err(cancel_prediction_bet_ix(
+        &match_pda, &pool_pda, &bet_pda, &vault_pda, &bettor_ata, &bettor.pubkey(),
+    ), &[&bettor]);
+    assert!(!err.is_empty(), "cancel after settlement must be rejected");
+    assert!(svm.account_exists(&bet_pda));
+}
+
+/// The pool is one-per-match, so a vault on the wrong mint would block
+/// predictions for that match for good.
+#[test]
+fn test_init_pool_rejects_other_mint() {
+    let mut svm = TestSvm::new();
+    let p1_pk = svm.payer_pubkey();
+    let (_p2, _mint, match_pda, _escrow, _p1_ata, _p2_ata, _platform_ata) =
+        setup_match_for_prediction(&mut svm, &p1_pk, "pred-pool-mint");
+
+    let other_mint = svm.create_mint(9);
+    let (pool_pda, _) = find_prediction_pool_pda("pred-pool-mint");
+    let (vault_pda, _) = find_prediction_pool_vault_pda(&pool_pda);
+    let err = svm.send_ix_expect_err(initialize_prediction_pool_ix(
+        &match_pda, &pool_pda, &vault_pda, &other_mint, &p1_pk, 200,
+    ), &[]);
+    assert!(!err.is_empty(), "pool vault must use the match's mint");
+    assert!(!svm.account_exists(&pool_pda));
 }

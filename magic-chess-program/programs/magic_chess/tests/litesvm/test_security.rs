@@ -20,7 +20,7 @@ fn setup_joined_match(
     let bet_amount: u64 = 100_000;
     let (match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let init_ix = initialize_match_ix(
         &match_pda, p1_pk, &mint,
@@ -57,7 +57,7 @@ fn test_double_initialize_rejected() {
     let bet_amount: u64 = 100_000;
     let (match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     // First init — succeeds
     let init_ix = initialize_match_ix(
@@ -100,7 +100,7 @@ fn test_double_join_rejected() {
     let bet_amount: u64 = 100_000;
     let (match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
@@ -207,7 +207,7 @@ fn test_wrong_owner_token_account_rejected() {
     let bet_amount: u64 = 100_000;
     let (match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     // Try to init with another owner's token account — must fail
     let init_ix = initialize_match_ix(
@@ -239,7 +239,7 @@ fn test_wrong_mint_token_account_rejected() {
     let bet_amount: u64 = 100_000;
     let (match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     // Try to init with wrong mint for player token account — must fail
     let _init_ix = initialize_match_ix(
@@ -283,7 +283,7 @@ fn test_cannot_join_own_match() {
     let bet_amount: u64 = 100_000;
     let (match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
@@ -330,7 +330,7 @@ fn test_cancel_bet_after_settlement_rejected() {
     let bet_amount: u64 = 100_000;
     let (match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     // Init with prediction enabled
     let init_ix = initialize_match_ix(
@@ -431,7 +431,7 @@ fn test_negative_move_timeout_rejected() {
     let bet_amount: u64 = 100_000;
     let (match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     // Negative timeout should fail
     let init_ix = initialize_match_ix(
@@ -471,4 +471,107 @@ fn test_settlement_on_active_match_rejected() {
         !err.is_empty(),
         "Expected error for settlement on active match, got: {}", err
     );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Audit fixes (2026-10-30): fee recipient and fee cap are enforced on-chain,
+// and a settled match may only be closed by a player or the platform wallet.
+// ─────────────────────────────────────────────────────────────────────────
+
+/// A hand-built `initialize_match` naming the creator as the fee wallet
+/// must fail: the joiner only sees the stake, never the fee.
+#[test]
+fn test_initialize_rejects_foreign_fee_wallet() {
+    let mut svm = TestSvm::new();
+    let p1_pk = svm.payer_pubkey();
+
+    let mint = svm.create_mint(9);
+    let p1_ata = svm.create_ata(&mint, &p1_pk);
+    svm.mint_tokens(&mint, &p1_ata, 1_000_000);
+
+    let match_id = "test-sec-fee-wallet";
+    let (match_pda, _) = find_chess_match_pda(match_id);
+    let (escrow_pda, _) = find_escrow_pda(match_id);
+
+    let init_ix = initialize_match_ix(
+        &match_pda, &p1_pk, &mint,
+        &p1_ata, &escrow_pda, match_id,
+        100_000, 0, 200, &p1_pk, false, // fee wallet = creator
+    );
+    let err = svm.send_ix_expect_err(init_ix, &[]);
+    assert!(!err.is_empty(), "creator must not be able to name itself as fee wallet");
+    assert!(!svm.account_exists(&match_pda));
+}
+
+/// A 100% "fee" would hand the whole pot to the fee wallet; the cap is 10%.
+#[test]
+fn test_initialize_rejects_fee_over_cap() {
+    let mut svm = TestSvm::new();
+    let p1_pk = svm.payer_pubkey();
+
+    let mint = svm.create_mint(9);
+    let p1_ata = svm.create_ata(&mint, &p1_pk);
+    svm.mint_tokens(&mint, &p1_ata, 1_000_000);
+
+    let match_id = "test-sec-fee-cap";
+    let (match_pda, _) = find_chess_match_pda(match_id);
+    let (escrow_pda, _) = find_escrow_pda(match_id);
+    let platform_fee_wallet = platform_fee_wallet();
+
+    let init_ix = initialize_match_ix(
+        &match_pda, &p1_pk, &mint,
+        &p1_ata, &escrow_pda, match_id,
+        100_000, 0, 10_000, &platform_fee_wallet, false,
+    );
+    let err = svm.send_ix_expect_err(init_ix, &[]);
+    assert!(!err.is_empty(), "a 100% fee must be rejected");
+
+    // The cap itself is allowed.
+    let init_ix = initialize_match_ix(
+        &match_pda, &p1_pk, &mint,
+        &p1_ata, &escrow_pda, match_id,
+        100_000, 0, 1_000, &platform_fee_wallet, false,
+    );
+    svm.send_ix(init_ix, &[]);
+    assert_eq!(svm.get_chess_match(&match_pda).platform_fee_basis_points, 1_000);
+}
+
+/// `close_match` pays the match rent to the signer, so a stranger must not
+/// be able to close a settled match.
+#[test]
+fn test_close_match_rejects_stranger() {
+    let mut svm = TestSvm::new();
+    let p1_pk = svm.payer_pubkey();
+
+    let mint = svm.create_mint(9);
+    let p1_ata = svm.create_ata(&mint, &p1_pk);
+    svm.mint_tokens(&mint, &p1_ata, 1_000_000);
+
+    let match_id = "test-sec-close";
+    let (match_pda, _) = find_chess_match_pda(match_id);
+    let (escrow_pda, _) = find_escrow_pda(match_id);
+    let platform_fee_wallet = platform_fee_wallet();
+
+    let init_ix = initialize_match_ix(
+        &match_pda, &p1_pk, &mint,
+        &p1_ata, &escrow_pda, match_id,
+        100_000, 0, 200, &platform_fee_wallet, false,
+    );
+    svm.send_ix(init_ix, &[]);
+
+    // Abort sets payout_processed, which is what close_match requires.
+    let abort_ix = abort_match_ix(&match_pda, &escrow_pda, &p1_ata, &p1_pk);
+    svm.send_ix(abort_ix, &[]);
+
+    let stranger = svm.create_funded_account(1_000_000_000);
+    let close_ix = close_match_ix(&match_pda, &stranger.pubkey());
+    let err = svm.send_ix_expect_err(close_ix, &[&stranger]);
+    assert!(!err.is_empty(), "a stranger must not close the match");
+    assert!(svm.account_exists(&match_pda));
+
+    // The creator still can.
+    let close_ix = close_match_ix(&match_pda, &p1_pk);
+    svm.send_ix(close_ix, &[]);
+    let account = svm.ctx.svm.get_account(&match_pda);
+    assert!(account.is_none() || account.unwrap().data.is_empty());
 }

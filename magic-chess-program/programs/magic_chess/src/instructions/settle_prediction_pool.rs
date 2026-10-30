@@ -35,17 +35,22 @@ pub struct SettlePredictionPool<'info> {
     )]
     pub prediction_pool_vault: Box<Account<'info, TokenAccount>>,
 
-    /// Match winner's ATA. In a draw, this is the White player's ATA.
+    /// Match winner's token account. In a draw, this is the White player's.
+    /// Settlement is permissionless, so the owner is checked against the
+    /// match result; otherwise the caller could name their own accounts and
+    /// take the players' shares.
     #[account(
         mut,
         constraint = match_winner_ata.mint == chess_match.betting_token_mint @ ChessError::InvalidMint,
+        constraint = match_winner_ata.owner == match_winner_key(&chess_match) @ ChessError::PlayerTokenAccountMismatch,
     )]
     pub match_winner_ata: Box<Account<'info, TokenAccount>>,
 
-    /// Match loser's ATA. In a draw, this is the Black player's ATA.
+    /// Match loser's token account. In a draw, this is the Black player's.
     #[account(
         mut,
         constraint = match_loser_ata.mint == chess_match.betting_token_mint @ ChessError::InvalidMint,
+        constraint = match_loser_ata.owner == match_loser_key(&chess_match) @ ChessError::PlayerTokenAccountMismatch,
     )]
     pub match_loser_ata: Box<Account<'info, TokenAccount>>,
 
@@ -63,6 +68,22 @@ pub struct SettlePredictionPool<'info> {
     pub caller: UncheckedAccount<'info>,
 
     pub token_program: Program<'info, Token>,
+}
+
+/// Wallet that receives the "match winner" share: White on a draw.
+pub fn match_winner_key(chess_match: &ChessMatch) -> Pubkey {
+    match chess_match.game_status {
+        GameStatus::BlackWins => chess_match.players[1],
+        _ => chess_match.players[0],
+    }
+}
+
+/// Wallet that receives the "match loser" share: Black on a draw.
+pub fn match_loser_key(chess_match: &ChessMatch) -> Pubkey {
+    match chess_match.game_status {
+        GameStatus::BlackWins => chess_match.players[0],
+        _ => chess_match.players[1],
+    }
 }
 
 pub fn handle_settle_prediction_pool(ctx: Context<SettlePredictionPool>) -> Result<()> {

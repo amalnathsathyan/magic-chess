@@ -12,7 +12,7 @@ fn setup_joined_match(
     svm: &mut TestSvm,
     p1_pk: &Pubkey,
     match_id: &str,
-    platform_fee_wallet: &Keypair,
+    platform_fee_wallet: &Pubkey,
 ) -> (Keypair, Pubkey, Pubkey, Pubkey, Pubkey, Pubkey, Pubkey) {
     let mint = svm.create_mint(9);
 
@@ -26,7 +26,7 @@ fn setup_joined_match(
     let init_ix = initialize_match_ix(
         &match_pda, p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, &platform_fee_wallet.pubkey(), false,
+        bet_amount, 0, 200, platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -41,7 +41,7 @@ fn setup_joined_match(
     svm.send_ix(join_ix, &[&p2]);
 
     // Platform fee token account
-    let platform_ata = svm.create_ata(&mint, &platform_fee_wallet.pubkey());
+    let platform_ata = svm.create_ata(&mint, platform_fee_wallet);
 
     (p2, mint, match_pda, escrow_pda, p1_ata, p2_ata, platform_ata)
 }
@@ -53,7 +53,7 @@ fn setup_joined_match(
 fn test_winner_payout() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();
-    let platform_fee_wallet = Keypair::new();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let (p2, _mint, match_pda, escrow_pda, p1_ata, p2_ata, platform_ata) =
         setup_joined_match(&mut svm, &p1_pk, "test-settle-001", &platform_fee_wallet);
@@ -94,7 +94,7 @@ fn test_winner_payout() {
 fn test_draw_payout() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();
-    let platform_fee_wallet = Keypair::new();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let (_p2, _mint, match_pda, escrow_pda, p1_ata, p2_ata, platform_ata) =
         setup_joined_match(&mut svm, &p1_pk, "test-settle-002", &platform_fee_wallet);
@@ -149,7 +149,7 @@ fn test_draw_payout() {
 fn test_platform_fee_calculation() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();
-    let platform_fee_wallet = Keypair::new();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let mint = svm.create_mint(9);
     let p1_ata = svm.create_ata(&mint, &p1_pk);
@@ -163,7 +163,7 @@ fn test_platform_fee_calculation() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 500, &platform_fee_wallet.pubkey(), false,
+        bet_amount, 0, 500, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 
@@ -179,7 +179,7 @@ fn test_platform_fee_calculation() {
     let resign_ix = resign_game_ix(&match_pda, &p2.pubkey());
     svm.send_ix(resign_ix, &[&p2]);
 
-    let platform_ata = svm.create_ata(&mint, &platform_fee_wallet.pubkey());
+    let platform_ata = svm.create_ata(&mint, &platform_fee_wallet);
     let plat_before = svm.get_token_balance(&platform_ata);
 
     let settle_ix = process_settlement_ix(
@@ -203,7 +203,7 @@ fn test_platform_fee_calculation() {
 fn test_duplicate_settlement_rejected() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();
-    let platform_fee_wallet = Keypair::new();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let (p2, _mint, match_pda, escrow_pda, p1_ata, p2_ata, platform_ata) =
         setup_joined_match(&mut svm, &p1_pk, "test-settle-004", &platform_fee_wallet);
@@ -232,7 +232,7 @@ fn test_duplicate_settlement_rejected() {
 fn test_escrow_fully_drained_after_settlement() {
     let mut svm = TestSvm::new();
     let p1_pk = svm.payer_pubkey();
-    let platform_fee_wallet = Keypair::new();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let (p2, _mint, match_pda, escrow_pda, p1_ata, p2_ata, platform_ata) =
         setup_joined_match(&mut svm, &p1_pk, "test-settle-005", &platform_fee_wallet);

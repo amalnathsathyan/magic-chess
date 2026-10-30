@@ -13,6 +13,15 @@ pub const MAX_POSITION_HISTORY: usize = 200;
 pub const MIN_BET_AMOUNT: u64 = 0;
 pub const PLATFORM_FEE_MAX_BPS: u16 = 10_000;
 pub const PLATFORM_FEE_DEFAULT_BPS: u16 = 200;
+/// Hard cap on the match fee (10%). The creator passes the fee, so without a
+/// cap a hand-built `initialize_match` could route the whole pot to the fee
+/// wallet no matter who wins.
+pub const MATCH_PLATFORM_FEE_MAX_BPS: u16 = 1_000;
+/// The only wallet a match may name as its fee recipient. The creator chooses
+/// it at `initialize_match`, so pinning it keeps a hand-built match from
+/// paying the "fee" to the creator. Change it together with
+/// `NEXT_PUBLIC_PLATFORM_FEE_WALLET` in the frontend.
+pub const PLATFORM_FEE_WALLET: Pubkey = pubkey!("ByBqw1sTTPjWQx6DEAvwT4srVyr4wUdf1R4V4wGoh8j6");
 
 // ── Prediction Pool Fee Split (basis points of losing pool) ──
 pub const PREDICTION_WINNERS_SHARE_BPS: u16 = 7_500; // 75% → correct predictors

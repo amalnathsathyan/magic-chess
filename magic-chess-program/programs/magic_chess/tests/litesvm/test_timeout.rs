@@ -19,7 +19,7 @@ fn setup_timed_match(
     let bet_amount: u64 = 100_000;
     let (match_pda, _) = find_chess_match_pda(match_id);
     let (escrow_pda, _) = find_escrow_pda(match_id);
-    let platform_fee_wallet = Keypair::new().pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
 
     let init_ix = initialize_match_ix(
         &match_pda, p1_pk, &mint,

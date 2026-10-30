@@ -335,6 +335,22 @@ function PlayView() {
         : null;
   const isParticipant = playerColor !== null;
   const isWaiting = match?.gameStatus === GameStatus.WaitingForOpponent;
+
+  // The creator sets the fee and its recipient on-chain, and a hand-built
+  // match could point both at the creator. Only this app's fee wallet and a
+  // fee at or under the configured rate are offered for joining.
+  const feeTerms = useMemo(() => {
+    if (!match) return null;
+    const expectedWallet = solanaConfig.platformFeeWallet;
+    const walletOk =
+      !expectedWallet || match.platformFeeWallet.toBase58() === expectedWallet;
+    const rateOk = match.platformFeeBasisPoints <= solanaConfig.platformFeeBps;
+    return {
+      ok: walletOk && rateOk,
+      percent: match.platformFeeBasisPoints / 100,
+      wallet: match.platformFeeWallet.toBase58(),
+    };
+  }, [match]);
   const isActive = match?.gameStatus === GameStatus.Active;
   const isFinished = Boolean(match && !isWaiting && !isActive);
   // An open match starts at the time written into its id (or at creation)
@@ -518,6 +534,12 @@ function PlayView() {
 
   const handleJoin = async () => {
     if (!match || !wallet || !isWaiting || !canJoinNow) return;
+    if (feeTerms && !feeTerms.ok) {
+      toast.error(
+        `This match was not created by ZUG Arena: it pays a ${feeTerms.percent}% fee to ${feeTerms.wallet.slice(0, 4)}…${feeTerms.wallet.slice(-4)}. Joining is blocked.`
+      );
+      return;
+    }
     try {
       const owner = new PublicKey(wallet.address);
       const amount = match.betAmountPlayerOne;
@@ -1143,6 +1165,11 @@ function PlayView() {
                         ? "0"
                         : formatOnChainTokenAmount(match.totalPot, wagerTokenDetail)}
                     </dd>
+                    {match.betAmountPlayerOne > 0n && feeTerms ? (
+                      <p className="mt-0.5 text-xs text-muted-foreground tnum">
+                        {feeTerms.percent}% fee
+                      </p>
+                    ) : null}
                   </div>
                   <div className="px-4 py-3">
                     <dt className="label">Clock</dt>
@@ -1169,6 +1196,13 @@ function PlayView() {
                     {match.isDelegated ? "Playing on the MagicBlock rollup" : "On Solana"}
                   </p>
 
+                  {isWaiting && walletAddress !== whiteAddress && feeTerms && !feeTerms.ok ? (
+                    <p className="text-sm text-primary">
+                      This match pays a {feeTerms.percent}% fee to a wallet that is not ZUG
+                      Arena&apos;s. It was not created here, so joining is blocked.
+                    </p>
+                  ) : null}
+
                   {isWaiting && walletAddress !== whiteAddress && start ? (
                     start.phase === "expired" ? (
                       <p className="text-sm text-muted-foreground">
@@ -1186,7 +1220,7 @@ function PlayView() {
                         <button
                           type="button"
                           onClick={() => void handleJoin()}
-                          disabled={isBusy || !canJoinNow}
+                          disabled={isBusy || !canJoinNow || (feeTerms ? !feeTerms.ok : false)}
                           className="btn btn-primary w-full"
                         >
                           {isBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
