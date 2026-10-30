@@ -521,7 +521,7 @@ fn test_initialize_rejects_fee_over_cap() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        100_000, 0, 10_000, &platform_fee_wallet, false,
+        100_000, 300, 10_000, &platform_fee_wallet, false,
     );
     let err = svm.send_ix_expect_err(init_ix, &[]);
     assert!(!err.is_empty(), "a 100% fee must be rejected");
@@ -530,7 +530,7 @@ fn test_initialize_rejects_fee_over_cap() {
     let init_ix = initialize_match_ix(
         &match_pda, &p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        100_000, 0, 1_000, &platform_fee_wallet, false,
+        100_000, 300, 1_000, &platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
     assert_eq!(svm.get_chess_match(&match_pda).platform_fee_basis_points, 1_000);

@@ -26,7 +26,7 @@ fn setup_joined_match(
     let init_ix = initialize_match_ix(
         &match_pda, p1_pk, &mint,
         &p1_ata, &escrow_pda, match_id,
-        bet_amount, 0, 200, platform_fee_wallet, false,
+        bet_amount, 300, 200, platform_fee_wallet, false,
     );
     svm.send_ix(init_ix, &[]);
 
