@@ -521,6 +521,44 @@ const migrations: Array<{ name: string; run: (s: Sql) => Promise<void> }> = [
       `);
     },
   },
+  {
+    // Devnet only: who received free ZUG play tokens, so the signup bonus is
+    // paid once and the daily drip once per UTC day. A row is inserted before
+    // the transfer is sent and deleted if the transfer fails, so the unique
+    // indexes also serialize concurrent claims. Drop with the faucet on mainnet.
+    name: "010_faucet_claims",
+    run: async (s) => {
+      await s.unsafe(`
+        CREATE TABLE IF NOT EXISTS faucet_claims (
+          id              BIGSERIAL     PRIMARY KEY,
+          privy_user_id   VARCHAR(128)  NOT NULL,
+          wallet          VARCHAR(44)   NOT NULL,
+          kind            VARCHAR(10)   NOT NULL CHECK (kind IN ('signup', 'daily')),
+          claim_day       DATE          NOT NULL,
+          amount          NUMERIC(20,0) NOT NULL,
+          mint            VARCHAR(44)   NOT NULL,
+          signature       VARCHAR(88),
+          created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
+        )
+      `);
+      await s.unsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_faucet_claims_wallet_day
+          ON faucet_claims (wallet, kind, claim_day)
+      `);
+      await s.unsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_faucet_claims_user_day
+          ON faucet_claims (privy_user_id, kind, claim_day)
+      `);
+      await s.unsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_faucet_claims_wallet_signup
+          ON faucet_claims (wallet) WHERE kind = 'signup'
+      `);
+      await s.unsafe(`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_faucet_claims_user_signup
+          ON faucet_claims (privy_user_id) WHERE kind = 'signup'
+      `);
+    },
+  },
 ];
 
 export async function runMigrations(): Promise<void> {

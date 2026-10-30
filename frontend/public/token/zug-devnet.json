@@ -1,0 +1,11 @@
+{
+  "name": "ZUG",
+  "symbol": "ZUG",
+  "description": "ZUG Arena play token on Solana devnet. Every move matters. Devnet tokens for staking in test matches at https://playzug.xyz; they have no value and will not carry over to mainnet.",
+  "image": "https://raw.githubusercontent.com/amalnathsathyan/magic-chess/dev/frontend/public/brand/zug-icon-512.png",
+  "external_url": "https://playzug.xyz",
+  "attributes": [
+    { "trait_type": "network", "value": "devnet" },
+    { "trait_type": "purpose", "value": "play money" }
+  ]
+}

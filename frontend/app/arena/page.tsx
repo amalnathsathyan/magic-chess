@@ -9,14 +9,12 @@ import { GameStatus, type MatchInfo } from "@magic-chess/sdk";
 import { LiveGames } from "@/components/lobby/LiveGames";
 import { RecentGames } from "@/components/lobby/RecentGames";
 import { TimeoutClaims } from "@/components/lobby/TimeoutClaims";
+import { FaucetBanner } from "@/components/lobby/FaucetBanner";
 import { api, type ApiMatch } from "@/lib/api";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
 import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
-import {
-  formatTokenAmount,
-  solanaConfig,
-} from "@/lib/solana-config";
+import { findStakeToken, formatStake, isKnownStakeMint } from "@/lib/stake-tokens";
 
 const APP_MATCH_ID = /^mc-[0-9a-f]{20}$/;
 const SUPPORTED_MOVE_TIMEOUTS = new Set([60, 180, 600]);
@@ -157,7 +155,7 @@ export default function ArenaPage() {
           APP_MATCH_ID.test(match.matchId) &&
           !match.players[0].equals(PublicKey.default) &&
           match.players[1].equals(PublicKey.default) &&
-          match.bettingTokenMint.toBase58() === solanaConfig.wagerMint &&
+          isKnownStakeMint(match.bettingTokenMint) &&
           SUPPORTED_MOVE_TIMEOUTS.has(moveTimeout)
         );
       })
@@ -170,8 +168,8 @@ export default function ArenaPage() {
           matchId: match.matchId,
           whitePlayer: white,
           blackPlayer: black,
-          wagerAmount: formatTokenAmount(match.betAmountPlayerOne),
-          wagerToken: solanaConfig.wagerSymbol,
+          wagerAmount: formatStake(match.betAmountPlayerOne, match.bettingTokenMint).split(" ")[0],
+          wagerToken: findStakeToken(match.bettingTokenMint)?.symbol ?? "",
           timeControl: `${Number(match.moveTimeoutDuration)}s / move`,
           status: "open" as const,
           isOwn: white === walletAddress,
@@ -219,6 +217,8 @@ export default function ArenaPage() {
         </div>
       </div>
 
+      {/* Devnet only: free ZUG to stake with. */}
+      <FaucetBanner walletAddress={walletAddress} />
       <TimeoutClaims walletAddress={walletAddress} />
 
       <CreateMatchForm
@@ -346,8 +346,8 @@ export default function ArenaPage() {
                         blackPlayer: m.players[1].equals(PublicKey.default)
                           ? undefined
                           : m.players[1].toBase58(),
-                        wagerAmount: formatTokenAmount(m.betAmountPlayerOne),
-                        wagerToken: solanaConfig.wagerSymbol,
+                        wagerAmount: formatStake(m.betAmountPlayerOne, m.bettingTokenMint).split(" ")[0],
+                        wagerToken: findStakeToken(m.bettingTokenMint)?.symbol ?? "",
                         timeControl: `${Number(m.moveTimeoutDuration)}s / move`,
                         status: yourTab === "live" ? "in_progress" : "completed",
                         isOwn: true,

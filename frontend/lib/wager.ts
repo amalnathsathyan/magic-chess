@@ -11,11 +11,24 @@ import {
 } from "@solana/web3.js";
 import type { MagicChessClient } from "@magic-chess/sdk";
 import { WRAPPED_SOL_MINT } from "@/lib/solana-config";
+import { findStakeToken, formatStake } from "@/lib/stake-tokens";
 
 type TransactionProvider = {
-  connection?: Pick<Connection, "getBalance">;
+  connection?: Pick<Connection, "getBalance" | "getTokenAccountBalance">;
   sponsorPayer?: PublicKey;
 };
+
+export class InsufficientStakeError extends Error {
+  constructor(
+    message: string,
+    readonly mint: PublicKey,
+    readonly required: bigint,
+    readonly available: bigint
+  ) {
+    super(message);
+    this.name = "InsufficientStakeError";
+  }
+}
 
 export function getTransactionPayer(
   client: MagicChessClient,
@@ -60,13 +73,37 @@ export async function buildWagerInstruction(
     const balance = await provider.connection.getBalance(owner, "confirmed");
     if (BigInt(balance) < amount) {
       const requiredSol = Number(amount) / 1_000_000_000;
-      throw new Error(
-        `This stake needs ${requiredSol} SOL in your wallet. Network fees are covered, the stake is not. Add SOL or create a free match.`
+      throw new InsufficientStakeError(
+        `This stake needs ${requiredSol} SOL in your wallet. Network fees are covered, the stake is not. Add SOL or create a free match.`,
+        mint,
+        amount,
+        BigInt(balance)
       );
     }
   }
 
   const tokenAccount = getAssociatedTokenAddressSync(mint, owner);
+
+  if (!mint.equals(WRAPPED_SOL_MINT) && amount > 0n && provider.connection) {
+    // A missing token account is a zero balance, not an error.
+    const held = await provider.connection
+      .getTokenAccountBalance(tokenAccount, "confirmed")
+      .then((result) => BigInt(result.value.amount))
+      .catch(() => 0n);
+    if (held < amount) {
+      const token = findStakeToken(mint);
+      const symbol = token?.symbol ?? "tokens";
+      throw new InsufficientStakeError(
+        `This stake needs ${token ? formatStake(amount, mint) : `${amount} ${symbol}`} in your wallet, you hold ${token ? formatStake(held, mint) : held.toString()}.` +
+          (token && token.mint !== WRAPPED_SOL_MINT.toBase58()
+            ? ` Claim free ${symbol} first, or pick a smaller stake.`
+            : ""),
+        mint,
+        amount,
+        held
+      );
+    }
+  }
   const payer = provider.sponsorPayer ?? owner;
   const instructions: TransactionInstruction[] = [
     createAssociatedTokenAccountIdempotentInstruction(

@@ -47,27 +47,39 @@ export class SponsorError extends Error {
   }
 }
 
-export function loadFeePayer(secret: string, expectedAddress: string): Keypair {
-  if (!secret || !expectedAddress) {
-    throw new SponsorError("Solana fee payer is not configured", 503, "sponsor_unavailable");
-  }
+/**
+ * Parse a 64-byte secret key as `solana-keygen` writes it (a JSON byte array)
+ * or as wallets export it (base58). Throws a plain Error naming `label`.
+ */
+export function parseSecretKey(secret: string, label: string): Keypair {
   let decoded: Uint8Array;
   try {
     decoded = secret.trim().startsWith("[")
       ? Uint8Array.from(JSON.parse(secret) as number[])
       : bs58.decode(secret.trim());
-  } catch (error) {
-    if (error instanceof SponsorError) throw error;
-    throw new SponsorError("Fee payer private key is invalid", 503, "sponsor_unavailable");
+  } catch {
+    throw new Error(`${label} is not a valid secret key`);
   }
   if (decoded.length !== 64) {
+    throw new Error(`${label} must decode to 64 bytes`);
+  }
+  return Keypair.fromSecretKey(decoded);
+}
+
+export function loadFeePayer(secret: string, expectedAddress: string): Keypair {
+  if (!secret || !expectedAddress) {
+    throw new SponsorError("Solana fee payer is not configured", 503, "sponsor_unavailable");
+  }
+  let keypair: Keypair;
+  try {
+    keypair = parseSecretKey(secret, "SOLANA_FEE_PAYER_PRIVATE_KEY");
+  } catch (error) {
     throw new SponsorError(
-      "SOLANA_FEE_PAYER_PRIVATE_KEY must decode to 64 bytes",
+      error instanceof Error ? error.message : "Fee payer private key is invalid",
       503,
       "sponsor_unavailable"
     );
   }
-  const keypair = Keypair.fromSecretKey(decoded);
   if (keypair.publicKey.toBase58() !== expectedAddress) {
     throw new SponsorError(
       "Fee payer private key does not match SOLANA_FEE_PAYER_ADDRESS",

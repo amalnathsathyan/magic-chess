@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Connection, PublicKey } from "@solana/web3.js";
 import { solanaConfig, WRAPPED_SOL_MINT } from "@/lib/solana-config";
 import { fetchTokenMetas } from "@/lib/token-metadata";
+import { FAUCET_CLAIMED_EVENT } from "@/lib/faucet";
 
 export interface TokenBalance {
   mint: string;
@@ -21,6 +22,14 @@ export interface TokenBalance {
 export function useTokenBalances(walletAddress: string | null | undefined) {
   const [balances, setBalances] = useState<TokenBalance[]>([]);
   const [loading, setLoading] = useState(false);
+  const [version, setVersion] = useState(0);
+  const refetch = useCallback(() => setVersion((v) => v + 1), []);
+
+  // A faucet claim lands tokens in the wallet; show them without a reload.
+  useEffect(() => {
+    window.addEventListener(FAUCET_CLAIMED_EVENT, refetch);
+    return () => window.removeEventListener(FAUCET_CLAIMED_EVENT, refetch);
+  }, [refetch]);
 
   useEffect(() => {
     if (!walletAddress) {
@@ -87,7 +96,7 @@ export function useTokenBalances(walletAddress: string | null | undefined) {
 
     fetchBalances();
     return () => { cancelled = true; };
-  }, [walletAddress]);
+  }, [walletAddress, version]);
 
-  return { balances, loading };
+  return { balances, loading, refetch };
 }

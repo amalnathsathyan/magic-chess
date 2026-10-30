@@ -431,6 +431,34 @@ deploy `npx wrangler deploy`). Public config lives in the `[vars]` block of
 `frontend/wrangler.toml`; change `NEXT_PUBLIC_API_URL` there if the backend moves.
 The backend's allowed origins are set by `CORS_ORIGIN` (see `backend/.env.example`).
 
+### Devnet ZUG faucet (devnet only, remove on mainnet)
+
+Testers hold no devnet SOL, so the app hands out a devnet SPL token ("ZUG") to stake with:
+10,000 ZUG on the first claim, then 1,000 ZUG once per UTC day. Set it up once:
+
+```bash
+# 1. A funded devnet keypair pays the rent (~0.02 SOL).
+solana config set --url devnet && solana airdrop 1
+
+# 2. Create the mint, attach the ZUG logo metadata, mint 1,000,000,000 ZUG to a
+#    treasury wallet and revoke the mint authority. Prints every env value.
+cd backend && npm install && npm run faucet:create-token
+#    Options: --treasury <keypair.json> to use your own treasury wallet,
+#             --keep-mint-authority, --skip-metadata, --supply, --decimals, --uri
+```
+
+3. Backend (Render → Environment): `FAUCET_MINT` and `FAUCET_TREASURY_PRIVATE_KEY` from the
+   script's output. The treasury needs no SOL: the sponsor fee payer pays the fees and the
+   players' token-account rent. Leave `FAUCET_MINT` empty to turn the faucet off.
+4. Frontend (Cloudflare build variables and `frontend/wrangler.toml` `[vars]`):
+   `NEXT_PUBLIC_WAGER_MINT=<mint>`, `NEXT_PUBLIC_WAGER_SYMBOL=ZUG`, `NEXT_PUBLIC_WAGER_DECIMALS=6`.
+   Push to `dev` so the Worker rebuilds.
+5. Check `GET https://api.playzug.xyz/api/faucet/status` shows `"enabled": true` and the
+   treasury balance, then sign in on the arena and claim.
+
+The treasury keypair file (`~/.config/solana/zug-faucet-treasury.json` by default) is the whole
+supply; keep it out of git. Running the script again creates a new, unrelated mint.
+
 ---
 
 ## Publish the SDK (`@magic-chess/sdk`)

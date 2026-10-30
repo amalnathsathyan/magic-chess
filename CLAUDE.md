@@ -140,6 +140,34 @@ Program tests: 182 unit (`--test unit_tests`) + 59 LiteSVM + 15 payout flow + 11
 Prediction market instructions live on-chain (`prediction_enabled` flag, 5 instructions); no outcome-pool UI yet.
 Frontend (ZUG Arena) and backend are live on devnet; see `docs/docs/deployment.md`.
 
+## Devnet ZUG faucet: status and next steps (2026-10-30, devnet only)
+
+Branch `feat/devnet-zug-faucet`. Testers on devnet hold no SOL, so the app hands out a devnet SPL
+token ("ZUG", 6 decimals, fixed 1B supply) and makes it the default stake token. **Remove all of
+this when the app moves to mainnet** (removal list in `docs/docs/features/devnet-faucet.md`).
+
+- One-time token creation: `cd backend && npm run faucet:create-token`
+  (`backend/scripts/create-devnet-zug.ts`): classic SPL mint + hand-rolled Metaplex metadata
+  (logo via raw GitHub URL, JSON at `frontend/public/token/zug-devnet.json`), whole supply to a
+  treasury keypair, mint authority revoked. Prints the env values.
+- Backend: `services/faucet.ts` + `routes/faucet.ts`, migration 010 `faucet_claims`. Signup
+  10000 ZUG on the first claim, 1000 ZUG once per UTC day after that (the signup day has no
+  daily claim). Claims are keyed by Privy user *and* wallet (unique indexes; row inserted before
+  the transfer, deleted on failure). Treasury key `FAUCET_TREASURY_PRIVATE_KEY` signs; the
+  sponsor fee payer pays fee + ATA rent. Env in `backend/.env.example`.
+- Frontend: `lib/stake-tokens.ts` (default token from `NEXT_PUBLIC_WAGER_*`, then SOL),
+  `lib/faucet.ts`, `hooks/useFaucet.ts`, `components/lobby/FaucetBanner.tsx` (banner on
+  `/arena`, card in `CreateMatchForm` and on the play page's join panel). The token dropdown
+  lists ZUG first with the balance, presets 0/100/500/1000; SPL stakes get a balance check
+  (`InsufficientStakeError`). The lobby lists matches in any known stake token, not only the
+  configured mint.
+
+Next steps (jason):
+1. Run the script from a funded devnet keypair, set `FAUCET_MINT` + `FAUCET_TREASURY_PRIVATE_KEY`
+   on Render and `NEXT_PUBLIC_WAGER_MINT/SYMBOL/DECIMALS` in Cloudflare + `wrangler.toml`.
+2. Check the claim end to end with an embedded wallet (banner → toast → ZUG in the dropdown).
+3. Not done: ratings/P&L cards still assume one stake token; a per-token P&L is a later change.
+
 ## Gameplay: status and next steps (handoff, 2026-10-07)
 
 Owner so far: the "Gameplay fixes from live testing" thread. This section is the handoff for the next agent.

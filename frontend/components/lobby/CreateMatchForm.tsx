@@ -17,11 +17,12 @@ import {
   getPlatformFeeWallet,
   parseTokenAmount,
   solanaConfig,
-  WRAPPED_SOL_MINT,
 } from "@/lib/solana-config";
 import { buildWagerInstruction, getTransactionPayer } from "@/lib/wager";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { useTokenBalances, type TokenBalance } from "@/lib/token-balances";
+import { DEFAULT_STAKE_TOKEN, findStakeToken, STAKE_TOKENS } from "@/lib/stake-tokens";
+import { FaucetBanner } from "@/components/lobby/FaucetBanner";
 import { syncMatchCreated } from "@/lib/sync";
 import { solanaDevnetTxUrl } from "@/lib/explorer";
 
@@ -30,8 +31,6 @@ interface CreateMatchFormProps {
   onClose: () => void;
   className?: string;
 }
-
-const STAKE_PRESETS = ["0", "0.1", "0.5", "1"] as const;
 
 const TIME_CONTROLS = [
   { label: "Bullet", minutes: 1 },
@@ -62,21 +61,20 @@ export function CreateMatchForm({
   const wallet = selectSolanaWallet(wallets);
   const { balances, loading: balancesLoading } = useTokenBalances(wallet?.address);
 
-  // Always include WSOL as default, plus user's tokens, plus custom option
+  // The app's stake tokens come first (on devnet: the ZUG play token, then
+  // SOL), each with the wallet's balance, then any other token the wallet
+  // holds, then a custom mint.
   const tokenList = useMemo(() => {
-    const seen = new Set<string>();
-    const list: TokenBalance[] = [];
-    // WSOL is always available (idempotent ATA creation)
-    list.push({
-      mint: WRAPPED_SOL_MINT.toBase58(),
-      symbol: "SOL",
-      name: "Solana",
-      amount: 0n,
-      decimals: 9,
-      uiAmount: 0,
-    });
-    seen.add(WRAPPED_SOL_MINT.toBase58());
-    // Add user's actual token balances
+    const held = new Map(balances.map((b) => [b.mint, b]));
+    const list: TokenBalance[] = STAKE_TOKENS.map((token) => ({
+      mint: token.mint,
+      symbol: token.symbol,
+      name: token.name,
+      decimals: token.decimals,
+      amount: held.get(token.mint)?.amount ?? 0n,
+      uiAmount: held.get(token.mint)?.uiAmount ?? 0,
+    }));
+    const seen = new Set(list.map((token) => token.mint));
     for (const b of balances) {
       if (!seen.has(b.mint)) {
         seen.add(b.mint);
@@ -88,9 +86,19 @@ export function CreateMatchForm({
 
   const isCustom = selectedTokenIndex === tokenList.length;
   const selectedToken = isCustom
-    ? { mint: customMint, symbol: "", decimals: 9 }
+    ? { mint: customMint, symbol: "", decimals: 9, uiAmount: 0, amount: 0n }
     : (tokenList[selectedTokenIndex] ?? tokenList[0]);
+  const stakePresets = findStakeToken(selectedToken.mint)?.presets ?? DEFAULT_STAKE_TOKEN.presets;
   const isFree = wagerAmount === "0" || wagerAmount === "";
+  const isDefaultToken = selectedToken.mint === DEFAULT_STAKE_TOKEN.mint;
+  const stakeShort = (() => {
+    if (isCustom || isFree) return false;
+    try {
+      return parseTokenAmount(wagerAmount, selectedToken.decimals) > selectedToken.amount;
+    } catch {
+      return false;
+    }
+  })();
 
   const resolveMint = (): PublicKey => {
     if (isCustom) {
@@ -196,6 +204,18 @@ export function CreateMatchForm({
           </Dialog.Description>
 
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* ── Devnet only: free ZUG to stake with ── */}
+            <FaucetBanner
+              walletAddress={wallet?.address}
+              variant="card"
+              onlyWhenClaimable
+              reason={
+                stakeShort && isDefaultToken
+                  ? `You hold ${selectedToken.uiAmount.toLocaleString("en-US")} ${selectedToken.symbol}. Claim more to stake ${wagerAmount}.`
+                  : undefined
+              }
+            />
+
             {/* ── Token selector ── */}
             <div className="relative">
               <label className="label mb-2 block">Token</label>
@@ -228,6 +248,10 @@ export function CreateMatchForm({
                       onClick={() => {
                         setSelectedTokenIndex(index);
                         setTokenDropdownOpen(false);
+                        // A SOL preset makes no sense in ZUG and the other way round.
+                        if (stakePresets.includes(wagerAmount) && token.mint !== selectedToken.mint) {
+                          setWagerAmount("0");
+                        }
                       }}
                       className={cn(
                         "flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
@@ -237,12 +261,16 @@ export function CreateMatchForm({
                       )}
                     >
                       <span className="flex-1 text-left">{token.symbol}</span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground tnum">
                         {token.uiAmount > 0
                           ? token.uiAmount < 0.001
                             ? "<0.001"
-                            : token.uiAmount.toFixed(token.uiAmount < 1 ? 3 : 1)
-                          : ""}
+                            : token.uiAmount >= 100
+                              ? Math.floor(token.uiAmount).toLocaleString("en-US")
+                              : token.uiAmount.toFixed(token.uiAmount < 1 ? 3 : 1)
+                          : findStakeToken(token.mint)
+                            ? "0"
+                            : ""}
                       </span>
                       {selectedTokenIndex === index && (
                         <Check className="h-4 w-4 text-primary" />
@@ -302,7 +330,7 @@ export function CreateMatchForm({
                 className="h-12 w-full border border-border bg-background px-3 text-lg font-semibold tnum text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               />
               <div className="mt-2 grid grid-cols-4 gap-2">
-                {STAKE_PRESETS.map((preset) => (
+                {stakePresets.map((preset) => (
                   <button
                     key={preset}
                     type="button"
@@ -319,8 +347,12 @@ export function CreateMatchForm({
                   </button>
                 ))}
               </div>
-              {selectedToken.mint === WRAPPED_SOL_MINT.toBase58() ? (
-                <p className="mt-2 text-xs text-muted-foreground">Network fees are on us.</p>
+              {!isCustom ? (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {stakeShort
+                    ? `You hold ${selectedToken.uiAmount.toLocaleString("en-US")} ${selectedToken.symbol}. Network fees are on us; the stake is yours.`
+                    : "Network fees are on us."}
+                </p>
               ) : null}
             </div>
 
