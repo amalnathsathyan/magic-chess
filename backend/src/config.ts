@@ -100,6 +100,29 @@ export const config = {
     sessionSecret: process.env.PREDICTION_SESSION_SECRET || undefined,
   },
 
+  // ZUGCON: a mainnet memecoin dripped to both players after a finished
+  // devnet game. The reward wallet holds the claim allocation and pays the
+  // transfer fees itself. Off until a mint and a funded wallet are configured.
+  rewards: {
+    enabled: process.env.ZUGCON_REWARDS_ENABLED === "true",
+    mint: cleanEnv("ZUGCON_MINT"),
+    symbol: process.env.ZUGCON_SYMBOL || "ZUGCON",
+    // pump.fun mints use 6 decimals.
+    decimals: Number(process.env.ZUGCON_DECIMALS || "6"),
+    rpcEndpoint:
+      process.env.ZUGCON_RPC_ENDPOINT || "https://api.mainnet-beta.solana.com",
+    walletAddress: cleanEnv("ZUGCON_REWARDS_WALLET_ADDRESS"),
+    walletPrivateKey: process.env.ZUGCON_REWARDS_WALLET_PRIVATE_KEY || "",
+    // Whole tokens, not base units.
+    creatorAmount: Number(process.env.ZUGCON_CREATOR_REWARD || "20000"),
+    joinerAmount: Number(process.env.ZUGCON_JOINER_REWARD || "10000"),
+    // A game shorter than this earns nothing (stops create/join/resign farming).
+    minPlies: Number(process.env.ZUGCON_MIN_PLIES || "10"),
+    // Rewarded games per wallet per UTC day, and against the same opponent.
+    dailyGamesPerWallet: Number(process.env.ZUGCON_DAILY_GAMES_PER_WALLET || "10"),
+    dailyGamesPerPair: Number(process.env.ZUGCON_DAILY_GAMES_PER_PAIR || "3"),
+  },
+
   // Shared secret for sync endpoint auth
   apiKey,
 } as const;

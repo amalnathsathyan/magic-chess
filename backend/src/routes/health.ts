@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { dbReadiness, sql } from "../db/pool.js";
 import { config } from "../config.js";
+import { rewardSettings, rewardWalletReport } from "../services/zugconRewards.js";
 import { getCacheSize, getSweepStats } from "../services/boardCache.js";
 import { privyJwksUrl } from "../services/privyAuth.js";
 import type { MatchRealtimeHub } from "../services/matchRealtime.js";
@@ -73,6 +74,11 @@ export function healthRoutes(
           ? config.sponsor.privyJwksUrl || privyJwksUrl(config.sponsor.privyAppId)
           : null,
         sponsorFeePayer: config.sponsor.feePayerAddress || null,
+      },
+      // Mainnet reward wallet: enabled flag, SOL for fees and ZUGCON left to drip.
+      rewards: {
+        enabled: rewardSettings().enabled,
+        ...(await rewardWalletReport()),
       },
       realtime: realtime?.stats() ?? {
         connections: 0,

@@ -404,6 +404,29 @@ Next steps:
 - Fixed: the live indexer failed with `column "event_index" of relation "sync_events" does not exist`, because
   that column was added to migration 004 after production had run it. Migration 009 adds it.
 
+## ZUGCON rewards: status and next steps (2026-10-30)
+
+Branch `feat/zugcon-rewards`. ZUGCON is a pump.fun memecoin on **mainnet** that pays both players of a finished devnet
+game: 20,000 to the creator, 10,000 to the joiner. No program change.
+
+- Backend: `services/zugconRewards.ts` (eligibility, claim, transfer), `routes/rewards.ts`
+  (`GET /api/rewards`, `GET/POST /api/rewards/matches/:id[...]`), migration `010_reward_claims`, config
+  `rewards.*` (`ZUGCON_*` env vars, listed in `backend/.env.example`), `/api/health` → `rewards` balances.
+  A claim needs a wallet-signed message, a finished game with an opponent, the same result read live from the devnet
+  chain (or a settled row once the account is closed), 10+ plies and room under the daily caps (10 games per wallet,
+  3 per opponent pair). One `reward_claims` row per seat is written before the transfer, and the signature is recorded
+  before confirmation, so a retry never pays twice. The drip wallet signs and pays fees (mainnet RPC
+  `ZUGCON_RPC_ENDPOINT`).
+- Frontend: `hooks/useZugconReward.ts` + `components/rewards/ZugconRewardModal.tsx`, shown on the play page and
+  the review page for participants of finished games. Claiming is one free signature; the modal says the token is
+  on mainnet and links Solscan.
+- Docs: `docs/docs/features/zugcon-rewards.md`; the launch guide (pump.fun fields, the 50/10 split costs ~38 SOL
+  on the bonding curve and a 15/5 split is recommended, three-wallet setup, Jupiter Lock) is in the project files
+  (`zugcon/zugcon-launch-guide.md`).
+
+Next steps (jason): launch on pump.fun, fund the drip wallet, set the `ZUGCON_*` env vars in Render, flip
+`ZUGCON_REWARDS_ENABLED=true`, run one test game and claim both sides. Tune the caps if real play hits them.
+
 ## UI redesign: status and next steps (2026-10-27)
 
 Branch `feat/app-redesign`. The whole frontend was restructured to show only the text that matters, in the main areas.

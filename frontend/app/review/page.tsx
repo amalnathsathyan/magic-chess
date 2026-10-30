@@ -11,7 +11,11 @@ import {
   RefreshCw,
   Share2,
 } from "lucide-react";
+import { useWallets } from "@privy-io/react-auth/solana";
 import { ChessBoard } from "@/components/chess/ChessBoard";
+import { ZugconRewardBanner } from "@/components/rewards/ZugconRewardModal";
+import { useZugconReward } from "@/hooks/useZugconReward";
+import { selectSolanaWallet } from "@/lib/privy-wallet";
 import { MoveList } from "@/components/chess/MoveList";
 import { ReplayControls } from "@/components/chess/ReplayControls";
 import { ShareCardDialog } from "@/components/share/ShareCard";
@@ -108,6 +112,21 @@ function ReviewView() {
   );
   const status = history?.gameStatus ?? "";
   const finished = isFinishedStatus(status);
+
+  // ZUGCON: a player who comes back to a finished game can still claim here.
+  const { wallets } = useWallets();
+  const wallet = selectSolanaWallet(wallets);
+  const viewerRole =
+    wallet && history?.whitePlayer === wallet.address
+      ? "creator"
+      : wallet && history?.blackPlayer === wallet.address
+        ? "joiner"
+        : null;
+  const reward = useZugconReward({
+    matchId: matchId || null,
+    wallet,
+    finished: finished && viewerRole !== null,
+  });
   const reason = formatEndReason(history?.gameEndReason);
   const duration = formatDuration(history?.startedAt, history?.endedAt);
   const wager = BigInt(history?.betAmountPerPlayer ?? "0");
@@ -255,6 +274,17 @@ function ReviewView() {
                 <p className="mt-3 text-xs text-muted-foreground">
                   Played {timeAgo(history.endedAt ?? history.createdAt)}
                 </p>
+                {finished && viewerRole ? (
+                  <ZugconRewardBanner
+                    className="mt-4"
+                    status={reward.status}
+                    claim={reward.claim}
+                    phase={reward.phase}
+                    error={reward.error}
+                    onClaim={() => void reward.claimReward()}
+                    role={viewerRole}
+                  />
+                ) : null}
                 {finished ? (
                   <button
                     type="button"
