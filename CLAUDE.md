@@ -158,15 +158,45 @@ this when the app moves to mainnet** (removal list in `docs/docs/features/devnet
 - Frontend: `lib/stake-tokens.ts` (default token from `NEXT_PUBLIC_WAGER_*`, then SOL),
   `lib/faucet.ts`, `hooks/useFaucet.ts`, `components/lobby/FaucetBanner.tsx` (banner on
   `/arena`, card in `CreateMatchForm` and on the play page's join panel). The token dropdown
-  lists ZUG first with the balance, presets 0/100/500/1000; SPL stakes get a balance check
-  (`InsufficientStakeError`). The lobby lists matches in any known stake token, not only the
-  configured mint.
+  lists ZUG first with the balance, presets 0/100/500/1000; the SPL balance check in
+  `lib/wager.ts` says "Claim free ZUG first" when the default token is short.
 
 Next steps (jason):
 1. Run the script from a funded devnet keypair, set `FAUCET_MINT` + `FAUCET_TREASURY_PRIVATE_KEY`
    on Render and `NEXT_PUBLIC_WAGER_MINT/SYMBOL/DECIMALS` in Cloudflare + `wrangler.toml`.
 2. Check the claim end to end with an embedded wallet (banner → toast → ZUG in the dropdown).
 3. Not done: ratings/P&L cards still assume one stake token; a per-token P&L is a later change.
+
+## Scheduled starts and abandoned open matches (2026-10-30)
+
+Branch `feat/scheduled-match-start`. From devnet testing: many matches were created, nobody joined, and
+they sat open for days. Creating a match now asks when it starts: **Now**, **In 10 min**, or **Pick a time**
+(`datetime-local`, 2 minutes to 30 days ahead).
+
+- **No program change.** The start time is written into the match id (`mc-<16 hex>-t<base36 minutes>`;
+  `mc-<16 hex>` and the older `mc-<20 hex>` mean "now"), so the lobby (chain), play page, backend and
+  bots all read it from the chain. Helpers: `sdk/src/utils/matchId.ts` (`buildMatchId`,
+  `scheduledStartAt`, `matchStartState`, `isAppMatchId`) and the backend mirror
+  `backend/src/services/matchSchedule.ts` (`/api/matches` returns `startsAt`, `openUntil`, `scheduled`,
+  `startPhase`). Tests: `sdk/test/matchId.test.mjs`, `backend/test/matchSchedule.test.ts`.
+- **Join window.** An open match is joinable for 60 minutes after its start (`OPEN_MATCH_WINDOW_SECONDS`).
+  Upcoming: lobby row says "Starts 7:00 PM (in 9:41)", play page counts down with the join button disabled,
+  the invite message and challenge card carry the start time. Expired: hidden from the lobby except for the
+  creator, the play page says nobody joined and the creator's "Cancel and get refund" (`abort_match`) becomes
+  the primary button. `frontend/lib/match-start.ts` formats all of this.
+- **Limits.** The chain doesn't enforce the window: `join_match` has no start or deadline check, so a raw SDK
+  call can join early or late (the clock then starts at that join). `abort_match` is creator-only, so an
+  abandoned match's stake and the sponsor's rent (~0.0161 SOL per match) stay locked until the creator
+  cancels. The backend cannot clean these up today.
+
+Next steps (program, fold into the planned rework: free-match path, `payer` pin, permissionless undelegate):
+- Add `starts_at: i64` and `join_deadline: i64` to `ChessMatch` (layout change; existing devnet accounts
+  must be closed or ignored). `initialize_match` takes `starts_at` (0 = now) and sets `last_move_timestamp`
+  to `max(now, starts_at)` on join; `join_match` requires `starts_at <= now <= join_deadline`.
+- Let anyone call `abort_match` once `now > join_deadline` while `WaitingForOpponent`, refunding the creator
+  and sending rent to the rent payer. A backend keeper (same fee payer as the sponsor) then sweeps expired
+  open matches found by the reconciler, which also stops "settle" calls landing on games that never started.
+- Until then, consider a lobby notice to creators of expired matches (the arena's `TimeoutClaims` pattern).
 
 ## Gameplay: status and next steps (handoff, 2026-10-07)
 
@@ -251,14 +281,15 @@ Research only; no code changed. Pick up from here.
 - If the action fails (e.g. a missing ATA; actions can't create ATAs), the validator retries commit+undelegate without it, so the "Finalize" button stays as the fallback. Free matches have no ATAs, so nothing can fail there; do the free-match change first.
 - Same loosened-authorization concern as above: needs jason's approval and a devnet upgrade.
 
-**Smaller gameplay fixes (no program change, effort S unless noted):**
+**Smaller gameplay fixes (no program change, effort S unless noted).** Items marked *done* shipped in the
+"Improve game flow UX end to end" branch (`fix/game-flow-ux`, 2026-10-30); the rest are still open.
 - `subscribeToMatch` (`sdk/src/client.ts:218`) and `useMoveTransactionNotifications.ts:120` never resubscribe after a rollup restart or dropped socket; moves arrive late through the 8s fallback poll (`play/page.tsx:250`). Add a `getSlot` heartbeat and rebuild, plus a "rollup reconnecting" banner instead of a frozen board or a "Match unavailable" card (`play/page.tsx:853-862`).
 - Per move, `sendInstructionWithSession` (`client.ts:162-179`) fetches a fresh blockhash and simulates; `makeMove` then reads the account again (`client.ts:415`) and the frontend discards it. Cache the blockhash ~30s, drop the simulation and the read (~100–300 ms per move).
 - Runtime lookup (base → router → rollup, `sdk/src/magicblock.ts:243-281`) repeats on every `getMatch`/`subscribeToMatch`/`resign`/`claimTimeout`, 2–3× on reload. Share the per-match cache `makeMove` has (`client.ts:184-194`).
-- No rebroadcast for dropped moves (`play/page.tsx:632-640`). `useMagicBlock.ts:25` matches the generic `"accountnotfound"`, so a transient error can turn session keys off and bring wallet popups back mid-game (effort S–M).
-- Timer compares the device clock to the chain's `lastMoveTimestamp` (`play/page.tsx:336-343`). A skewed device fires `claim_timeout_win` early, then `autoClaimedRef` blocks the retry (`play/page.tsx:749-758`). Estimate the offset.
+- *Partly done:* `useMagicBlock.ts` no longer forgets the session key on a generic `AccountNotFound` (the wallet signs that one move and the key is tried again next move). Still open: no rebroadcast for dropped moves (`play/page.tsx`, `submitLegalMove`).
+- *Done:* the timer adds `serverOffsetMs` from `useMatchRealtime` (the server's `serverTime` on presence, clock and snapshot events) to the device clock, on the play and spectate pages. The embedded-wallet auto-claim retries up to 5 times (3s, then 8s apart) instead of giving up after one rejected `claim_timeout_win`.
 - White's clock starts at join on L1 (`join_match.rs:81`) before delegation is seen; `waitForDelegation` polls at 1s (`sdk/src/magicblock.ts:113`). Poll at ~250 ms (effort M to start the clock on the first rollup tx).
-- Finalize polls `getMatch` up to 20×1s (`play/page.tsx:701-707`) after `client.undelegateMatch` already waited for the undelegation (`client.ts:651-661`). Remove it.
+- *Done:* Finalize reads the base account once after `client.undelegateMatch` (which already waits for the undelegation).
 - Duplicate polling: `useMatch` 3–8s, log poller 2.5s, backend `refreshConnectedMatches` 3s (`matchRealtime.ts:173`), indexer 3s (`chainIndexer.ts:71`, runtime cache 30s TTL), spectate 3–10s. Let SSE `match.snapshot` drive refreshes.
 
 **Later / optional:**
@@ -267,6 +298,26 @@ Research only; no code changed. Pick up from here.
 - Private payments: no gain while wagers stay in the L1 escrow.
 
 Suggested order: free-match path + `payer` fix (one upgrade) → small fixes above → auto-payout via Magic Actions.
+
+## Game flow UX pass (2026-10-30, branch `fix/game-flow-ux`)
+
+Frontend only; no program, SDK or backend change. Found by reading the whole create → join → play → finalize flow.
+- **Lobby shows every stake token.** "Open matches" used to drop any match whose mint wasn't `NEXT_PUBLIC_WAGER_MINT`
+  (a custom token, or the devnet ZUG token another thread is adding), so those matches were only reachable by link.
+  Amounts and symbols now come from the mint (`useMintDetails`) in both lists on `/arena`.
+- **"Open" tab under Your games** lists matches you created that nobody joined. Before, leaving the play page lost
+  the match unless it showed in Open matches.
+- **Opponent presence was always "Offline".** The stream only marks a side online after a signed proof, and the play
+  page never sent one. Embedded (Privy) wallets now sign it silently on load (`useMatchRealtime.verifyPlayerPresence`);
+  external wallets aren't prompted. `PlayerRow` shows the dot only when a side is confirmed online, never a grey one.
+- **Clock skew, auto-claim retry, Finalize poll, session-key fallback:** see the *done* items above.
+- **Stake balance check for SPL tokens.** `buildWagerInstruction` checks the player's token balance for a non-SOL
+  mint before building create/join, with a "this stake needs X ZUG" message instead of a failed transaction.
+- **Free matches say "close", not "pay out"** (Finalize button, journey panel, spectator note). After payout the panel
+  offers Review and New match; a cancelled match says "Cancelled and refunded".
+
+Next (still open): resubscribe the account stream after a dropped socket or rollup restart; rebroadcast dropped
+moves; let the backend keeper claim and settle (program change, needs jason).
 ## Gameplay: status and next steps
 
 Fixed after jason's live test (2026-10-06):
@@ -290,15 +341,36 @@ Next steps:
 - `tsup` (`sdk/tsup.config.ts`) builds ESM + CJS + `.d.ts` for `.` and `./react` into `sdk/dist/` (gitignored).
   `package.json` has an `exports` map, `files: ["dist"]`, `publishConfig.access: public`, react as optional peer.
 - The frontend now consumes `sdk/dist`, not `sdk/src`; its `prebuild`/`predev` run
-  `cd ../sdk && npm install --include=dev && npm run build`. Don't add a `prepare` script to the SDK: the
+  `cd ../sdk && npm ci --include=dev && npm run build` and copy the agent skill to `frontend/public/skill.md`
+  (served at playzug.xyz/skill.md, gitignored). `npm install --include=dev` rewrote the SDK lockfile without its
+  optional peers, which then broke `npm ci` in CI. Don't add a `prepare` script to the SDK: the
   frontend's `npm ci` runs it for the `file:../sdk` dep before the SDK's own deps exist, which broke Workers Builds. Editing the SDK with the frontend running:
   `cd sdk && npm run dev` (tsup watch).
 - Fixed: Node ESM consumers crashed on `import { BN } from "@anchor-lang/core"` (anchor is CJS for Node).
   `client.ts` imports `BN` from `bn.js` (now a dependency).
 - `sdk/test/smoke.mjs` imports the built package by name in ESM and CJS. `prepublishOnly` = typecheck +
-  test + build + smoke. CI builds the SDK before the frontend typecheck and runs build + smoke + `npm pack --dry-run`.
+  build + test + smoke (tests import `dist/`). CI uses `npm ci` (keep `sdk/package-lock.json` in sync) and runs
+  build + test + smoke + `npm pack --dry-run`.
 - `.github/workflows/publish-sdk.yml` publishes on a `sdk-v<version>` tag via npm trusted publishing (OIDC).
 - Publishing guide: `DEPLOY.md` → "Publish the SDK". npm README: `sdk/README.md`.
+
+### Agents (2026-10-17, branch `feat/agent-sdk`)
+- `connectMagicChess({ keypair })` (`sdk/src/connect.ts`) and agent methods on `MagicChessClient`: `openMatch`
+  (wraps SOL + create, one tx), `joinOpenMatch` (stake + join + delegate, one tx, like the app), `waitForOpponent`,
+  `waitForTurn`, `makeMoveUci`, `playMatch(matchId, chooseMove)`, `finishMatch` (undelegate + payout ATAs + settle),
+  `cancelOpenMatch`. Helpers and `ZUG_DEVNET` (fee wallet, 100 bps, wSOL, api.playzug.xyz) in `sdk/src/play.ts`.
+  Agents pay their own fees; the gas sponsor needs a Privy token, so it isn't used.
+- `matchToFen` fixes a real bug: `boardToFen` wants `"White"/"Pawn"` but `ChessMatch.board` has `"white"/"pawn"`,
+  so the old docs example threw. The frontend has its own `matchToFen` in `lib/match-board.ts`; it could switch.
+- `zug` CLI (`sdk/src/cli.ts`, bin in `package.json`, chess.js for `legalMoves`) and the agent skill
+  `sdk/skills/zug-arena/SKILL.md`, both shipped in the npm package. `sdk/CHANGELOG.md` feeds the GitHub release
+  that `publish-sdk.yml` now creates.
+- The skill is linked from the landing page ("Build on ZUG" and the footer), `docs/docs/intro.md`,
+  `build/agents.md` and `build/sdk.md`, all pointing at playzug.xyz/skill.md.
+- Not run against devnet yet: the cloud sandbox can't reach Solana RPC. First thing to do from a local checkout:
+  `zug wallet --new`, `zug airdrop 1`, `zug open`, join from the app, play a few moves, `zug finish`.
+- The escrow rent `finishMatch` returns defaults to the creator (`players[0]`); for app-created (sponsored)
+  matches that should be the sponsor, which the unchecked settlement `payer` can't tell apart (see below).
 
 ### Next steps (owner action needed)
 - The owner creates the npm org `magic-chess`, runs `npm login`, does the first `npm publish` from `sdk/`,

@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ArrowLeft,
   Check,
+  Clapperboard,
   Copy,
   ExternalLink,
   LoaderCircle,
@@ -26,7 +27,7 @@ import {
 } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { BN } from "@anchor-lang/core";
-import { useWallets } from "@privy-io/react-auth/solana";
+import { useSignMessage, useWallets } from "@privy-io/react-auth/solana";
 import {
   DELEGATION_PROGRAM_ID,
   findChessMatchPda,
@@ -71,8 +72,14 @@ import { PlayerRow } from "@/components/chess/PlayerRow";
 import { PredictionPanel } from "@/components/predictions/PredictionPanel";
 import { useMatchRealtime } from "@/hooks/useMatchRealtime";
 import { copyToClipboard } from "@/lib/clipboard";
-import { absoluteUrl, playHref, spectateHref } from "@/lib/match-links";
+import { absoluteUrl, playHref, reviewHref, spectateHref } from "@/lib/match-links";
 import { playerLabel } from "@/lib/players";
+import {
+  formatCountdown,
+  formatStartTime,
+  formatStartTimeWithZone,
+  getMatchStart,
+} from "@/lib/match-start";
 import { drawInviteCard, renderCard } from "@/lib/share-card";
 import {
   formatRemaining,
@@ -184,11 +191,31 @@ function PlayView() {
   const router = useRouter();
   const client = useMagicChessClient();
   const { match, loading, error, refetch } = useMatch(matchId || null);
-  const realtime = useMatchRealtime({ matchId });
   const [copied, setCopied] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const { wallets } = useWallets();
   const wallet = selectSolanaWallet(wallets);
+  const embeddedWallet = wallet ? isPrivyEmbeddedWallet(wallet) : false;
+  const { signMessage } = useSignMessage();
+  // Presence proof for the match stream: a free message signature. Embedded
+  // wallets sign it without a modal; external wallets are never prompted.
+  const signPresenceMessage = useCallback(
+    async (message: Uint8Array) => {
+      if (!wallet) throw new Error("Connect a wallet first.");
+      const { signature } = await signMessage({
+        message,
+        wallet,
+        options: { uiOptions: { showWalletUIs: false } },
+      });
+      return signature;
+    },
+    [signMessage, wallet]
+  );
+  const realtime = useMatchRealtime({
+    matchId,
+    walletAddress: wallet?.address,
+    signMessage: signPresenceMessage,
+  });
   const {
     submitMove,
     sessionStatus,
@@ -264,6 +291,10 @@ function PlayView() {
     const intervalId = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => window.clearInterval(intervalId);
   }, []);
+  // The clock compares the device's time to the chain's last-move timestamp.
+  // A phone whose clock is off would flag a game early (or late), so the
+  // server's clock, carried by the match stream, corrects it.
+  const chainNow = now + realtime.serverOffsetMs;
 
   // Unlock audio on first user gesture (browser autoplay policy)
   useEffect(() => {
@@ -308,6 +339,10 @@ function PlayView() {
   const isWaiting = match?.gameStatus === GameStatus.WaitingForOpponent;
   const isActive = match?.gameStatus === GameStatus.Active;
   const isFinished = Boolean(match && !isWaiting && !isActive);
+  // An open match starts at the time written into its id (or at creation)
+  // and takes a joiner for an hour after that. See the SDK's matchStartState.
+  const start = match && isWaiting ? getMatchStart(matchId, match.lastMoveTimestamp, now) : null;
+  const canJoinNow = start?.phase === "open";
   const isMyTurn = Boolean(
     match && playerColor && match.currentTurn === playerColor
   );
@@ -352,7 +387,7 @@ function PlayView() {
       ? Math.max(
           0,
           timeoutMilliseconds -
-            (now - Number(match.lastMoveTimestamp) * 1_000)
+            (chainNow - Number(match.lastMoveTimestamp) * 1_000)
         )
       : null;
   const canClaimTimeout = Boolean(
@@ -387,7 +422,20 @@ function PlayView() {
     if (winner === playerColor) return `You receive ${formatWager(net)}${feeNote}.`;
     return `${winner === "white" ? "White" : "Black"} receives ${formatWager(net)}${feeNote}.`;
   })();
-  const embeddedWallet = wallet ? isPrivyEmbeddedWallet(wallet) : false;
+  // Announce this player to the match stream so the opponent's page shows
+  // them as online. Embedded wallets sign the proof silently; external
+  // wallets would get a popup, so they stay unannounced.
+  const announcedPresenceRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!embeddedWallet || !isParticipant || !walletAddress) return;
+    if (realtime.status !== "live" || realtime.role !== "spectator" || realtime.verifying) return;
+    const key = `${matchId}:${walletAddress}`;
+    if (announcedPresenceRef.current === key) return;
+    announcedPresenceRef.current = key;
+    realtime.verifyPlayerPresence().catch(() => {
+      // Presence is a nicety; the game doesn't depend on it.
+    });
+  }, [embeddedWallet, isParticipant, matchId, realtime, walletAddress]);
 
   // The indexer database and the rollup's own transaction log both list the
   // confirmed moves; use whichever is further along, so the list survives the
@@ -471,7 +519,7 @@ function PlayView() {
   };
 
   const handleJoin = async () => {
-    if (!match || !wallet || !isWaiting) return;
+    if (!match || !wallet || !isWaiting || !canJoinNow) return;
     try {
       const owner = new PublicKey(wallet.address);
       const amount = match.betAmountPlayerOne;
@@ -482,7 +530,8 @@ function PlayView() {
         client,
         owner,
         match.bettingTokenMint,
-        amount
+        amount,
+        { symbol: wagerTokenDetail?.symbol, decimals: wagerTokenDetail?.decimals }
       );
 
       // 2. Build join_match instruction
@@ -587,7 +636,11 @@ function PlayView() {
 
   const inviteStake =
     match && match.betAmountPlayerOne > 0n ? formatWager(match.betAmountPlayerOne) : null;
-  const inviteMessage = `Your move. I just opened a ${inviteStake ? `${inviteStake} chess match` : "free chess match"} on @zugxyz${timeoutMilliseconds > 0 ? `, ${timeoutMilliseconds / 1_000}s a move` : ""}. Take the black pieces:`;
+  const inviteStartsAt =
+    start?.scheduled && start.phase === "upcoming"
+      ? formatStartTimeWithZone(start.startsAt, now)
+      : null;
+  const inviteMessage = `Your move. I just opened a ${inviteStake ? `${inviteStake} chess match` : "free chess match"} on @zugxyz${timeoutMilliseconds > 0 ? `, ${timeoutMilliseconds / 1_000}s a move` : ""}${inviteStartsAt ? `. It starts ${inviteStartsAt}` : ""}. Take the black pieces:`;
   const renderInvite = async () => {
     // Name and rating are a nice touch, not a requirement: the DB may be asleep.
     const profile = whiteAddress ? await api.getPlayerProfile(whiteAddress).catch(() => null) : null;
@@ -598,6 +651,7 @@ function PlayView() {
         matchId,
         stake: inviteStake ?? "FREE",
         clock: timeoutMilliseconds > 0 ? `${timeoutMilliseconds / 1_000}s/move` : "Untimed",
+        startsAt: inviteStartsAt ?? undefined,
       })
     );
   };
@@ -751,12 +805,9 @@ function PlayView() {
           "Final state committed to Solana"
         );
 
-        baseMatch = null;
-        for (let attempt = 0; attempt < 20; attempt += 1) {
-          baseMatch = await client.getMatch(matchId);
-          if (baseMatch && !baseMatch.isDelegated) break;
-          await new Promise((resolve) => window.setTimeout(resolve, 1_000));
-        }
+        // undelegateMatch resolves once the base layer owns the account
+        // again, so one read is enough.
+        baseMatch = await client.getMatch(matchId);
       }
       if (!baseMatch || baseMatch.isDelegated) {
         throw new Error(
@@ -800,18 +851,27 @@ function PlayView() {
   useEffect(() => {
     claimTimeoutRef.current = handleClaimTimeout;
   });
+  // A claim the rollup rejects (its clock hadn't quite run out, or a transient
+  // RPC error) is retried a little later instead of leaving the win unclaimed.
   const autoClaimedRef = useRef<string | null>(null);
+  const autoClaimAttemptsRef = useRef(0);
   const lastMoveTimestamp = match?.lastMoveTimestamp.toString();
   useEffect(() => {
     if (!canClaimTimeout || !embeddedWallet || !match?.isDelegated) return;
     const key = `${matchId}:${lastMoveTimestamp}`;
-    if (autoClaimedRef.current === key) return;
-    const timer = window.setTimeout(() => {
+    if (autoClaimedRef.current !== key) {
       autoClaimedRef.current = key;
+      autoClaimAttemptsRef.current = 0;
+    }
+    if (autoClaimAttemptsRef.current >= 5) return;
+    const delay = autoClaimAttemptsRef.current === 0 ? 3_000 : 8_000;
+    const timer = window.setTimeout(() => {
+      autoClaimAttemptsRef.current += 1;
       void claimTimeoutRef.current();
-    }, 3_000);
+    }, delay);
     return () => window.clearTimeout(timer);
-  }, [canClaimTimeout, embeddedWallet, lastMoveTimestamp, match?.isDelegated, matchId]);
+    // `txStatus` re-arms the timer after a failed attempt.
+  }, [canClaimTimeout, embeddedWallet, lastMoveTimestamp, match?.isDelegated, matchId, txStatus]);
 
   // Sounds for what arrives from the chain: the opponent's moves (ours play
   // on submit), the game starting and the game ending.
@@ -1057,7 +1117,13 @@ function PlayView() {
               <section className="panel" aria-labelledby="match-heading">
                 <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
                   <h1 id="match-heading" className="section-title">
-                    {flagged ? "Time ran out" : statusLabel(match.gameStatus)}
+                    {flagged
+                      ? "Time ran out"
+                      : start?.phase === "upcoming"
+                        ? `Starts ${formatStartTime(start.startsAt, now)}`
+                        : start?.phase === "expired"
+                          ? "Nobody joined"
+                          : statusLabel(match.gameStatus)}
                   </h1>
                   <span className="truncate font-mono text-xs text-muted-foreground" title={match.matchId}>
                     {match.matchId}
@@ -1118,24 +1184,49 @@ function PlayView() {
                     />
                   ) : null}
 
-                  {isWaiting && walletAddress !== whiteAddress ? (
-                    <button
-                      type="button"
-                      onClick={() => void handleJoin()}
-                      disabled={isBusy}
-                      className="btn btn-primary w-full"
-                    >
-                      {isBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
-                      {match.betAmountPlayerOne === 0n
-                        ? "Join free match"
-                        : `Join for ${formatOnChainTokenAmount(match.betAmountPlayerOne, wagerTokenDetail)}`}
-                    </button>
+                  {isWaiting && walletAddress !== whiteAddress && start ? (
+                    start.phase === "expired" ? (
+                      <p className="text-sm text-muted-foreground">
+                        This match closed: nobody joined within the hour after it opened. Ask{" "}
+                        {playerLabel(whiteAddress)} for a new one, or start your own.
+                      </p>
+                    ) : (
+                      <>
+                        {start.phase === "upcoming" ? (
+                          <p className="text-sm text-muted-foreground">
+                            Starts {formatStartTime(start.startsAt, now)}. The join button opens then;
+                            this page keeps counting down.
+                          </p>
+                        ) : null}
+                        <button
+                          type="button"
+                          onClick={() => void handleJoin()}
+                          disabled={isBusy || !canJoinNow}
+                          className="btn btn-primary w-full"
+                        >
+                          {isBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                          {start.phase === "upcoming" ? (
+                            <span className="tnum">Opens in {formatCountdown(start.startsAt, now)}</span>
+                          ) : match.betAmountPlayerOne === 0n ? (
+                            "Join free match"
+                          ) : (
+                            `Join for ${formatOnChainTokenAmount(match.betAmountPlayerOne, wagerTokenDetail)}`
+                          )}
+                        </button>
+                      </>
+                    )
                   ) : null}
 
-                  {isWaiting && walletAddress === whiteAddress ? (
+                  {isWaiting && walletAddress === whiteAddress && start ? (
                     <>
                       <p className="text-sm text-muted-foreground">
-                        Send the link. This page updates when someone joins.
+                        {start.phase === "expired"
+                          ? "Nobody joined within the hour. Cancel to get your stake back, then start a new match when your opponent is ready."
+                          : start.phase === "upcoming"
+                            ? `Starts ${formatStartTime(start.startsAt, now)}, in ${formatCountdown(start.startsAt, now)}. Send the link now; your opponent can join from then.`
+                            : start.scheduled
+                              ? `Open since ${formatStartTime(start.startsAt, now)}. Your opponent can join until ${formatStartTime(start.openUntil, now)}.`
+                              : "Send the link. This page updates when someone joins."}
                       </p>
                       <button
                         type="button"
@@ -1159,9 +1250,14 @@ function PlayView() {
                           type="button"
                           onClick={() => void handleAbort()}
                           disabled={isBusy}
-                          className="btn btn-secondary btn-sm text-muted-foreground hover:!border-destructive/50 hover:!text-destructive"
+                          className={cn(
+                            "btn btn-sm",
+                            start.phase === "expired"
+                              ? "btn-primary"
+                              : "btn-secondary text-muted-foreground hover:!border-destructive/50 hover:!text-destructive"
+                          )}
                         >
-                          Cancel and refund
+                          {start.phase === "expired" ? "Cancel and get refund" : "Cancel and refund"}
                         </button>
                       </div>
                       <ShareCardDialog
@@ -1239,16 +1335,24 @@ function PlayView() {
                       {settlePhase === "committing"
                         ? "Step 1 of 2: saving the result…"
                         : settlePhase === "paying"
-                          ? "Step 2 of 2: paying out…"
-                          : match.isDelegated
-                            ? "Finalize and pay out"
-                            : "Pay out"}
+                          ? match.totalPot === 0n
+                            ? "Step 2 of 2: closing the match…"
+                            : "Step 2 of 2: paying out…"
+                          : match.totalPot === 0n
+                            ? match.isDelegated
+                              ? "Finalize and close"
+                              : "Close match"
+                            : match.isDelegated
+                              ? "Finalize and pay out"
+                              : "Pay out"}
                     </button>
                   ) : null}
 
                   {isFinished && !isParticipant && !match.payoutProcessed ? (
                     <p className="text-xs text-muted-foreground">
-                      Waiting for a player to pay out.
+                      {match.totalPot === 0n
+                        ? "Waiting for a player to close the match."
+                        : "Waiting for a player to pay out."}
                     </p>
                   ) : null}
 
@@ -1256,12 +1360,30 @@ function PlayView() {
                     <>
                       <p className="inline-flex items-center gap-1.5 text-sm text-success">
                         <Check className="h-4 w-4" aria-hidden="true" />
-                        Paid out on Solana
+                        {match.gameStatus === GameStatus.Aborted
+                          ? "Cancelled and refunded"
+                          : match.totalPot === 0n
+                            ? "Match closed on Solana"
+                            : "Paid out on Solana"}
                       </p>
-                      <Link href="/arena" className="btn btn-secondary w-full">
-                        <Sword className="h-4 w-4" aria-hidden="true" />
-                        New match
-                      </Link>
+                      <div className="grid grid-cols-2 gap-2">
+                        {match.gameStatus !== GameStatus.Aborted ? (
+                          <Link href={reviewHref(matchId)} className="btn btn-secondary">
+                            <Clapperboard className="h-4 w-4" aria-hidden="true" />
+                            Review
+                          </Link>
+                        ) : null}
+                        <Link
+                          href="/arena"
+                          className={cn(
+                            "btn btn-secondary",
+                            match.gameStatus === GameStatus.Aborted && "col-span-2"
+                          )}
+                        >
+                          <Sword className="h-4 w-4" aria-hidden="true" />
+                          New match
+                        </Link>
+                      </div>
                     </>
                   ) : null}
 
@@ -1282,6 +1404,15 @@ function PlayView() {
                 payoutProcessed={match.payoutProcessed}
                 playerColor={playerColor}
                 isCreator={walletAddress === whiteAddress}
+                start={
+                  start
+                    ? {
+                        phase: start.phase,
+                        scheduled: start.scheduled,
+                        label: formatStartTime(start.startsAt, now),
+                      }
+                    : null
+                }
                 isFree={match.betAmountPlayerOne === 0n}
                 wagerLabel={formatWager(match.betAmountPlayerOne)}
                 moveTimeoutSeconds={Number(match.moveTimeoutDuration)}

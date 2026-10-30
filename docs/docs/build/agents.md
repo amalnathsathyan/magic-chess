@@ -1,6 +1,6 @@
 # Agentic Chess — Building AI Agents on Magic Chess
 
-Magic Chess is uniquely suited for autonomous AI agents. Every game state is on-chain and verifiable, moves are gasless through MagicBlock Ephemeral Rollups, and the prediction market infrastructure lets agents place bets on outcomes. This guide covers how to build three classes of agents — chess-playing bots, spectator predictors, and prediction-market makers — using the `@magic-chess/sdk` TypeScript SDK.
+Magic Chess is uniquely suited for autonomous AI agents. Every game state is on-chain and verifiable, moves are gasless through MagicBlock Ephemeral Rollups, and agents can put a stake on their own games or predict the outcome of others. This guide covers how to build three classes of agents — chess-playing bots, spectator predictors, and prediction-market makers — using the `@magic-chess/sdk` TypeScript SDK.
 
 ---
 
@@ -19,126 +19,99 @@ Magic Chess is uniquely suited for autonomous AI agents. Every game state is on-
 
 ## 1. Magic Chess SDK for Agents
 
-The `@magic-chess/sdk` exports a single `MagicChessClient` class that wraps the Anchor `Program<MagicChess>` and provides typed, simulation-checked methods for every on-chain instruction. It also transparently resolves whether an account lives on the base layer or inside a MagicBlock Ephemeral Rollup, so agents do not need to track delegation state manually.
+Three ways in, from least to most code:
 
-### 1.1 Client Initialization
+- **The agent skill.** [playzug.xyz/skill.md](https://playzug.xyz/skill.md) teaches an agent to open, join,
+  play and pay out matches with the `zug` CLI. Tell any agent "read https://playzug.xyz/skill.md and open a
+  ZUG match", or install it for Claude Code:
+  `mkdir -p ~/.claude/skills/zug-arena && curl -fsSL https://playzug.xyz/skill.md -o ~/.claude/skills/zug-arena/SKILL.md`.
+  The same file ships in the npm package (`skills/zug-arena/SKILL.md`); its source is
+  [`sdk/skills/zug-arena/SKILL.md`](https://github.com/amalnathsathyan/magic-chess/blob/dev/sdk/skills/zug-arena/SKILL.md).
+- **The `zug` CLI.** Every command prints JSON, so any agent with a shell can play.
+- **The TypeScript API.** `connectMagicChess` plus the agent methods on `MagicChessClient`.
 
-```typescript
-import { Connection, PublicKey, Keypair } from "@solana/web3.js";
-import { AnchorProvider, Wallet, Program } from "@anchor-lang/core";
-import { MagicChessClient, MAGIC_CHESS_IDL, type MagicChess } from "@magic-chess/sdk";
+An agent needs a Solana keypair with devnet SOL: about 0.03 SOL for rent and fees, plus any stake. Moves on the
+rollup are free. Matches use ZUG Arena's fee terms (`ZUG_DEVNET`), so they show in the app's lobby and people can
+join an agent's match from a browser, or the other way round.
 
-const PROGRAM_ID = new PublicKey(
-  "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h"
-);
+### 1.1 The CLI
 
-// Base-layer connection for L1 operations (create, join, settle)
-const baseConnection = new Connection("https://api.devnet.solana.com", "confirmed");
+```bash
+npm install -g @magic-chess/sdk          # or prefix each command with: npx -y -p @magic-chess/sdk
+zug wallet --new                         # creates ~/.config/solana/id.json if missing (or --keypair / ZUG_KEYPAIR)
+zug airdrop 1                            # devnet faucet, rate limited
 
-// Agent wallet — can be a Keypair, a browser wallet, or any MagicChessWallet
-const agentKeypair = Keypair.generate();
-const wallet = new Wallet(agentKeypair);
+zug open --stake 0.01 --clock 300        # White; 0.01 SOL each, 300 s a move
+# {"matchId":"mc-3f…","signature":"…","stakePerPlayer":"0.01 SOL","url":"https://playzug.xyz/play?id=mc-3f…"}
 
-const provider = new AnchorProvider(baseConnection, wallet, {
-  commitment: "confirmed",
-});
-const program = new Program<MagicChess>(MAGIC_CHESS_IDL, provider);
-
-const client = new MagicChessClient(program, wallet);
+zug wait mc-3f…                          # waits for an opponent, then for your turn or the end
+# {"state":"your-turn","you":"white","fen":"rnbqkbnr/…","legalMoves":["a2a3",…,"e2e4",…],"secondsLeftToMove":297,…}
+zug move mc-3f… e2e4
+# …repeat wait/move until "state":"game-over" ("opponent-out-of-time" means: zug claim mc-3f…)
+zug finish mc-3f…                        # undelegate and pay out; either player can run it
 ```
 
-### 1.2 Creating Matches Programmatically
+Also `zug list` (open matches), `zug join <id>` (play Black), `zug status <id>`, `zug resign <id>` and
+`zug cancel <id>` (before anyone joins; refunds the stake). Errors print `{"error":"…"}` on stderr and exit 1.
 
-An agent acting as Player 1 (White) calls `createMatch`. The method transfers the wager from the player's associated token account into a PDA-backed escrow owned by the program.
-
-```typescript
-import { NATIVE_MINT } from "@solana/spl-token";
-
-const matchId = `agent-${Date.now().toString(36)}`;
-
-const { match, signature } = await client.createMatch({
-  matchId,
-  betAmount: 0n,                        // 0 = free match
-  moveTimeoutDuration: 180,             // 3 minutes per move (blitz)
-  platformFeeBasisPoints: 100,          // 1% platform fee
-  platformFeeWallet: agentKeypair.publicKey,
-  bettingTokenMint: NATIVE_MINT,        // WSOL on devnet
-  playerTokenAccount: whiteAta,         // Agent's WSOL ATA
-  predictionEnabled: true,              // Enable prediction pool for this match
-});
-
-console.log(`Match created: ${match}`);
-console.log(`Tx: ${signature}`);
-```
-
-Key parameters:
-- `matchId` — unique string up to 32 bytes; derive it deterministically for idempotent agent operations.
-- `betAmount` — raw token units (0 for free matches, pass a `bigint` for wagered games).
-- `predictionEnabled` — set `true` to allow spectators and agents to bet on the outcome.
-
-### 1.3 Joining Matches
-
-Player 2 (Black) discovers joinable matches via `listJoinableMatches` and joins with `joinMatch`.
+### 1.2 Client Initialization
 
 ```typescript
-// Discover open matches for a specific token
-const openMatches = await client.listJoinableMatches({
-  mint: NATIVE_MINT,
-});
+import { Keypair } from "@solana/web3.js";
+import { connectMagicChess, zugPlayUrl } from "@magic-chess/sdk";
 
-if (openMatches.length === 0) {
-  console.log("No open matches found. Creating one...");
-}
-
-// Join the first available match
-const target = openMatches[0];
-const { signature } = await client.joinMatch({
-  matchId: target.matchId,
-  playerTokenAccount: blackAta,
-});
-
-console.log(`Joined match ${target.matchId}: ${signature}`);
+// Devnet RPC, MagicBlock router and ZUG Arena's backend by default; override with rpcUrl, routerEndpoint, indexerUrl.
+const client = connectMagicChess({ keypair: Keypair.fromSecretKey(secretKey) });
 ```
 
-The SDK validates the wager amount against on-chain state before submitting, preventing stale-data races: if the `betAmount` parameter mismatches the chain's `betAmountPlayerOne`, the call rejects with a descriptive error.
+`connectMagicChess({ wallet })` takes any `MagicChessWallet` instead, and with neither you get a read-only client.
+To build the Anchor `Program` yourself, use `new MagicChessClient(program, keypairWallet(keypair))`.
 
-### 1.4 Reading Board State (FEN) From On-Chain
-
-The agent reads the full `ChessMatch` account, then converts the on-chain board representation to standard FEN notation. The SDK exports `boardToFen` for this purpose.
+### 1.3 Opening and Joining Matches
 
 ```typescript
-import { boardToFen } from "@magic-chess/sdk";
+// White: wraps SOL for the stake and opens the match in one transaction.
+const { matchId } = await client.openMatch({
+  stake: 10_000_000n,        // lamports per player (0.01 SOL); omit or 0 for a free match
+  moveTimeoutSeconds: 180,   // 3 minutes per move; 0 = untimed
+});
+console.log(zugPlayUrl(matchId)); // challenge link for a person
+const match = await client.waitForOpponent(matchId);
 
-// Fetch the full match account
-const matchState = await client.getMatch(matchId);
-if (!matchState) throw new Error("Match not found");
-
-// The ChessMatch type contains the full board, castling rights, en passant, clocks
-const fen = boardToFen(
-  matchState.board,
-  matchState.currentTurn as "white" | "black",
-  {
-    whiteKingside: matchState.castlingRights.whiteKingside,
-    whiteQueenside: matchState.castlingRights.whiteQueenside,
-    blackKingside: matchState.castlingRights.blackKingside,
-    blackQueenside: matchState.castlingRights.blackQueenside,
-  },
-  matchState.enPassantTarget,
-  matchState.halfmoveClock,
-  matchState.fullmoveNumber
-);
-
-console.log(`FEN: ${fen}`);
-// Example: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
-
-// Also check game state
-console.log(`Status: ${matchState.gameStatus}`);
-console.log(`Turn: ${matchState.currentTurn}`);
-console.log(`Halfmove clock: ${matchState.halfmoveClock}`);
-console.log(`Fullmove number: ${matchState.fullmoveNumber}`);
+// Black: find an open match and join it. Puts in the same stake and moves the match
+// to the rollup in the same transaction.
+const [open] = await client.listJoinableMatches();
+await client.joinOpenMatch(open.matchId);
 ```
 
-The `ChessMatch` type (exported from `@magic-chess/sdk`) exposes every field of the on-chain account:
+Pass `matchId` to `openMatch` to choose the id (at most 32 bytes; derive it deterministically for idempotent
+agents). `cancelOpenMatch(matchId)` refunds an unjoined match. White's move clock starts when Black joins, so
+start waiting right after opening.
+
+The lower-level `createMatch` and `joinMatch` still exist for full control over token accounts, rent payer and
+extra instructions; see the [SDK reference](./sdk.md).
+
+### 1.4 Playing a Game
+
+`playMatch` runs the whole loop: it waits for your turn, hands your function the position, submits the UCI move
+you return, and claims the win if the opponent's clock runs out.
+
+```typescript
+import { Chess } from "chess.js";
+
+const final = await client.playMatch(matchId, ({ fen }) => {
+  const moves = new Chess(fen).moves({ verbose: true });
+  const pick = moves[Math.floor(Math.random() * moves.length)]; // replace with an engine
+  return pick.from + pick.to + (pick.promotion ?? "");
+});
+console.log(final.gameStatus, final.gameEndReason); // e.g. "whiteWins", "checkmate"
+
+await client.finishMatch(matchId); // pot to the winner minus the 1% fee; a draw splits it
+```
+
+For step-by-step control, use `waitForTurn(matchId)` (returns `{ state, match }`), `matchToFen(match)` and
+`makeMoveUci(matchId, "e2e4")`. The `ChessMatch` type (exported from `@magic-chess/sdk`) exposes every field of
+the on-chain account:
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -162,11 +135,7 @@ import { Chess } from "chess.js";
 
 // 1. Read current board as FEN
 const matchState = await client.getMatch(matchId);
-const fen = boardToFen(
-  matchState.board,
-  matchState.currentTurn as "white" | "black",
-  /* ... castling, ep, clocks as above ... */
-);
+const fen = matchToFen(matchState);
 
 // 2. Compute best move with chess.js (or Stockfish)
 const game = new Chess(fen);
@@ -404,7 +373,7 @@ await client.initializePredictionPool(matchId, 100); // 1% platform fee
 
 // 2. Analyze the current board to assess each player's advantage
 const matchState = await client.getMatch(matchId);
-const fen = boardToFen(/* ... */);
+const fen = matchToFen(matchState);
 
 // Agent evaluates the position using chess.js or a custom heuristic
 const game = new Chess(fen);
@@ -438,7 +407,7 @@ Agents can predict the next move by combining the live FEN with engine analysis:
 ```typescript
 // Read current position
 const matchState = await client.getMatch(matchId);
-const fen = boardToFen(/* ... */);
+const fen = matchToFen(matchState);
 
 // Use Stockfish or chess.js to evaluate candidate moves
 const game = new Chess(fen);
@@ -540,14 +509,7 @@ async function agentPlayLoop(
     }
 
     // 2. Convert board to FEN
-    const fen = boardToFen(
-      matchState.board,
-      matchState.currentTurn as "white" | "black",
-      { /* castling rights */ },
-      matchState.enPassantTarget,
-      matchState.halfmoveClock,
-      matchState.fullmoveNumber
-    );
+    const fen = matchToFen(matchState);
 
     // 3. Compute move with chess.js
     const game = new Chess(fen);
@@ -641,7 +603,7 @@ async function spectatorLoop(client: MagicChessClient) {
     // Only analyze active matches with prediction enabled
     if (match.gameStatus !== "active" || !match.predictionEnabled) continue;
 
-    const fen = boardToFen(/* ... */);
+    const fen = matchToFen(match);
 
     // Run engine evaluation
     const evalScore = await runStockfish(fen, { depth: 18 });
@@ -701,7 +663,7 @@ async function marketMakeLoop(client: MagicChessClient, maxExposure: bigint) {
 
     // Get fair probabilities from engine
     const matchState = await client.getMatch(pool.matchId);
-    const fen = boardToFen(/* ... */);
+    const fen = matchToFen(matchState);
     const fair = await computeFairProbabilities(fen);
 
     // Calculate edge for each outcome

@@ -34,7 +34,33 @@ export type {
 
 // Client
 export { MagicChessClient } from "./client";
-export type { TransactionExtras } from "./client";
+export type {
+  TransactionExtras,
+  OpenMatchOptions,
+  TurnState,
+  WaitOptions,
+  ChooseMove,
+} from "./client";
+
+// One-call setup for bots and agents
+export { connectMagicChess, keypairWallet } from "./connect";
+export type { ConnectOptions } from "./connect";
+
+// Agent and gameplay helpers
+export {
+  ZUG_DEVNET,
+  zugPlayUrl,
+  newMatchId,
+  parseTokenAmount,
+  matchToFen,
+  uciToMove,
+  moveToUci,
+  playerColor,
+  isMatchOver,
+  secondsLeftToMove,
+  buildStakeInstructions,
+  buildPayoutAccountInstructions,
+} from "./play";
 
 // PDA helpers
 export {
@@ -65,6 +91,17 @@ export type {
 
 // Wager display helpers
 export { formatRawTokenAmount, isFreeWager } from "./wager";
+
+// Match ids and scheduled starts
+export {
+  OPEN_MATCH_WINDOW_SECONDS,
+  MAX_SCHEDULE_AHEAD_SECONDS,
+  isAppMatchId,
+  scheduledStartAt,
+  buildMatchId,
+  matchStartState,
+} from "./utils/matchId";
+export type { MatchStartPhase, MatchStartState } from "./utils/matchId";
 
 // FEN utilities
 export { boardToFen, fenToBoard } from "./utils/fen";

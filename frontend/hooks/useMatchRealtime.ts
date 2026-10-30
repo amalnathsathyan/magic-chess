@@ -55,6 +55,11 @@ export function useMatchRealtime(args: {
     data: SettledEvent;
   } | null>(null);
   const [verifying, setVerifying] = useState(false);
+  // The server's clock minus this device's, from the timestamps the stream
+  // carries. The chain's clock is close to the server's, so timers that
+  // compare `Date.now()` to an on-chain timestamp add this to stay honest on
+  // a phone whose clock is off.
+  const [serverOffsetMs, setServerOffsetMs] = useState(0);
 
   const openSession = useCallback(
     async (body: Parameters<typeof api.createRealtimeSession>[1]) => {
@@ -75,6 +80,11 @@ export function useMatchRealtime(args: {
       const source = new EventSource(getApiUrl(session.eventUrl));
       sourceRef.current = source;
 
+      const noteServerTime = (serverTime: unknown) => {
+        const serverMs = typeof serverTime === "string" ? Date.parse(serverTime) : NaN;
+        if (Number.isFinite(serverMs)) setServerOffsetMs(serverMs - Date.now());
+      };
+
       const listen = <T,>(eventName: string, handler: (data: T) => void) => {
         source.addEventListener(eventName, (event) => {
           if (sourceRef.current !== source) return;
@@ -90,13 +100,22 @@ export function useMatchRealtime(args: {
         setRole(data.role);
         setStatus("live");
       });
-      listen<MatchPresence>("presence.sync", setPresence);
-      listen<ApiMatchClock>("clock.tick", setClock);
+      listen<MatchPresence>("presence.sync", (data) => {
+        noteServerTime(data.serverTime);
+        setPresence(data);
+      });
+      listen<ApiMatchClock>("clock.tick", (data) => {
+        noteServerTime(data.serverTime);
+        setClock(data);
+      });
       listen<ApiRealtimeSnapshot & { clock?: ApiMatchClock }>(
         "match.snapshot",
         (data) => {
           setSnapshot(data);
-          if (data.clock) setClock(data.clock);
+          if (data.clock) {
+            noteServerTime(data.clock.serverTime);
+            setClock(data.clock);
+          }
           setRefreshSequence((value) => value + 1);
         }
       );
@@ -179,5 +198,6 @@ export function useMatchRealtime(args: {
     predictionSettled,
     verifying,
     verifyPlayerPresence,
+    serverOffsetMs,
   };
 }

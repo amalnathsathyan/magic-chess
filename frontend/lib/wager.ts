@@ -11,23 +11,19 @@ import {
 } from "@solana/web3.js";
 import type { MagicChessClient } from "@magic-chess/sdk";
 import { WRAPPED_SOL_MINT } from "@/lib/solana-config";
-import { findStakeToken, formatStake } from "@/lib/stake-tokens";
+import { DEFAULT_STAKE_TOKEN } from "@/lib/stake-tokens";
 
 type TransactionProvider = {
   connection?: Pick<Connection, "getBalance" | "getTokenAccountBalance">;
   sponsorPayer?: PublicKey;
 };
 
-export class InsufficientStakeError extends Error {
-  constructor(
-    message: string,
-    readonly mint: PublicKey,
-    readonly required: bigint,
-    readonly available: bigint
-  ) {
-    super(message);
-    this.name = "InsufficientStakeError";
-  }
+/** "1.5 ZUG" from raw units, for error messages. */
+function formatUnits(raw: bigint, decimals: number, symbol: string | null): string {
+  const base = 10n ** BigInt(decimals);
+  const fraction = (raw % base).toString().padStart(decimals, "0").replace(/0+$/, "");
+  const amount = fraction ? `${raw / base}.${fraction}` : (raw / base).toString();
+  return symbol ? `${amount} ${symbol}` : `${amount} tokens`;
 }
 
 export function getTransactionPayer(
@@ -52,7 +48,8 @@ export async function buildWagerInstruction(
   client: MagicChessClient,
   owner: PublicKey,
   mint: PublicKey,
-  amount: bigint
+  amount: bigint,
+  options?: { symbol?: string | null; decimals?: number | null }
 ): Promise<{
   instructions: TransactionInstruction[];
   tokenAccount: PublicKey;
@@ -73,37 +70,40 @@ export async function buildWagerInstruction(
     const balance = await provider.connection.getBalance(owner, "confirmed");
     if (BigInt(balance) < amount) {
       const requiredSol = Number(amount) / 1_000_000_000;
-      throw new InsufficientStakeError(
-        `This stake needs ${requiredSol} SOL in your wallet. Network fees are covered, the stake is not. Add SOL or create a free match.`,
-        mint,
-        amount,
-        BigInt(balance)
+      throw new Error(
+        `This stake needs ${requiredSol} SOL in your wallet. Network fees are covered, the stake is not. Add SOL or create a free match.`
       );
     }
   }
 
   const tokenAccount = getAssociatedTokenAddressSync(mint, owner);
 
+  // Any other token: check the balance up front, so the player reads "you
+  // need X" instead of a failed transaction's error code.
   if (!mint.equals(WRAPPED_SOL_MINT) && amount > 0n && provider.connection) {
-    // A missing token account is a zero balance, not an error.
+    // A missing token account means nothing held. Any other failure (RPC
+    // down) skips the check rather than wrongly refusing the stake.
     const held = await provider.connection
       .getTokenAccountBalance(tokenAccount, "confirmed")
-      .then((result) => BigInt(result.value.amount))
-      .catch(() => 0n);
-    if (held < amount) {
-      const token = findStakeToken(mint);
-      const symbol = token?.symbol ?? "tokens";
-      throw new InsufficientStakeError(
-        `This stake needs ${token ? formatStake(amount, mint) : `${amount} ${symbol}`} in your wallet, you hold ${token ? formatStake(held, mint) : held.toString()}.` +
-          (token && token.mint !== WRAPPED_SOL_MINT.toBase58()
-            ? ` Claim free ${symbol} first, or pick a smaller stake.`
-            : ""),
-        mint,
-        amount,
-        held
+      .then((result): { amount: string; decimals: number } | null => result.value)
+      .catch((cause: unknown) =>
+        /could not find|invalid param|account not found/i.test(String(cause)) ? null : undefined
+      );
+    const balance = held === undefined ? null : held ? BigInt(held.amount) : 0n;
+    if (balance !== null && balance < amount) {
+      const decimals = held?.decimals ?? options?.decimals ?? 0;
+      const need = formatUnits(amount, decimals, options?.symbol ?? null);
+      // Devnet only: the default stake token comes from the faucet.
+      const faucet = mint.toBase58() === DEFAULT_STAKE_TOKEN.mint && DEFAULT_STAKE_TOKEN.mint !== WRAPPED_SOL_MINT.toBase58();
+      const hint = faucet ? `Claim free ${DEFAULT_STAKE_TOKEN.symbol} first.` : "Get some first or create a free match.";
+      throw new Error(
+        balance === 0n
+          ? `This stake needs ${need}, and this wallet holds none. ${hint}`
+          : `This stake needs ${need}; this wallet holds ${formatUnits(balance, decimals, options?.symbol ?? null)}. ${hint}`
       );
     }
   }
+
   const payer = provider.sponsorPayer ?? owner;
   const instructions: TransactionInstruction[] = [
     createAssociatedTokenAccountIdempotentInstruction(

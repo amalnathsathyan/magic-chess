@@ -3,6 +3,7 @@ import { sql } from "../db/pool.js";
 import { getFen } from "../services/boardCache.js";
 import { INITIAL_FEN, sanFromUci } from "../services/movePredictions.js";
 import { TIMED_OUT_SQL, sideToMove, timeoutState } from "../services/matchTimeout.js";
+import { startState } from "../services/matchSchedule.js";
 
 const listQuerySchema = {
   type: "object",
@@ -109,6 +110,10 @@ export function matchRoutes(app: FastifyInstance): void {
           },
           now
         ),
+        ...startState(
+          { matchId: row.matchId, gameStatus: row.gameStatus, createdAt: row.createdAt },
+          now
+        ),
         matchId: row.matchId,
         whitePlayer: row.whitePlayer,
         blackPlayer: row.blackPlayer,
@@ -187,6 +192,7 @@ export function matchRoutes(app: FastifyInstance): void {
         lastMoveAt: m.lastMoveAt,
         payoutProcessed: m.payoutProcessed,
         moveCount: plies,
+        ...startState({ matchId: m.matchId, gameStatus: m.gameStatus, createdAt: m.createdAt }),
         ...timeoutState({
           gameStatus: m.gameStatus,
           lastMoveAt: m.lastMoveAt,

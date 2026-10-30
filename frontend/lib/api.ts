@@ -61,6 +61,11 @@ export interface ApiMatch {
   timeoutAt?: string | null;
   startedAt?: string | null;
   endedAt?: string | null;
+  /** When the match starts (its scheduled time, or creation) and the join window. */
+  startsAt?: string;
+  openUntil?: string;
+  scheduled?: boolean;
+  startPhase?: "upcoming" | "open" | "expired" | null;
   whiteName?: string | null;
   blackName?: string | null;
   /** Ratings going into the game and what each side gained or lost. */

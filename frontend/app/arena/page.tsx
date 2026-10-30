@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, History, Plus, RefreshCw, Search, Swords, Activity } from "lucide-react";
+import { AlertCircle, History, Link2, Plus, RefreshCw, Search, Swords, Activity } from "lucide-react";
 import { PublicKey } from "@solana/web3.js";
 import { useWallets } from "@privy-io/react-auth/solana";
 import { useMatches, usePlayerMatches } from "@magic-chess/sdk/react";
-import { GameStatus, type MatchInfo } from "@magic-chess/sdk";
+import { GameStatus, isAppMatchId, type MatchInfo } from "@magic-chess/sdk";
+import { getMatchStart } from "@/lib/match-start";
 import { LiveGames } from "@/components/lobby/LiveGames";
 import { RecentGames } from "@/components/lobby/RecentGames";
 import { TimeoutClaims } from "@/components/lobby/TimeoutClaims";
@@ -14,9 +15,8 @@ import { api, type ApiMatch } from "@/lib/api";
 import { MatchCard, type MatchCardData } from "@/components/lobby/MatchCard";
 import { CreateMatchForm } from "@/components/lobby/CreateMatchForm";
 import { selectSolanaWallet } from "@/lib/privy-wallet";
-import { findStakeToken, formatStake, isKnownStakeMint } from "@/lib/stake-tokens";
+import { useMintDetails, type MintDetails } from "@/hooks/useMintDetails";
 
-const APP_MATCH_ID = /^mc-[0-9a-f]{20}$/;
 const SUPPORTED_MOVE_TIMEOUTS = new Set([60, 180, 600]);
 const AUTO_REFRESH_MS = 15_000;
 
@@ -94,6 +94,30 @@ function useMyMatches(walletAddress: string | null, chainMatches: MatchInfo[]) {
   }, [chainMatches, indexed]);
 }
 
+/**
+ * Stake amount and token symbol for a card. Decimals and symbol come from the
+ * mint itself, so a match staked in any token reads right, not only the
+ * configured one.
+ */
+function formatStake(
+  amount: bigint,
+  details: MintDetails | undefined
+): { amount: string; token: string } {
+  if (amount === 0n) return { amount: "0", token: "" };
+  if (details?.decimals === null || details?.decimals === undefined) {
+    return { amount: amount.toString(), token: "raw units" };
+  }
+  const base = 10n ** BigInt(details.decimals);
+  const fraction = (amount % base)
+    .toString()
+    .padStart(details.decimals, "0")
+    .replace(/0+$/, "");
+  return {
+    amount: fraction ? `${amount / base}.${fraction}` : (amount / base).toString(),
+    token: details.symbol ?? "tokens",
+  };
+}
+
 /** Map a GameStatus enum value to a human-readable result label. */
 function gameStatusToResult(status: GameStatus): string | undefined {
   switch (status) {
@@ -124,7 +148,14 @@ export default function ArenaPage() {
     error: playerMatchesError,
   } = usePlayerMatches(player);
   const playerMatches = useMyMatches(walletAddress, chainPlayerMatches);
-  const [activeTab, setActiveTab] = useState<"past" | "live" | null>(null);
+  const [activeTab, setActiveTab] = useState<"past" | "live" | "open" | null>(null);
+  const mintDetails = useMintDetails(
+    useMemo(
+      () =>
+        [...matches, ...playerMatches].map((match) => match.bettingTokenMint.toBase58()),
+      [matches, playerMatches]
+    )
+  );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const handleRefresh = useCallback(async () => {
@@ -148,14 +179,14 @@ export default function ArenaPage() {
 
   const matchCards = useMemo<MatchCardData[]>(() => {
     const query = search.trim().toLowerCase();
+    const now = Date.now();
     return matches
       .filter((match) => {
         const moveTimeout = Number(match.moveTimeoutDuration);
         return (
-          APP_MATCH_ID.test(match.matchId) &&
+          isAppMatchId(match.matchId) &&
           !match.players[0].equals(PublicKey.default) &&
           match.players[1].equals(PublicKey.default) &&
-          isKnownStakeMint(match.bettingTokenMint) &&
           SUPPORTED_MOVE_TIMEOUTS.has(moveTimeout)
         );
       })
@@ -164,33 +195,55 @@ export default function ArenaPage() {
         const black = match.players[1].equals(PublicKey.default)
           ? undefined
           : match.players[1].toBase58();
+        const stake = formatStake(
+          match.betAmountPlayerOne,
+          mintDetails.get(match.bettingTokenMint.toBase58())
+        );
         return {
           matchId: match.matchId,
           whitePlayer: white,
           blackPlayer: black,
-          wagerAmount: formatStake(match.betAmountPlayerOne, match.bettingTokenMint).split(" ")[0],
-          wagerToken: findStakeToken(match.bettingTokenMint)?.symbol ?? "",
+          wagerAmount: stake.amount,
+          wagerToken: stake.token,
           timeControl: `${Number(match.moveTimeoutDuration)}s / move`,
           status: "open" as const,
           isOwn: white === walletAddress,
           createdAt: Number(match.lastMoveTimestamp) * 1_000,
+          start: getMatchStart(match.matchId, match.lastMoveTimestamp, now),
         };
       })
-      .sort((left, right) => right.createdAt - left.createdAt)
+      // A match nobody joined within its window leaves the list. Its creator
+      // still sees it, with the refund button on the play page.
+      .filter((match) => match.start.phase !== "expired" || match.isOwn)
+      // Joinable now first, newest at the top; then upcoming, soonest first.
+      .sort((left, right) => {
+        const leftOpen = left.start.phase !== "upcoming";
+        const rightOpen = right.start.phase !== "upcoming";
+        if (leftOpen !== rightOpen) return leftOpen ? -1 : 1;
+        return leftOpen
+          ? right.createdAt - left.createdAt
+          : left.start.startsAt - right.start.startsAt;
+      })
       .filter((match) => {
         if (!query) return true;
         return [match.matchId, match.whitePlayer, match.blackPlayer]
           .filter(Boolean)
           .some((value) => value!.toLowerCase().includes(query));
       });
-  }, [matches, search, walletAddress]);
+  }, [matches, mintDetails, search, walletAddress]);
 
   const yourLive = playerMatches.filter((m) => m.gameStatus === GameStatus.Active);
+  // Matches you created that nobody has joined yet. They aren't "in play",
+  // and without this tab the only way back to one was the invite link.
+  const yourOpen = playerMatches.filter(
+    (m) => m.gameStatus === GameStatus.WaitingForOpponent && m.players[0].toBase58() === walletAddress
+  );
   const yourPast = playerMatches.filter(
     (m) => m.gameStatus !== GameStatus.WaitingForOpponent && m.gameStatus !== GameStatus.Active
   );
-  const yourTab = activeTab ?? (yourLive.length > 0 ? "live" : "past");
-  const yourList = yourTab === "live" ? yourLive : yourPast;
+  const yourTab =
+    activeTab ?? (yourLive.length > 0 ? "live" : yourOpen.length > 0 ? "open" : "past");
+  const yourList = yourTab === "live" ? yourLive : yourTab === "open" ? yourOpen : yourPast;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 md:py-12">
@@ -312,6 +365,13 @@ export default function ArenaPage() {
                     In play
                     {!playerMatchesLoading ? <span className="tnum">{yourLive.length}</span> : null}
                   </YourTab>
+                  {yourOpen.length > 0 || yourTab === "open" ? (
+                    <YourTab active={yourTab === "open"} onClick={() => setActiveTab("open")}>
+                      <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+                      Open
+                      {!playerMatchesLoading ? <span className="tnum">{yourOpen.length}</span> : null}
+                    </YourTab>
+                  ) : null}
                   <YourTab active={yourTab === "past"} onClick={() => setActiveTab("past")}>
                     <History className="h-3.5 w-3.5" aria-hidden="true" />
                     Finished
@@ -332,31 +392,42 @@ export default function ArenaPage() {
                 </p>
               ) : yourList.length === 0 ? (
                 <p className="p-4 text-sm text-muted-foreground">
-                  {yourTab === "live" ? "No games in play." : "No finished games yet."}
+                  {yourTab === "live"
+                    ? "No games in play."
+                    : yourTab === "open"
+                      ? "No open matches waiting for an opponent."
+                      : "No finished games yet."}
                 </p>
               ) : (
                 <div className="max-h-[22rem] divide-y divide-border overflow-y-auto overscroll-contain">
-                  {yourList.slice(0, 20).map((m) => (
-                    <MatchCard
-                      key={m.matchId}
-                      compact
-                      match={{
-                        matchId: m.matchId,
-                        whitePlayer: m.players[0].toBase58(),
-                        blackPlayer: m.players[1].equals(PublicKey.default)
-                          ? undefined
-                          : m.players[1].toBase58(),
-                        wagerAmount: formatStake(m.betAmountPlayerOne, m.bettingTokenMint).split(" ")[0],
-                        wagerToken: findStakeToken(m.bettingTokenMint)?.symbol ?? "",
-                        timeControl: `${Number(m.moveTimeoutDuration)}s / move`,
-                        status: yourTab === "live" ? "in_progress" : "completed",
-                        isOwn: true,
-                        createdAt: Number(m.lastMoveTimestamp) * 1_000,
-                        result: yourTab === "live" ? undefined : gameStatusToResult(m.gameStatus),
-                        moveCount: m.fullmoveNumber,
-                      }}
-                    />
-                  ))}
+                  {yourList.slice(0, 20).map((m) => {
+                    const stake = formatStake(
+                      m.betAmountPlayerOne,
+                      mintDetails.get(m.bettingTokenMint.toBase58())
+                    );
+                    return (
+                      <MatchCard
+                        key={m.matchId}
+                        compact
+                        match={{
+                          matchId: m.matchId,
+                          whitePlayer: m.players[0].toBase58(),
+                          blackPlayer: m.players[1].equals(PublicKey.default)
+                            ? undefined
+                            : m.players[1].toBase58(),
+                          wagerAmount: stake.amount,
+                          wagerToken: stake.token,
+                          timeControl: `${Number(m.moveTimeoutDuration)}s / move`,
+                          status:
+                            yourTab === "live" ? "in_progress" : yourTab === "open" ? "open" : "completed",
+                          isOwn: true,
+                          createdAt: Number(m.lastMoveTimestamp) * 1_000,
+                          result: yourTab === "past" ? gameStatusToResult(m.gameStatus) : undefined,
+                          moveCount: m.fullmoveNumber,
+                        }}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </section>

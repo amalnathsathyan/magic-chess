@@ -2,10 +2,11 @@
 
 import { playHref, reviewHref, spectateHref } from "@/lib/match-links";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PlayerAvatar } from "@/components/shared/PlayerAvatar";
 import { playerLabel } from "@/lib/players";
 import { cn } from "@/lib/utils";
+import { describeStart, type MatchStartState } from "@/lib/match-start";
 
 export interface MatchCardData {
   matchId: string;
@@ -22,6 +23,8 @@ export interface MatchCardData {
   result?: string;
   /** Number of full moves played. Only for in-progress or completed matches. */
   moveCount?: number;
+  /** When an open match starts and whether it can be joined yet. */
+  start?: MatchStartState;
 }
 
 interface MatchCardProps {
@@ -75,11 +78,23 @@ export function MatchCard({ match, className, compact = false }: MatchCardProps)
     [match.createdAt]
   );
   const isFree = Number(match.wagerAmount) === 0;
+  const start = isOpen ? match.start : undefined;
+  // Upcoming matches count down, so they tick once a second.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (start?.phase !== "upcoming") return;
+    const id = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(id);
+  }, [start?.phase]);
 
   const action = isOpen
     ? match.isOwn
       ? "Open"
-      : "Join"
+      : start?.phase === "upcoming"
+        ? "Soon"
+        : start?.phase === "expired"
+          ? "Closed"
+          : "Join"
     : isInProgress
       ? match.isOwn
         ? "Resume"
@@ -87,9 +102,13 @@ export function MatchCard({ match, className, compact = false }: MatchCardProps)
       : "Replay";
 
   const detail = isOpen
-    ? match.isOwn
-      ? `Your match, ${relativeCreatedAt}`
-      : relativeCreatedAt
+    ? start && (start.scheduled || start.phase !== "open")
+      ? match.isOwn
+        ? `Your match. ${describeStart(start, now)}`
+        : describeStart(start, now)
+      : match.isOwn
+        ? `Your match, ${relativeCreatedAt}`
+        : relativeCreatedAt
     : isInProgress
       ? `Move ${match.moveCount ?? 1}`
       : match.result ?? "Finished";
@@ -134,7 +153,8 @@ export function MatchCard({ match, className, compact = false }: MatchCardProps)
         className={cn(
           "btn btn-sm w-[4.5rem] shrink-0",
           compact && "hidden",
-          (isOpen && !match.isOwn) || (isInProgress && match.isOwn)
+          (isOpen && !match.isOwn && (!start || start.phase === "open")) ||
+            (isInProgress && match.isOwn)
             ? "bg-primary/15 text-primary group-hover:bg-primary group-hover:text-primary-foreground"
             : "border border-border text-soft group-hover:border-border-hover group-hover:text-foreground"
         )}
