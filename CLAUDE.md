@@ -162,11 +162,12 @@ this when the app moves to mainnet** (removal list in `docs/docs/features/devnet
   `lib/wager.ts` says "Claim free ZUG first" when the default token is short.
 
 Devnet ZUG mint (created by jason 2026-10-30): `AoeVGNnjuTAt92KZRhD59GbJTAwJSxpaTPmai8xmFSpK`, 6 decimals, 1B fixed supply.
-`wrangler.toml` and the env examples point at it.
+`frontend/.env.production` (what the build reads), `wrangler.toml` and the env examples point at it;
+the app shows `NEXT_PUBLIC_WAGER_SYMBOL` (ZUG, same as the on-chain metadata) in the dropdown and the faucet banner.
 
 Next steps (jason):
 1. Set `FAUCET_MINT` + `FAUCET_TREASURY_PRIVATE_KEY` on Render and `NEXT_PUBLIC_WAGER_MINT/SYMBOL/DECIMALS`
-   in the Cloudflare build variables (same values as `wrangler.toml`), then merge so both redeploy.
+   only if they should differ from `frontend/.env.production`.
 2. Check the claim end to end with an embedded wallet (banner → toast → ZUG in the dropdown).
 3. Not done: ratings/P&L cards still assume one stake token; a per-token P&L is a later change.
 
@@ -419,6 +420,29 @@ Next steps:
 Next steps:
 - Not tested against a live Privy session; check that the export modal opens on a phone. If Privy returns an
   error, confirm wallet export isn't blocked by a policy in the Privy dashboard.
+
+## ZUGCON rewards: status and next steps (2026-10-30)
+
+Branch `feat/zugcon-rewards`. ZUGCON is a pump.fun memecoin on **mainnet** that pays both players of a finished devnet
+game: 20,000 to the creator, 10,000 to the joiner. No program change.
+
+- Backend: `services/zugconRewards.ts` (eligibility, claim, transfer), `routes/rewards.ts`
+  (`GET /api/rewards`, `GET/POST /api/rewards/matches/:id[...]`), migration `011_reward_claims` (renumbered: 010 is the faucet), config
+  `rewards.*` (`ZUGCON_*` env vars, listed in `backend/.env.example`), `/api/health` → `rewards` balances.
+  A claim needs a wallet-signed message, a finished game with an opponent, the same result read live from the devnet
+  chain (or a settled row once the account is closed), 10+ plies and room under the daily caps (10 games per wallet,
+  3 per opponent pair). One `reward_claims` row per seat is written before the transfer, and the signature is recorded
+  before confirmation, so a retry never pays twice. The drip wallet signs and pays fees (mainnet RPC
+  `ZUGCON_RPC_ENDPOINT`).
+- Frontend: `hooks/useZugconReward.ts` + `components/rewards/ZugconRewardModal.tsx`, shown on the play page and
+  the review page for participants of finished games. Claiming is one free signature; the modal says the token is
+  on mainnet and links Solscan.
+- Docs: `docs/docs/features/zugcon-rewards.md`; the launch guide (pump.fun fields, the 50/10 split costs ~38 SOL
+  on the bonding curve and a 15/5 split is recommended, three-wallet setup, Jupiter Lock) is in the project files
+  (`zugcon/zugcon-launch-guide.md`).
+
+Next steps (jason): launch on pump.fun, fund the drip wallet, set the `ZUGCON_*` env vars in Render, flip
+`ZUGCON_REWARDS_ENABLED=true`, run one test game and claim both sides. Tune the caps if real play hits them.
 
 ## Domain move to playzug.xyz: status and next steps (2026-10-16)
 

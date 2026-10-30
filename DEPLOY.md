@@ -450,9 +450,10 @@ cd backend && npm install && npm run faucet:create-token
 3. Backend (Render → Environment): `FAUCET_MINT` and `FAUCET_TREASURY_PRIVATE_KEY` from the
    script's output. The treasury needs no SOL: the sponsor fee payer pays the fees and the
    players' token-account rent. Leave `FAUCET_MINT` empty to turn the faucet off.
-4. Frontend (Cloudflare build variables and `frontend/wrangler.toml` `[vars]`):
-   `NEXT_PUBLIC_WAGER_MINT=<mint>`, `NEXT_PUBLIC_WAGER_SYMBOL=ZUG`, `NEXT_PUBLIC_WAGER_DECIMALS=6`.
-   Push to `dev` so the Worker rebuilds.
+4. Frontend: `NEXT_PUBLIC_WAGER_MINT=<mint>`, `NEXT_PUBLIC_WAGER_SYMBOL=ZUG`,
+   `NEXT_PUBLIC_WAGER_DECIMALS=6` in `frontend/.env.production` (Next inlines `NEXT_PUBLIC_*` at
+   build time; Cloudflare *build* variables override that file, while the Worker's runtime `[vars]`
+   in `wrangler.toml` never reach the bundle). Push to `dev` so the Worker rebuilds.
 5. Check `GET https://api.playzug.xyz/api/faucet/status` shows `"enabled": true` and the
    treasury balance, then sign in on the arena and claim.
 

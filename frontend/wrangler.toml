@@ -36,6 +36,8 @@ REDIRECT_LEGACY_HOST = "true"
 NEXT_PUBLIC_RPC_ENDPOINT = "https://rpc.magicblock.app/devnet"
 NEXT_PUBLIC_MAGICBLOCK_ROUTER = "https://devnet-router.magicblock.app/"
 NEXT_PUBLIC_PROGRAM_ID = "FbXiX6xcMRPVuTc7AZkQMSbpKa1uBzQY16NFf5jhJC7h"
+# Worker runtime only: NEXT_PUBLIC_* reach the bundle from frontend/.env.production
+# (or Cloudflare *build* variables), not from here. Kept in sync for reference.
 # Default stake token. Devnet only: the devnet ZUG play token the faucet hands
 # out (created 2026-10-30 with `npm run faucet:create-token`), so new players
 # can stake without SOL. SOL stays selectable. Mainnet: replace with the real
