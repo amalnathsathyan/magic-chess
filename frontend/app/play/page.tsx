@@ -47,6 +47,8 @@ import { MoveList } from "@/components/chess/MoveList";
 import { PromotionDialog } from "@/components/chess/PromotionDialog";
 import { BoardControls } from "@/components/chess/BoardControls";
 import { MatchJourney, type SettlePhase } from "@/components/chess/MatchJourney";
+import { FaucetBanner } from "@/components/lobby/FaucetBanner";
+import { DEFAULT_STAKE_TOKEN, formatStake } from "@/lib/stake-tokens";
 import { api, type ApiMatchHistory } from "@/lib/api";
 import { sounds } from "@/lib/sounds";
 import { formatTokenAmount, solanaConfig } from "@/lib/solana-config";
@@ -1168,6 +1170,19 @@ function PlayView() {
                     <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
                     {match.isDelegated ? "Playing on the MagicBlock rollup" : "On Solana"}
                   </p>
+
+                  {isWaiting &&
+                  walletAddress !== whiteAddress &&
+                  match.betAmountPlayerOne > 0n &&
+                  match.bettingTokenMint.toBase58() === DEFAULT_STAKE_TOKEN.mint ? (
+                    // Devnet only: an invited player with no ZUG yet claims it here.
+                    <FaucetBanner
+                      walletAddress={walletAddress}
+                      variant="card"
+                      onlyWhenClaimable
+                      reason={`Joining stakes ${formatStake(match.betAmountPlayerOne, match.bettingTokenMint)}. Claim free ${DEFAULT_STAKE_TOKEN.symbol} first.`}
+                    />
+                  ) : null}
 
                   {isWaiting && walletAddress !== whiteAddress && start ? (
                     start.phase === "expired" ? (

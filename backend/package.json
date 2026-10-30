@@ -10,10 +10,12 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/**/*.test.ts",
     "migrate": "tsx src/db/migrate.ts",
-    "migrate:prod": "node dist/db/migrate.js"
+    "migrate:prod": "node dist/db/migrate.js",
+    "faucet:create-token": "tsx scripts/create-devnet-zug.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.0.1",
+    "@solana/spl-token": "^0.4.15",
     "@solana/web3.js": "^1.98.4",
     "bs58": "^6.0.0",
     "chess.js": "^1.4.0",
