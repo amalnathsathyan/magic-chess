@@ -49,7 +49,7 @@ fn test_timeout_move_works_with_timeout_configured() {
     let p1_pk = svm.payer_pubkey();
 
     let (p2, _mint, match_pda) =
-        setup_timed_match(&mut svm, &p1_pk, "test-timeout-001", 1);
+        setup_timed_match(&mut svm, &p1_pk, "test-timeout-001", 30);
 
     svm.send_ix(make_move_ix(&match_pda, &p1_pk, 1, 4, 3, 4, None), &[]);
     svm.send_ix(make_move_ix(&match_pda, &p2.pubkey(), 6, 4, 4, 4, None), &[&p2]);
@@ -67,7 +67,7 @@ fn test_cannot_claim_timeout_if_not_timed_out() {
     let p1_pk = svm.payer_pubkey();
 
     let (_p2, _mint, match_pda) =
-        setup_timed_match(&mut svm, &p1_pk, "test-timeout-002", 1);
+        setup_timed_match(&mut svm, &p1_pk, "test-timeout-002", 30);
 
     svm.send_ix(make_move_ix(&match_pda, &p1_pk, 1, 4, 3, 4, None), &[]);
 
