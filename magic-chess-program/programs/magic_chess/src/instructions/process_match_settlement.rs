@@ -27,8 +27,8 @@ pub struct ProcessMatchSettlement<'info> {
     // We need both its Account<TokenAccount> for data (like owner) and its AccountInfo for CPI.
     #[account(
         mut,
-        seeds = [MATCH_ESCROW_SEED, chess_match.match_id.as_bytes()], // Assuming match_id is String
-        bump, // Anchor derives and verifies this bump
+        seeds = [MATCH_ESCROW_SEED, chess_match.match_id.as_bytes()],
+        bump = chess_match.match_escrow_bump,
     )]
     pub match_escrow_token_account: Box<Account<'info, TokenAccount>>,
 
@@ -75,66 +75,37 @@ pub struct ProcessMatchSettlement<'info> {
 }
 
 pub fn handle_process_match_settlement(ctx: Context<ProcessMatchSettlement>) -> Result<()> {
-    // Prevent duplicate mutable accounts (state corruption)
-    require!(
-        ctx.accounts.player_one_ata.key() != ctx.accounts.player_two_ata.key(),
-        ChessError::DuplicateAccounts
-    );
-    require!(
-        ctx.accounts.player_one_ata.key() != ctx.accounts.platform_fee_ata.key(),
-        ChessError::DuplicateAccounts
-    );
-    require!(
-        ctx.accounts.player_two_ata.key() != ctx.accounts.platform_fee_ata.key(),
-        ChessError::DuplicateAccounts
-    );
+    // A player who is also the platform wallet could pass one account twice.
+    let p1 = ctx.accounts.player_one_ata.key();
+    let p2 = ctx.accounts.player_two_ata.key();
+    let platform = ctx.accounts.platform_fee_ata.key();
+    require!(p1 != p2 && p1 != platform && p2 != platform, ChessError::DuplicateAccounts);
 
-    // Capture immutable data before mutable borrows
     let total_pot = ctx.accounts.chess_match.total_pot;
-    let fee_bps = ctx.accounts.chess_match.platform_fee_basis_points;
-    let fee = total_pot
-        .checked_mul(fee_bps.into())
-        .ok_or(ChessError::MathError)?
-        .checked_div(10000)
-        .ok_or(ChessError::MathError)?;
+    let fee = payout_logic::compute_fee(total_pot, ctx.accounts.chess_match.platform_fee_basis_points)?;
     let game_status = ctx.accounts.chess_match.game_status;
     let players = ctx.accounts.chess_match.players;
     let match_id = ctx.accounts.chess_match.match_id.clone();
-    let match_escrow_bump = ctx.accounts.chess_match.match_escrow_bump;
 
-    let chess_match = &mut ctx.accounts.chess_match; // Note: mutable reference
-
-    // These are Account<TokenAccount> types from the context
-    let match_escrow_data = &ctx.accounts.match_escrow_token_account;
-    let player_one_ata_data = &ctx.accounts.player_one_ata;
-    let player_two_ata_data = &ctx.accounts.player_two_ata;
-    let platform_fee_ata_data = &ctx.accounts.platform_fee_ata;
-
-    // These are AccountInfo types needed for the payout_logic functions
-    let match_escrow_info = match_escrow_data.to_account_info();
-    let player_one_ata_info = player_one_ata_data.to_account_info();
-    let player_two_ata_info = player_two_ata_data.to_account_info();
-    let platform_fee_ata_info = platform_fee_ata_data.to_account_info();
-
-    let token_program_info = &ctx.accounts.token_program;
-    let current_program_id = ctx.program_id; // program_id is implicitly available via ctx.program_id
+    let escrow_info = ctx.accounts.match_escrow_token_account.to_account_info();
+    let player_one_info = ctx.accounts.player_one_ata.to_account_info();
+    let player_two_info = ctx.accounts.player_two_ata.to_account_info();
+    let platform_info = ctx.accounts.platform_fee_ata.to_account_info();
+    let token_program = &ctx.accounts.token_program;
 
     match game_status {
         GameStatus::WhiteWins => {
             payout_logic::process_payout(
-                chess_match,                     // &Account<'info, ChessMatch>
-                &match_escrow_info,              // &AccountInfo<'info>
-                &player_one_ata_info,            // &AccountInfo<'info> for winner
-                &platform_fee_ata_info,          // &AccountInfo<'info>
-                token_program_info,              // &Program<'info, Token>
-                current_program_id,              // &Pubkey
-                match_escrow_data,               // &Account<'info, TokenAccount> for validation
+                &ctx.accounts.chess_match,
+                &escrow_info,
+                &player_one_info,
+                &platform_info,
+                token_program,
             )?;
-
             emit!(PayoutEvent {
                 match_id: match_id.clone(),
                 winner: players[0],
-                amount: total_pot.checked_sub(fee).unwrap_or(0),
+                amount: total_pot.saturating_sub(fee),
                 fee,
             });
         }
@@ -143,19 +114,16 @@ pub fn handle_process_match_settlement(ctx: Context<ProcessMatchSettlement>) -> 
                 return err!(ChessError::InvalidGameStateForPayout);
             }
             payout_logic::process_payout(
-                chess_match,
-                &match_escrow_info,
-                &player_two_ata_info,            // &AccountInfo<'info> for winner
-                &platform_fee_ata_info,
-                token_program_info,
-                current_program_id,
-                match_escrow_data,
+                &ctx.accounts.chess_match,
+                &escrow_info,
+                &player_two_info,
+                &platform_info,
+                token_program,
             )?;
-
             emit!(PayoutEvent {
                 match_id: match_id.clone(),
                 winner: players[1],
-                amount: total_pot.checked_sub(fee).unwrap_or(0),
+                amount: total_pot.saturating_sub(fee),
                 fee,
             });
         }
@@ -163,61 +131,55 @@ pub fn handle_process_match_settlement(ctx: Context<ProcessMatchSettlement>) -> 
             if players[0] == Pubkey::default() || players[1] == Pubkey::default() {
                 return err!(ChessError::InvalidGameStateForPayout);
             }
-
             payout_logic::process_draw_payout(
-                chess_match,
-                &match_escrow_info,
-                &player_one_ata_info,
-                &player_two_ata_info,
-                &platform_fee_ata_info,
-                token_program_info,
-                current_program_id,
-                match_escrow_data,
+                &ctx.accounts.chess_match,
+                &escrow_info,
+                &player_one_info,
+                &player_two_info,
+                &platform_info,
+                token_program,
             )?;
-
             let remaining = total_pot.checked_sub(fee).ok_or(ChessError::MathError)?;
-            let half = remaining.checked_div(2).ok_or(ChessError::MathError)?;
-
             emit!(DrawPayoutEvent {
                 match_id: match_id.clone(),
                 white_player: players[0],
                 black_player: players[1],
-                amount_each: half,
+                amount_each: remaining / 2,
                 fee,
             });
         }
-        _ => {
-            return err!(ChessError::GameNotConcluded);
-        }
+        _ => return err!(ChessError::GameNotConcluded),
     }
 
     // Mark payout as processed to prevent double payouts
-    chess_match.payout_processed = true;
+    ctx.accounts.chess_match.payout_processed = true;
 
-    // Close the escrow token account and return rent to payer
-    let escrow_info = match_escrow_info.clone();
-    let payer_info = ctx.accounts.payer.to_account_info();
-
-    // Derive PDA signer seeds for the escrow authority
-    let match_id_bytes = match_id.as_bytes();
-    let escrow_seeds: &[&[u8]] = &[
-        MATCH_ESCROW_SEED,
-        match_id_bytes,
-        &[match_escrow_bump],
-    ];
-    let escrow_signer_seeds: &[&[&[u8]]] = &[&escrow_seeds[..]];
-
-    token::close_account(
-        CpiContext::new_with_signer(
-            token_program_info.key(),
-            CloseAccount {
-                account: escrow_info.clone(),
-                destination: payer_info,
-                authority: escrow_info.clone(),
-            },
-            escrow_signer_seeds,
-        ),
+    // Anyone can send tokens to the escrow address, and SPL Token refuses to
+    // close a non-native account that still holds any. Whatever is left after
+    // the payouts (a donation, or griefing to lock the pot) goes to the
+    // platform account so the close below can't be blocked.
+    ctx.accounts.match_escrow_token_account.reload()?;
+    let leftover = ctx.accounts.match_escrow_token_account.amount;
+    payout_logic::transfer_from_escrow(
+        &ctx.accounts.chess_match,
+        &escrow_info,
+        &platform_info,
+        token_program,
+        leftover,
     )?;
+
+    // Close the escrow token account and return its rent to `payer`.
+    let bump = [ctx.accounts.chess_match.match_escrow_bump];
+    let escrow_seeds: &[&[u8]] = &[MATCH_ESCROW_SEED, match_id.as_bytes(), &bump];
+    token::close_account(CpiContext::new_with_signer(
+        token_program.key(),
+        CloseAccount {
+            account: escrow_info.clone(),
+            destination: ctx.accounts.payer.to_account_info(),
+            authority: escrow_info.clone(),
+        },
+        &[escrow_seeds],
+    ))?;
 
     Ok(())
 }

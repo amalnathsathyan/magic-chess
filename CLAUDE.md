@@ -135,10 +135,35 @@ Installed locally (not tracked in git; reinstall from `skills-lock.json`):
 
 ## Current State
 
-Program tests: 187 unit (`--test unit_tests`, incl. 4 differential engine tests) + 60 LiteSVM + 15 payout flow + 11 Mollusk CU, all run in CI.
-The deployed devnet program lags the source: PR #69 (audit fixes) and the 2026-10-30 hardening pass below both need a redeploy by jason.
+Program tests: 189 unit (`--test unit_tests`, incl. 4 differential engine tests) + 62 LiteSVM + 15 payout flow + 11 Mollusk CU, all run in CI.
+The deployed devnet program lags the source: PR #69 (audit fixes), the 2026-10-30 hardening pass and the 2026-11-18 audit fixes below all need a redeploy by jason.
 Prediction market instructions live on-chain (`prediction_enabled` flag, 5 instructions); no outcome-pool UI yet.
 Frontend (ZUG Arena) and backend are live on devnet; see `docs/docs/deployment.md`.
+
+## Program audit 2: status and next steps (2026-11-18)
+
+Report: project files `audit/program-audit-2026-11-18.md` (audited `dev` at `d52ef61`). Branch
+`fix/program-audit-2026-11` fixes everything that needs no `ChessMatch` layout change. Needs a devnet redeploy by jason.
+- **N1 (High)**: settlement swept nothing, so 1 token unit sent to the escrow made `close_account` fail and locked the
+  pot. Settlement now reloads the escrow and moves any leftover to the platform fee account before closing.
+- **N2 (High)**: `close_match` now takes the prediction pool PDA and refuses while a pool exists. Before, closing
+  stranded bets, and a re-created match id let a losing bettor claim against a new game.
+- **N5**: `undelegate_match` only once the game is over or the side to move has run out of time (new error 6059).
+  `scripts/undelegate-and-move.ts` and the mid-game undelegate in `tests/magicblock_integration.ts` no longer work as written.
+- **N6/N7**: fee maths in `u128` (`payout_logic::compute_fee`); delegation pins `MAGICBLOCK_VALIDATOR`
+  (the SDK's current default, `MAS1Dt9q…`).
+- Cost and hygiene: stored escrow bump in settlement, no repeated escrow derivation, all `msg!` logs removed,
+  position history cleared on every pawn move or capture (≤101 entries), claimed bets close and refund their rent,
+  prediction bets must be > 0, dead `move_timeout_duration > 0` guards removed.
+- The IDL (`sdk/src/idl`) was edited by hand again (`close_match.prediction_pool`, errors 6059–6060). Regenerate with
+  `anchor build && npm run sync-idl` before publishing the SDK.
+
+Still open (layout change or product decision):
+- **N3**: sponsor-paid rent is refunded to players. Fix with a `rent_payer` field (with `starts_at` / `join_deadline`).
+- **N4**: any classic SPL mint is accepted. Decide the stake-mint allowlist (wSOL, ZUG, USDC?) for mainnet.
+- Rent: cap `position_history` at 101 and pack the board (~0.0074 SOL per match), stored vault bump in the pool.
+- Prediction pools are never closed; the clean fix stores the result in the pool so the match can close (layout change on `PredictionPool`).
+- Mainnet: multisig upgrade authority, verifiable build, `security.txt`, mainnet `PLATFORM_FEE_WALLET`.
 
 ## Devnet ZUG faucet: status and next steps (2026-10-30, devnet only)
 

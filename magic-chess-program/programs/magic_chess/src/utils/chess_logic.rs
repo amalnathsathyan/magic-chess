@@ -39,7 +39,6 @@ pub fn validate_and_apply_move(
 ) -> Result<MoveResult> {
     // 0. Consistency check (optional but good practice)
     if game_state.current_turn != player_color {
-        msg!("Inconsistency: player_color arg ({:?}) does not match game_state.current_turn ({:?})", player_color, game_state.current_turn);
         return err!(ChessError::NotYourTurn); // Or a more specific internal error
     }
 
@@ -174,6 +173,12 @@ pub fn validate_and_apply_move(
         game_state.en_passant_target,
         game_state.current_turn,
     );
+    // A pawn move or a capture can't be undone, so no earlier position can
+    // occur again. Dropping them keeps the history at most 101 entries (the
+    // fifty-move rule ends the game at 100 plies) and the repetition scan short.
+    if game_state.halfmove_clock == 0 {
+        game_state.position_history.clear();
+    }
     push_position_hash(&mut game_state.position_history, current_hash);
 
     // --- Determine game result for the opponent (whose turn it now is) ---

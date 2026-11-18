@@ -75,8 +75,8 @@ pub fn handle_make_move(ctx: Context<MakeMove>, args: MakeMoveArgs) -> Result<()
     let mover = chess_match.current_turn;
 
     // 3. A move that arrives after the clock ran out loses on time instead.
-    if chess_match.move_timeout_duration > 0
-        && now.saturating_sub(chess_match.last_move_timestamp) > chess_match.move_timeout_duration
+    // Every match has a clock (initialize_match enforces 30 s to 7 days).
+    if now.saturating_sub(chess_match.last_move_timestamp) > chess_match.move_timeout_duration
     {
         let status = match mover {
             PlayerColor::White => GameStatus::BlackWins,

@@ -558,6 +558,44 @@ export type MagicChess = {
           ],
           "writable": true,
           "signer": true
+        },
+        {
+          "name": "predictionPool",
+          "docs": [
+            "The match's prediction pool address. Settling, claiming and cancelling",
+            "a prediction all read the match account, and a closed match id can be",
+            "created again, which would let an old pool be claimed against a new",
+            "game. So a match that has a pool is never closed."
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  114,
+                  101,
+                  100,
+                  105,
+                  99,
+                  116,
+                  105,
+                  111,
+                  110,
+                  95,
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "chessMatch.matchId",
+                "account": "chessMatch"
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -2407,6 +2445,16 @@ export type MagicChess = {
       "code": 6058,
       "name": "invalidRentRecipient",
       "msg": "The escrow rent can only go to a player or the platform wallet."
+    },
+    {
+      "code": 6059,
+      "name": "undelegateWhileActive",
+      "msg": "A game in progress stays on the rollup until it ends or the side to move runs out of time."
+    },
+    {
+      "code": 6060,
+      "name": "predictionPoolExists",
+      "msg": "This match has a prediction pool, so its account stays open for bettors."
     }
   ],
   "types": [

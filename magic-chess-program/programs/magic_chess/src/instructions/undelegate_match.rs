@@ -21,6 +21,20 @@ pub fn handle_undelegate_match(ctx: Context<UndelegateMatch>) -> Result<()> {
         crate::errors::ChessError::UnauthorizedSigner
     );
 
+    // A game in progress stays on the rollup. Otherwise a player could pull
+    // it back to the base layer during the opponent's turn, so the
+    // opponent's next move fails and their clock keeps running. Leaving is
+    // allowed once the game is over, or once the side to move has run out of
+    // time (the waiting player can then claim on either layer).
+    let chess_match = &ctx.accounts.chess_match;
+    let now = Clock::get()?.unix_timestamp;
+    let timed_out = now.saturating_sub(chess_match.last_move_timestamp)
+        > chess_match.move_timeout_duration;
+    require!(
+        chess_match.game_status != GameStatus::Active || timed_out,
+        crate::errors::ChessError::UndelegateWhileActive
+    );
+
     // The commit CPI reads account bytes immediately. Persist the lifecycle
     // flag before scheduling commit-and-undelegate so the base-layer snapshot
     // cannot retain a stale `is_delegated = true` value.

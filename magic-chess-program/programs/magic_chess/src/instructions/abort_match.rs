@@ -52,17 +52,9 @@ pub fn handle_abort_match(ctx: Context<AbortMatch>) -> Result<()> {
     let creator_key = ctx.accounts.chess_match.players[0];
     let escrow_bump_seed = ctx.accounts.chess_match.match_escrow_bump;
 
-    // The escrow's authority is its own PDA. The stored bump (checked by the
-    // account constraint above) avoids a bump search on every abort.
-    let pda_authority = Pubkey::create_program_address(
-        &[MATCH_ESCROW_SEED, match_id.as_bytes(), &[escrow_bump_seed]],
-        ctx.program_id,
-    )
-    .map_err(|_| error!(ChessError::InvalidEscrowAccount))?;
-    if ctx.accounts.match_escrow_token_account.owner != pda_authority {
-        return err!(ChessError::InvalidEscrowAccount);
-    }
-
+    // The escrow address is checked against its seeds and stored bump by the
+    // account constraint, and the escrow is its own authority, so no extra
+    // derivation is needed before signing.
     // Prepare signer seeds for the escrow PDA (for token transfer)
     let match_id_bytes = match_id.as_bytes();
     let escrow_seeds: &[&[u8]] = &[

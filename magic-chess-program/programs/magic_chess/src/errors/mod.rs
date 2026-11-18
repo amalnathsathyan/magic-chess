@@ -125,4 +125,8 @@ pub enum ChessError {
     InvalidTimeoutDuration,
     #[msg("The escrow rent can only go to a player or the platform wallet.")]
     InvalidRentRecipient,
+    #[msg("A game in progress stays on the rollup until it ends or the side to move runs out of time.")]
+    UndelegateWhileActive,
+    #[msg("This match has a prediction pool, so its account stays open for bettors.")]
+    PredictionPoolExists,
 }

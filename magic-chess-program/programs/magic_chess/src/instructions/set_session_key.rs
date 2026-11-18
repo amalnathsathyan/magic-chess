@@ -51,10 +51,5 @@ pub fn handle_set_session_key(
         chess_match.black_session_expires_at = expires_at;
     }
 
-    msg!(
-        "Session key set for match {} player {:?}",
-        chess_match.match_id,
-        if is_white { PlayerColor::White } else { PlayerColor::Black }
-    );
     Ok(())
 }

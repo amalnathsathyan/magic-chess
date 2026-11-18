@@ -75,10 +75,5 @@ pub fn handle_initialize_prediction_pool(
     prediction_pool.settlement_processed = false;
     prediction_pool.bump = ctx.bumps.prediction_pool;
 
-    msg!(
-        "Prediction pool initialized for match: {} with platform_fee_bps={}",
-        prediction_pool.match_id,
-        platform_fee_bps_arg,
-    );
     Ok(())
 }

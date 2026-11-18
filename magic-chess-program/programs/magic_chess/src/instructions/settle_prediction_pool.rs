@@ -91,7 +91,6 @@ pub fn handle_settle_prediction_pool(ctx: Context<SettlePredictionPool>) -> Resu
 
     // Read pool fields BEFORE mutable borrow (needed for CPI authority later)
     let pool_bump = ctx.accounts.prediction_pool.bump;
-    let pool_match_id = ctx.accounts.prediction_pool.match_id.clone();
     let total_bet_white = ctx.accounts.prediction_pool.total_bet_on_white;
     let total_bet_black = ctx.accounts.prediction_pool.total_bet_on_black;
     let total_bet_draw = ctx.accounts.prediction_pool.total_bet_on_draw;
@@ -204,10 +203,6 @@ pub fn handle_settle_prediction_pool(ctx: Context<SettlePredictionPool>) -> Resu
             )?;
         }
 
-        msg!(
-            "Prediction pool settled with NO winning bets. Total {} split: winner={}, loser={}, platform={}",
-            total_pool, to_player_a, to_player_b, platform_share,
-        );
     } else {
         // ── Normal case: some bettors predicted correctly ──
         let losing_pool = total_pool
@@ -292,12 +287,6 @@ pub fn handle_settle_prediction_pool(ctx: Context<SettlePredictionPool>) -> Resu
         }
         // If losing_pool == 0: nothing to split — winners just get their bet back on claim.
 
-        msg!(
-            "Prediction pool settled for match: {}. Winning outcome: {}, Losing pool: {}",
-            pool_match_id,
-            winning_outcome,
-            losing_pool,
-        );
     }
 
     Ok(())

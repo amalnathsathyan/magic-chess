@@ -350,7 +350,7 @@ fn test_close_match_after_settlement() {
     svm.send_ix(abort_ix, &[]);
 
     // Close match
-    let close_ix = close_match_ix(&chess_match_pda, &p1_pk);
+    let close_ix = close_match_ix(match_id, &p1_pk);
     svm.send_ix(close_ix, &[]);
 
     // Verify PDA is closed
@@ -395,7 +395,7 @@ fn test_cannot_close_unsettled_match() {
     );
     svm.send_ix(init_ix, &[]);
 
-    let close_ix = close_match_ix(&chess_match_pda, &p1_pk);
+    let close_ix = close_match_ix(match_id, &p1_pk);
     let err = svm.send_ix_expect_err(close_ix, &[]);
     assert!(
         err.contains("InstructionError") || err.contains("Custom"),
