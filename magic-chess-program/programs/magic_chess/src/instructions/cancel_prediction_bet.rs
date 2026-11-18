@@ -129,11 +129,6 @@ pub fn handle_cancel_prediction_bet(ctx: Context<CancelPredictionBet>) -> Result
     );
     token::transfer(cpi_ctx, refund_amount)?;
 
-    msg!(
-        "Canceled prediction bet: bettor={}, amount={}",
-        prediction_bet.bettor,
-        refund_amount,
-    );
 
     // prediction_bet account is closed via the `close = bettor` constraint
     Ok(())

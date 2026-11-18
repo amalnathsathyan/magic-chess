@@ -491,12 +491,15 @@ pub fn abort_match_ix(
     }
 }
 
-pub fn close_match_ix(chess_match_pda: &Pubkey, payer: &Pubkey) -> Instruction {
+pub fn close_match_ix(match_id: &str, payer: &Pubkey) -> Instruction {
+    let (chess_match_pda, _) = find_chess_match_pda(match_id);
+    let (prediction_pool_pda, _) = find_prediction_pool_pda(match_id);
     Instruction {
         program_id: program_id(),
         accounts: vec![
-            AccountMeta::new(*chess_match_pda, false),
+            AccountMeta::new(chess_match_pda, false),
             AccountMeta::new(*payer, true),
+            AccountMeta::new_readonly(prediction_pool_pda, false),
         ],
         data: discriminator("close_match").to_vec(),
     }

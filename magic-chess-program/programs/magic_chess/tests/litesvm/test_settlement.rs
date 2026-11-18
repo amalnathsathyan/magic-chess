@@ -284,3 +284,40 @@ fn test_settlement_rent_recipient_pinned() {
     assert!(!svm.account_exists(&escrow_pda));
     assert!(svm.get_chess_match(&match_pda).payout_processed);
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// 7. Tokens sent to the escrow can't block settlement. SPL Token refuses to
+//    close a non-native account with a balance, so before the fix one unit
+//    sent to the escrow locked the pot for good.
+// ─────────────────────────────────────────────────────────────────────────
+#[test]
+fn test_settlement_survives_escrow_donation() {
+    let mut svm = TestSvm::new();
+    let p1_pk = svm.payer_pubkey();
+    let platform_fee_wallet = platform_fee_wallet();
+
+    let (p2, mint, match_pda, escrow_pda, p1_ata, p2_ata, platform_ata) =
+        setup_joined_match(&mut svm, &p1_pk, "test-settle-007", &platform_fee_wallet);
+
+    let resign_ix = resign_game_ix(&match_pda, &p2.pubkey());
+    svm.send_ix(resign_ix, &[&p2]);
+
+    // Anyone can send tokens to the escrow address.
+    svm.mint_tokens(&mint, &escrow_pda, 1);
+
+    let p1_before = svm.get_token_balance(&p1_ata);
+    let plat_before = svm.get_token_balance(&platform_ata);
+
+    let settle_ix = process_settlement_ix(
+        &match_pda, &escrow_pda, &p1_ata, &p2_ata, &platform_ata, &p1_pk,
+    );
+    svm.send_ix(settle_ix, &[]);
+
+    let total_pot: u64 = 200_000;
+    let fee: u64 = total_pot * 200 / 10000;
+    assert_eq!(svm.get_token_balance(&p1_ata), p1_before + total_pot - fee);
+    // The stray unit goes to the platform account.
+    assert_eq!(svm.get_token_balance(&platform_ata), plat_before + fee + 1);
+    assert!(!svm.account_exists(&escrow_pda), "Escrow must be closed after settlement");
+    assert!(svm.get_chess_match(&match_pda).payout_processed);
+}

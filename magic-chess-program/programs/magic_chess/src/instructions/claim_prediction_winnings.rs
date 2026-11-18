@@ -35,6 +35,7 @@ pub struct ClaimPredictionWinnings<'info> {
         bump = prediction_bet.bump,
         constraint = prediction_bet.bettor == bettor.key() @ ChessError::InvalidOwner,
         constraint = !prediction_bet.claimed @ ChessError::AlreadyClaimed,
+        close = bettor,
     )]
     pub prediction_bet: Account<'info, PredictionBet>,
 
@@ -147,11 +148,5 @@ pub fn handle_claim_prediction_winnings(ctx: Context<ClaimPredictionWinnings>) -
     // Mark the bet as claimed
     prediction_bet.claimed = true;
 
-    msg!(
-        "Claimed prediction winnings: bettor={}, amount={}, payout={}",
-        prediction_bet.bettor,
-        prediction_bet.amount,
-        payout_u64,
-    );
     Ok(())
 }

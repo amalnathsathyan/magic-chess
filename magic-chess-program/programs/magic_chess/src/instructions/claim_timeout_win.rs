@@ -48,10 +48,6 @@ pub fn handle_claim_timeout_win(ctx: Context<ClaimTimeoutWin>) -> Result<()> {
     );
 
     // 4. The clock must have run out.
-    require!(
-        chess_match.move_timeout_duration > 0,
-        ChessError::TimeoutNotConfigured
-    );
     let time_since_last_move = now.saturating_sub(chess_match.last_move_timestamp);
     require!(
         time_since_last_move > chess_match.move_timeout_duration,

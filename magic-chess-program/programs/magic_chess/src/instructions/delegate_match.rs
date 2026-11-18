@@ -97,7 +97,10 @@ pub fn handle_delegate_match(ctx: Context<DelegateMatch>) -> Result<()> {
     ctx.accounts.delegate_chess_match(
         &ctx.accounts.payer,
         &[CHESS_MATCH_SEED, match_id.as_bytes()],
-        DelegateConfig::default(),
+        DelegateConfig {
+            validator: Some(MAGICBLOCK_VALIDATOR),
+            ..DelegateConfig::default()
+        },
     )?;
 
     Ok(())

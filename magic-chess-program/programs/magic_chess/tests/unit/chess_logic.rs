@@ -2773,34 +2773,53 @@ fn push_position_hash_no_panic_empty_history() {
 
 #[test]
 fn position_history_evicts_oldest_when_full() {
+    let mut history: Vec<u64> = (0..200u64).collect();
+    chess_logic::push_position_hash(&mut history, 999);
+    assert_eq!(history.len(), 200, "position history must stay at 200 entries");
+    assert_eq!(history[0], 1, "the oldest hash should have been evicted");
+    assert_eq!(*history.last().unwrap(), 999);
+}
+
+#[test]
+fn irreversible_move_clears_position_history() {
     let mut board = board_with_kings();
     board[1][0] = Some(Piece {
         piece_type: PieceType::Pawn,
         color: PlayerColor::White,
     });
     let mut game = make_match(board, PlayerColor::White);
-
-    // Manually fill the position history to its CAP (200).
-    for i in 0..200u64 {
+    for i in 0..50u64 {
         game.position_history.push(i);
     }
-    assert_eq!(game.position_history.len(), 200);
-    let oldest_hash_before = game.position_history[0];
 
-    // Make a move — push_position_hash will evict index 0 then push.
+    // A pawn move resets the fifty-move counter, so no earlier position can
+    // repeat: only the new position is kept.
     let result = chess_logic::validate_and_apply_move(
         &mut game, 1, 0, 2, 0, PlayerColor::White, None,
     );
     assert!(result.is_ok());
-    assert_eq!(
-        game.position_history.len(),
-        200,
-        "position history must stay at 200 entries"
-    );
-    assert_ne!(
-        game.position_history[0], oldest_hash_before,
-        "the oldest hash before the move should have been evicted"
-    );
+    assert_eq!(game.halfmove_clock, 0);
+    assert_eq!(game.position_history.len(), 1);
+}
+
+#[test]
+fn reversible_move_keeps_position_history() {
+    let board = board_with_kings();
+    let mut game = make_match(board, PlayerColor::White);
+    game.halfmove_clock = 3;
+    for i in 0..10u64 {
+        game.position_history.push(i);
+    }
+    let king = (0..8)
+        .flat_map(|r| (0..8).map(move |c| (r, c)))
+        .find(|&(r, c)| matches!(game.board[r][c], Some(Piece { piece_type: PieceType::King, color: PlayerColor::White })))
+        .unwrap();
+    let (r, c) = (king.0 as u8, king.1 as u8);
+    let to_c = if c < 7 { c + 1 } else { c - 1 };
+    let result = chess_logic::validate_and_apply_move(&mut game, r, c, r, to_c, PlayerColor::White, None);
+    assert!(result.is_ok(), "{:?}", result);
+    assert_eq!(game.halfmove_clock, 4);
+    assert_eq!(game.position_history.len(), 11);
 }
 
 // Section G — Absolutely pinned pieces

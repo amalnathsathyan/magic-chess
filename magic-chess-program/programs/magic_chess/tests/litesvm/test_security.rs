@@ -564,14 +564,53 @@ fn test_close_match_rejects_stranger() {
     svm.send_ix(abort_ix, &[]);
 
     let stranger = svm.create_funded_account(1_000_000_000);
-    let close_ix = close_match_ix(&match_pda, &stranger.pubkey());
+    let close_ix = close_match_ix(match_id, &stranger.pubkey());
     let err = svm.send_ix_expect_err(close_ix, &[&stranger]);
     assert!(!err.is_empty(), "a stranger must not close the match");
     assert!(svm.account_exists(&match_pda));
 
     // The creator still can.
-    let close_ix = close_match_ix(&match_pda, &p1_pk);
+    let close_ix = close_match_ix(match_id, &p1_pk);
     svm.send_ix(close_ix, &[]);
     let account = svm.ctx.svm.get_account(&match_pda);
     assert!(account.is_none() || account.unwrap().data.is_empty());
+}
+
+/// A match with a prediction pool is never closed. Claims read the match
+/// account, and a closed match id can be created again, which would let an
+/// old pool be claimed against a new game.
+#[test]
+fn test_close_match_rejected_while_prediction_pool_exists() {
+    let mut svm = TestSvm::new();
+    let p1_pk = svm.payer_pubkey();
+
+    let mint = svm.create_mint(9);
+    let p1_ata = svm.create_ata(&mint, &p1_pk);
+    svm.mint_tokens(&mint, &p1_ata, 1_000_000);
+
+    let match_id = "test-sec-close-pool";
+    let (match_pda, _) = find_chess_match_pda(match_id);
+    let (escrow_pda, _) = find_escrow_pda(match_id);
+    let platform_fee_wallet = platform_fee_wallet();
+
+    let init_ix = initialize_match_ix(
+        &match_pda, &p1_pk, &mint,
+        &p1_ata, &escrow_pda, match_id,
+        100_000, 600, 200, &platform_fee_wallet, true,
+    );
+    svm.send_ix(init_ix, &[]);
+
+    let (pool_pda, _) = find_prediction_pool_pda(match_id);
+    let (vault_pda, _) = find_prediction_pool_vault_pda(&pool_pda);
+    svm.send_ix(
+        initialize_prediction_pool_ix(&match_pda, &pool_pda, &vault_pda, &mint, &p1_pk, 0),
+        &[],
+    );
+
+    // Abort sets payout_processed, which close_match otherwise accepts.
+    svm.send_ix(abort_match_ix(&match_pda, &escrow_pda, &p1_ata, &p1_pk), &[]);
+
+    let err = svm.send_ix_expect_err(close_match_ix(match_id, &p1_pk), &[]);
+    assert!(!err.is_empty(), "a match with a prediction pool must not close");
+    assert!(svm.account_exists(&match_pda));
 }

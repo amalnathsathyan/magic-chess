@@ -32,10 +32,5 @@ pub fn handle_revoke_session_key(ctx: Context<RevokeSessionKey>) -> Result<()> {
         chess_match.black_session_expires_at = 0;
     }
 
-    msg!(
-        "Session key revoked for match {} player {:?}",
-        chess_match.match_id,
-        if is_white { PlayerColor::White } else { PlayerColor::Black }
-    );
     Ok(())
 }

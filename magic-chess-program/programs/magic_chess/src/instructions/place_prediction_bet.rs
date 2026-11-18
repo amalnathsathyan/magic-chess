@@ -88,7 +88,7 @@ pub fn handle_place_prediction_bet(
     require!(predicted_outcome_arg <= 2, ChessError::InvalidOutcome);
 
     // ── Validate bet amount ──
-    require!(bet_amount_arg >= MIN_BET_AMOUNT, ChessError::InvalidBetAmount);
+    require!(bet_amount_arg > 0, ChessError::InvalidBetAmount);
 
     // ── Transfer bet from bettor to pool vault ──
     let cpi_accounts = Transfer {
@@ -130,11 +130,5 @@ pub fn handle_place_prediction_bet(
     prediction_bet.claimed = false;
     prediction_bet.bump = ctx.bumps.prediction_bet;
 
-    msg!(
-        "Prediction bet placed: bettor={}, amount={}, outcome={}",
-        bettor_key,
-        bet_amount_arg,
-        predicted_outcome_arg,
-    );
     Ok(())
 }

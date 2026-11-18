@@ -53,3 +53,8 @@ pub const ANCHOR_DISCRIMINATOR: usize = 8;
 
 // ── MagicBlock Program Addresses ──
 pub const DELEGATION_PROGRAM_ID: Pubkey = pubkey!("DELeGGvXpWV2fqJUhqcF5ZSYMS4JTLjteaAMARRSaeSh");
+/// The rollup validator every match is delegated to. While a game is
+/// delegated this validator orders moves, supplies the clock and commits the
+/// final state, so it is pinned here instead of left to the SDK default (this
+/// is the delegation program's `DEFAULT_VALIDATOR_IDENTITY` today).
+pub const MAGICBLOCK_VALIDATOR: Pubkey = pubkey!("MAS1Dt9qreoRMQ14YQuhg8UTZMMzDdKhmkZMECCzk57");
